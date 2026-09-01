@@ -45,6 +45,7 @@ npm run build
 - `lib/blocks.ts` is the shared block catalog for the page builder; it keeps the initial block types and their responsive defaults in one place.
 - `components/page-renderer.tsx` and `app/(public)/[slug]/page.tsx` provide the first published-page path: only pages with `PUBLISHED` status are rendered publicly, while unknown/unpublished slugs return 404.
 - `app/api/pages` exposes protected GET/POST/PATCH endpoints for validated page drafts; unauthenticated requests return `401` until the real session provider is connected.
+- `app/api/menus` exposes protected menu listing/creation endpoints; the Prisma menu model supports global menus and per-page assignment through `Page.menuId`, with nested ordered items.
 - `app/admin/editor/editor-canvas.tsx` is a client-side prototype using a responsive 12-column grid. Blocks can be reordered and moved between columns with native drag-and-drop.
 
 The public and admin interfaces share typography, color tokens, buttons, cards, and spacing, while keeping distinct navigation and information architecture.
