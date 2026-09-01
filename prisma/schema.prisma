@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  viewer
+  editor
+  admin
+}
+
+enum PageStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  name         String
+  role         Role           @default(viewer)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  revisions    PageRevision[] @relation("RevisionAuthor")
+  published    Page[]         @relation("PublishedBy")
+}
+
+model Page {
+  id                String        @id @default(cuid())
+  slug              String        @unique
+  title             String
+  status            PageStatus    @default(DRAFT)
+  blocks            Json
+  menuId            String?
+  menu              Menu?         @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  revisions         PageRevision[]
+  publishedAt       DateTime?
+  publishedById     String?
+  publishedBy       User?         @relation("PublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([status])
+}
+
+model PageRevision {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      Page    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  blocks    Json
+  title     String
+  authorId  String
+  author    User     @relation("RevisionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@index([pageId, createdAt])
+}
+
+model Menu {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  items     MenuItem[]
+  pages     Page[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model MenuItem {
+  id        String    @id @default(cuid())
+  menuId    String
+  menu      Menu      @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  label     String
+  href      String
+  position  Int       @default(0)
+  parentId  String?
+  parent    MenuItem? @relation("MenuTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  MenuItem[] @relation("MenuTree")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([menuId, position])
+}
+

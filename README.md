@@ -7,6 +7,7 @@ Barebones mobile-first public site foundation with a separately routed editor ar
 - Next.js (App Router) + TypeScript
 - Tailwind CSS
 - Native HTML5 drag-and-drop for the editor prototype (no editor dependency yet)
+- PostgreSQL + Prisma for the CMS foundation
 
 ## Local setup
 
@@ -16,6 +17,15 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). The public site is at `/`; the editor prototype is at `/admin/editor`.
+
+To prepare the CMS database, copy `.env.example` to `.env`, set `DATABASE_URL`, then run:
+
+```bash
+npm run db:generate
+npm run db:push
+```
+
+`db:push` is appropriate for this early prototype. Use reviewed Prisma migrations before production data is introduced.
 
 Available checks:
 
@@ -30,6 +40,8 @@ npm run build
 - `app/admin` contains the admin route boundary, admin navigation, and editor experience.
 - `components/ui` contains shared design-system primitives used by both boundaries.
 - `lib/auth.ts` defines the authorization seam and `viewer`/`editor`/`admin` role model.
+- `prisma/schema.prisma` defines PostgreSQL persistence for users, pages, page revisions, menus, and nested menu items.
+- `lib/content.ts` provides server-side page/menu CRUD and requires `editor` or `admin` authorization for each operation.
 - `app/admin/editor/editor-canvas.tsx` is a client-side prototype using a responsive 12-column grid. Blocks can be reordered and moved between columns with native drag-and-drop.
 
 The public and admin interfaces share typography, color tokens, buttons, cards, and spacing, while keeping distinct navigation and information architecture.
@@ -37,6 +49,8 @@ The public and admin interfaces share typography, color tokens, buttons, cards, 
 ## Security boundaries
 
 Authentication is intentionally **not implemented**. `lib/auth.ts` exposes `getCurrentUser()` and `requireRole()` as the integration seam for a real server-side session provider. The current placeholder returns no user and `requireRole()` throws when called, so it cannot be mistaken for production authentication. Do not add credentials or treat client-side editor state as authorization.
+
+The database service is server-only. Never expose `DATABASE_URL` to the browser (`NEXT_PUBLIC_` variables are public). The current page/menu service is intentionally unusable until a real authenticated session provider is connected.
 
 Before deploying an editor:
 
@@ -46,7 +60,7 @@ Before deploying an editor:
 
 ## Next steps
 
-- Persist pages, drafts, block schemas, and ordering in a database/CMS.
+- Connect a server-side identity provider so page CRUD and publishing can be used from the admin UI.
 - Replace native drag-and-drop with accessible pointer/keyboard interactions if the editor grows.
 - Add real preview/publish workflows, autosave, media uploads, and audit history.
 - Add unit and end-to-end coverage alongside the persistence/auth implementation.
