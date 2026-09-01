@@ -19,6 +19,15 @@ enum PageStatus {
   ARCHIVED
 }
 
+enum Permission {
+  ACCESS_ADMIN
+  EDIT_PAGES
+  PUBLISH_PAGES
+  MANAGE_MENUS
+  MANAGE_USERS
+  MANAGE_SETTINGS
+}
+
 model User {
   id           String         @id @default(cuid())
   email        String         @unique
@@ -28,10 +37,30 @@ model User {
   memberProfile MemberProfile?
   verificationTokens EmailVerificationToken[]
   role         Role           @default(viewer)
+  groupId      String?
+  group        SecurityGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   revisions    PageRevision[] @relation("RevisionAuthor")
   published    Page[]         @relation("PublishedBy")
+}
+
+model SecurityGroup {
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  users       User[]
+  permissions GroupPermission[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model GroupPermission {
+  groupId    String
+  permission Permission
+  group      SecurityGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, permission])
 }
 
 model Page {

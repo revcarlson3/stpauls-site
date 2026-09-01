@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "user:create": "node scripts/create-user.mjs"
+    "user:create": "node scripts/create-user.mjs",
+    "groups:seed": "node scripts/seed-groups.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.7.0",

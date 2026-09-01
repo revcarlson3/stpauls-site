@@ -10,6 +10,7 @@ Barebones mobile-first public site foundation with a separately routed editor ar
 - PostgreSQL + Prisma for the CMS foundation
 - NextAuth credentials sessions with role claims
 - SMTP-backed member-aware account registration
+- Configurable security groups and permissions
 
 ## Local setup
 
@@ -28,6 +29,14 @@ npm run db:push
 ```
 
 `db:push` is appropriate for this early prototype. Use reviewed Prisma migrations before production data is introduced.
+
+Security groups are stored in `SecurityGroup` and `GroupPermission`. The seed command creates `Visitor`, `Editor`, and `Administrator` groups with explicit permissions:
+
+```bash
+npm run groups:seed
+```
+
+Users will be assigned to a group as the administration UI is added. Server-side writes use permission checks rather than trusting client-side switches. The existing `role` field remains during this transition and should not be treated as the long-term permission source.
 
 Set `NEXTAUTH_SECRET` to a long random value and set `NEXTAUTH_URL` to the deployed HTTPS URL. After adding `passwordHash` to the schema, run `npm run db:push` again. Users must be provisioned through a controlled administrative process; this scaffold intentionally provides no default credentials or public registration.
 

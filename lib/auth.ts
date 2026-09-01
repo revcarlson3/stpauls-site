@@ -1,5 +1,7 @@
 import { getServerSession } from "next-auth";
+import type { Permission } from "@prisma/client";
 import { authOptions } from "@/lib/auth-options";
+import { db } from "@/lib/db";
 
 export type Role = "viewer" | "editor" | "admin";
 
@@ -24,6 +26,22 @@ export async function requireRole(requiredRole: Role): Promise<User> {
   if (!user || roleRank[user.role] < roleRank[requiredRole]) {
     throw new Error("Unauthorized: a server-side authenticated session is required.");
   }
+  return user;
+}
+
+export async function requirePermission(permission: Permission): Promise<User> {
+  const user = await requireAuthenticatedUser();
+  const membership = await db.user.findUnique({
+    where: { id: user.id },
+    select: { group: { select: { permissions: { where: { permission }, select: { permission: true } } } } }
+  });
+  if (!membership?.group?.permissions.length) throw new Error("Unauthorized: required permission is missing.");
+  return user;
+}
+
+async function requireAuthenticatedUser(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized: a server-side authenticated session is required.");
   return user;
 }
 
