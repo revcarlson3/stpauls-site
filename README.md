@@ -30,6 +30,14 @@ npm run db:push
 
 Set `NEXTAUTH_SECRET` to a long random value and set `NEXTAUTH_URL` to the deployed HTTPS URL. After adding `passwordHash` to the schema, run `npm run db:push` again. Users must be provisioned through a controlled administrative process; this scaffold intentionally provides no default credentials or public registration.
 
+The first administrator can be provisioned once from the runtime terminal without putting credentials in source control:
+
+```bash
+USER_EMAIL=admin@example.org USER_NAME="Site Admin" USER_ROLE=admin USER_PASSWORD="use-a-long-temporary-password" npm run user:create
+```
+
+On Windows PowerShell, set the variables for the command with `$env:USER_EMAIL=...` syntax. Remove the password from the environment after the command completes. Once signed in, only an administrator can create additional users through `POST /api/users`; public registration is intentionally disabled.
+
 Available checks:
 
 ```bash
