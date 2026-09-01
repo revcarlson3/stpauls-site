@@ -4,6 +4,10 @@ import type { Permission } from "@prisma/client";
 
 const permissions = new Set<Permission>(["ACCESS_ADMIN", "EDIT_PAGES", "PUBLISH_PAGES", "MANAGE_MENUS", "MANAGE_USERS", "MANAGE_SETTINGS"]);
 
+function isValidPermissions(value: unknown): value is Permission[] {
+  return Array.isArray(value) && value.every((permission) => permissions.has(permission as Permission));
+}
+
 export async function GET() {
   try {
     return NextResponse.json(await listSecurityGroups());
@@ -15,7 +19,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const input = await request.json();
-  if (!input || typeof input.name !== "string" || typeof input.slug !== "string" || !Array.isArray(input.permissions) || !input.name.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(input.slug) || input.permissions.some((permission: unknown) => !permissions.has(permission as Permission))) {
+  if (!input || typeof input.name !== "string" || typeof input.slug !== "string" || !isValidPermissions(input.permissions) || !input.name.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(input.slug)) {
     return NextResponse.json({ error: "Invalid security group input." }, { status: 400 });
   }
 

@@ -1,1 +1,1 @@
-export const SITE_REVISION = "0.3.0.23";
+export const SITE_REVISION = "0.3.0.24";

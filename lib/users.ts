@@ -43,6 +43,16 @@ export async function updateSecurityGroup(id: string, input: { name: string; per
   });
 }
 
+export async function deleteSecurityGroup(id: string) {
+  await requirePermission("MANAGE_USERS");
+  const group = await db.securityGroup.findUnique({ where: { id }, select: { slug: true } });
+  if (!group) throw new Error("Security group not found.");
+  if (["visitor", "editor", "administrator"].includes(group.slug)) {
+    throw new Error("The default security groups cannot be deleted.");
+  }
+  await db.securityGroup.delete({ where: { id } });
+}
+
 export async function saveUser(input: { email: string; name: string; password: string; role: Role }) {
   const passwordHash = await bcrypt.hash(input.password, 12);
   return db.user.create({
