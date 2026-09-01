@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import nodemailer from "nodemailer";
+import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 
 type RegistrationInput = { firstName: string; lastName: string; email: string; churchCode?: string };
@@ -41,9 +42,18 @@ export async function verifyEmail(token: string) {
   if (!timingSafeEqual(Buffer.from(record.tokenHash), Buffer.from(tokenHash))) throw new Error("Verification link is invalid.");
   await db.$transaction([
     db.user.update({ where: { id: record.userId }, data: { emailVerifiedAt: new Date() } }),
-    db.emailVerificationToken.delete({ where: { id: record.id } })
   ]);
   return record.userId;
+}
+
+export async function setPassword(token: string, password: string) {
+  if (password.length < 12) throw new Error("Password must be at least 12 characters.");
+  const record = await db.emailVerificationToken.findUnique({ where: { tokenHash: hashToken(token) } });
+  if (!record || record.expiresAt < new Date()) throw new Error("Verification link is invalid or expired.");
+  await db.$transaction([
+    db.user.update({ where: { id: record.userId }, data: { passwordHash: await bcrypt.hash(password, 12) } }),
+    db.emailVerificationToken.delete({ where: { id: record.id } })
+  ]);
 }
 
 function hashToken(token: string) {
@@ -76,4 +86,3 @@ async function sendVerificationEmail(email: string, name: string, token: string)
     text: `Hello ${name}, verify your account here: ${NEXTAUTH_URL}/api/register/verify?token=${token}`
   });
 }
-

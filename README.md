@@ -31,7 +31,7 @@ npm run db:push
 
 Set `NEXTAUTH_SECRET` to a long random value and set `NEXTAUTH_URL` to the deployed HTTPS URL. After adding `passwordHash` to the schema, run `npm run db:push` again. Users must be provisioned through a controlled administrative process; this scaffold intentionally provides no default credentials or public registration.
 
-Registration is now available at `/register`. It is not open until SMTP variables and `CHURCH_REGISTRATION_CODE` are configured. A blank/incorrect code creates an unlinked viewer account; a valid code links an exact, currently unassigned `MemberProfile` match. Verification tokens are stored hashed and expire after 24 hours. Password setup after verification is the next account-flow increment.
+Registration is now available at `/register`. It is not open until SMTP variables and `CHURCH_REGISTRATION_CODE` are configured. A blank/incorrect code creates an unlinked viewer account; a valid code links an exact, currently unassigned `MemberProfile` match. Verification tokens are stored hashed and expire after 24 hours; the verification link leads to password setup before sign-in is available.
 
 The first administrator can be provisioned once from the runtime terminal without putting credentials in source control:
 
