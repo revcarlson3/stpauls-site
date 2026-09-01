@@ -4,7 +4,7 @@ const db = new PrismaClient();
 const groups = [
   { slug: "visitor", name: "Visitor", permissions: [] },
   { slug: "editor", name: "Editor", permissions: ["ACCESS_ADMIN", "EDIT_PAGES", "MANAGE_MENUS"] },
-  { slug: "administrator", name: "Administrator", permissions: ["ACCESS_ADMIN", "EDIT_PAGES", "PUBLISH_PAGES", "MANAGE_MENUS", "MANAGE_USERS", "MANAGE_SETTINGS"] }
+  { slug: "administrator", name: "Administrator", permissions: ["ACCESS_ADMIN", "EDIT_PAGES", "PUBLISH_PAGES", "MANAGE_MENUS", "MANAGE_USERS", "MANAGE_SETTINGS", "MANAGE_MEMBERSHIP", "MANAGE_EVENTS", "MANAGE_GIVING", "MANAGE_ACCOUNTING", "MANAGE_SERVICES"] }
 ];
 
 try {
@@ -21,4 +21,3 @@ try {
 } finally {
   await db.$disconnect();
 }
-

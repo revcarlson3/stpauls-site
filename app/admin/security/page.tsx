@@ -9,7 +9,12 @@ const permissionOptions = [
   ["PUBLISH_PAGES", "Publish pages"],
   ["MANAGE_MENUS", "Manage menus"],
   ["MANAGE_USERS", "Manage users and groups"],
-  ["MANAGE_SETTINGS", "Manage settings"]
+  ["MANAGE_SETTINGS", "Manage settings"],
+  ["MANAGE_MEMBERSHIP", "Manage membership"],
+  ["MANAGE_EVENTS", "Manage events and scheduling"],
+  ["MANAGE_GIVING", "Manage giving and pledges"],
+  ["MANAGE_ACCOUNTING", "Manage accounting and budget"],
+  ["MANAGE_SERVICES", "Manage services and sermons"]
 ] as const;
 
 type Group = { id: string; name: string; slug: string; permissions: { permission: string }[]; _count: { users: number } };

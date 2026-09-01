@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createSecurityGroup, listSecurityGroups } from "@/lib/users";
 import type { Permission } from "@prisma/client";
 
-const permissions = new Set<Permission>(["ACCESS_ADMIN", "EDIT_PAGES", "PUBLISH_PAGES", "MANAGE_MENUS", "MANAGE_USERS", "MANAGE_SETTINGS"]);
+const permissions = new Set<Permission>(["ACCESS_ADMIN", "EDIT_PAGES", "PUBLISH_PAGES", "MANAGE_MENUS", "MANAGE_USERS", "MANAGE_SETTINGS", "MANAGE_MEMBERSHIP", "MANAGE_EVENTS", "MANAGE_GIVING", "MANAGE_ACCOUNTING", "MANAGE_SERVICES"]);
 
 function isValidPermissions(value: unknown): value is Permission[] {
   return Array.isArray(value) && value.every((permission) => permissions.has(permission as Permission));
