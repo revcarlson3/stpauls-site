@@ -2,17 +2,15 @@
 
 import { useState } from "react";
 import { Button, Card } from "@/components/ui";
+import { blockDefinitions, type BlockType } from "@/lib/blocks";
 
-type BlockType = "hero" | "text" | "event";
 type Block = { id: string; type: BlockType; title: string; span: number };
 
 const initialBlocks: Block[] = [
   { id: "hero-1", type: "hero", title: "A place to belong.", span: 12 },
-  { id: "text-1", type: "text", title: "Make space for what matters.", span: 7 },
-  { id: "event-1", type: "event", title: "Sunday gathering", span: 5 }
+  { id: "headline-1", type: "headline", title: "Make space for what matters.", span: 7 },
+  { id: "news-1", type: "news", title: "Latest from St. Paul's", span: 5 }
 ];
-
-const labels: Record<BlockType, string> = { hero: "Hero", text: "Text", event: "Event" };
 
 export default function EditorCanvas() {
   const [blocks, setBlocks] = useState(initialBlocks);
@@ -32,7 +30,8 @@ export default function EditorCanvas() {
   }
 
   function addBlock(type: BlockType) {
-    setBlocks((current) => [...current, { id: `${type}-${Date.now()}`, type, title: `New ${labels[type].toLowerCase()} block`, span: type === "hero" ? 12 : 6 }]);
+    const definition = blockDefinitions[type];
+    setBlocks((current) => [...current, { id: `${type}-${Date.now()}`, type, title: `New ${definition.label.toLowerCase()} block`, span: definition.defaultSpan }]);
   }
 
   return (
@@ -53,7 +52,7 @@ export default function EditorCanvas() {
               style={{ gridColumn: `span ${block.span} / span ${block.span}` }}
             >
               <div className="flex items-start justify-between gap-4">
-                <div><span className="text-xs font-semibold uppercase tracking-wider text-coral">{labels[block.type]}</span><h2 className="mt-2 font-serif text-2xl">{block.title}</h2></div>
+                <div><span className="text-xs font-semibold uppercase tracking-wider text-coral">{blockDefinitions[block.type].label}</span><h2 className="mt-2 font-serif text-2xl">{block.title}</h2></div>
                 <span className="rounded bg-mist px-2 py-1 text-[10px] font-semibold text-ink/60 opacity-0 transition group-hover:opacity-100">Drag</span>
               </div>
               <p className="mt-4 text-sm text-ink/50">Drop another block here to reorder</p>
@@ -65,11 +64,10 @@ export default function EditorCanvas() {
         <h2 className="font-semibold">Add a block</h2>
         <p className="mt-1 text-sm text-ink/55">Prototype controls</p>
         <div className="mt-5 grid gap-2">
-          {(Object.keys(labels) as BlockType[]).map((type) => <Button key={type} className="w-full justify-start bg-ink hover:bg-ink/90" onClick={() => addBlock(type)}>+ {labels[type]}</Button>)}
+          {(Object.keys(blockDefinitions) as BlockType[]).map((type) => <Button key={type} title={blockDefinitions[type].description} className="w-full justify-start bg-ink hover:bg-ink/90" onClick={() => addBlock(type)}>+ {blockDefinitions[type].label}</Button>)}
         </div>
         <p className="mt-5 border-t border-ink/10 pt-4 text-xs leading-5 text-ink/50">Changes live only in this browser session. Persistence and authorization are intentionally not wired yet.</p>
       </Card>
     </div>
   );
 }
-

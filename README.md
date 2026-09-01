@@ -42,6 +42,7 @@ npm run build
 - `lib/auth.ts` defines the authorization seam and `viewer`/`editor`/`admin` role model.
 - `prisma/schema.prisma` defines PostgreSQL persistence for users, pages, page revisions, menus, and nested menu items.
 - `lib/content.ts` provides server-side page/menu CRUD and requires `editor` or `admin` authorization for each operation.
+- `lib/blocks.ts` is the shared block catalog for the page builder; it keeps the initial block types and their responsive defaults in one place.
 - `app/admin/editor/editor-canvas.tsx` is a client-side prototype using a responsive 12-column grid. Blocks can be reordered and moved between columns with native drag-and-drop.
 
 The public and admin interfaces share typography, color tokens, buttons, cards, and spacing, while keeping distinct navigation and information architecture.
