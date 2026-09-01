@@ -31,6 +31,7 @@ export async function requireRole(requiredRole: Role): Promise<User> {
 
 export async function requirePermission(permission: Permission): Promise<User> {
   const user = await requireAuthenticatedUser();
+  if (user.role === "admin") return user;
   const membership = await db.user.findUnique({
     where: { id: user.id },
     select: { group: { select: { permissions: { where: { permission }, select: { permission: true } } } } }

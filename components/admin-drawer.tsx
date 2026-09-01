@@ -42,6 +42,7 @@ export function AdminDrawer() {
         <nav className="mt-8 grid gap-2" aria-label="Authenticated tools">
           <Link href="/admin/editor" className="focus-ring rounded-lg bg-mist px-4 py-3 font-semibold hover:bg-coral hover:text-white" onClick={() => setOpen(false)}>Open Site Studio</Link>
           <Link href="/admin" className="focus-ring rounded-lg px-4 py-3 font-semibold hover:bg-mist" onClick={() => setOpen(false)}>Admin dashboard</Link>
+          <Link href="/admin/security" className="focus-ring rounded-lg px-4 py-3 font-semibold hover:bg-mist" onClick={() => setOpen(false)}>Security groups</Link>
           <button type="button" className="focus-ring rounded-lg px-4 py-3 text-left font-semibold text-coral hover:bg-sand" onClick={() => signOut({ callbackUrl: "/" })}>Logout</button>
         </nav>
         <p className="absolute bottom-6 left-6 right-6 border-t border-ink/10 pt-4 text-xs leading-5 text-ink/50">This menu is visible only to authenticated users. Access is still enforced by the server.</p>
@@ -49,4 +50,3 @@ export function AdminDrawer() {
     </>
   );
 }
-
