@@ -6,7 +6,9 @@ export async function GET(request: Request) {
   if (!token) return NextResponse.json({ error: "Verification token is required." }, { status: 400 });
   try {
     await verifyEmail(token);
-    return NextResponse.redirect(new URL(`/register/password?token=${encodeURIComponent(token)}`, request.url));
+    const publicUrl = process.env.NEXTAUTH_URL;
+    if (!publicUrl) throw new Error("NEXTAUTH_URL is not configured.");
+    return NextResponse.redirect(new URL(`/register/password?token=${encodeURIComponent(token)}`, publicUrl));
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Verification link")) {
       return NextResponse.json({ error: error.message }, { status: 400 });
