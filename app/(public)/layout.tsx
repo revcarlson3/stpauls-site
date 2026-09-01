@@ -22,6 +22,9 @@ export default function PublicLayout({ children }: Readonly<{ children: React.Re
             <Link className="focus-ring hover:text-coral" href="#belong">
               Belong
             </Link>
+            <Link className="focus-ring hover:text-coral" href="/register">
+              Join
+            </Link>
             <Link className="focus-ring rounded-full border border-ink/20 px-4 py-2 hover:border-coral hover:text-coral" href="/admin/editor">
               Editor
             </Link>

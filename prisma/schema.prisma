@@ -24,6 +24,9 @@ model User {
   email        String         @unique
   name         String
   passwordHash String?
+  emailVerifiedAt DateTime?
+  memberProfile MemberProfile?
+  verificationTokens EmailVerificationToken[]
   role         Role           @default(viewer)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
@@ -47,6 +50,28 @@ model Page {
   updatedAt         DateTime      @updatedAt
 
   @@index([status])
+}
+
+model MemberProfile {
+  id         String   @id @default(cuid())
+  firstName  String
+  lastName   String
+  email      String   @unique
+  userId     String?  @unique
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
 }
 
 model PageRevision {
