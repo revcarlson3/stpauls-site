@@ -16,7 +16,7 @@ export async function createSecurityGroup(input: { name: string; slug: string; p
       slug: input.slug,
       permissions: { create: input.permissions.map((permission) => ({ permission })) }
     },
-    include: { permissions: true }
+    include: { permissions: true, _count: { select: { users: true } } }
   });
 }
 
