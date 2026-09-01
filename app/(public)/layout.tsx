@@ -1,14 +1,20 @@
 import Link from "next/link";
 import { Container } from "@/components/ui";
+import { SITE_REVISION } from "@/lib/site";
 
 export default function PublicLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <div className="min-h-screen">
       <header className="border-b border-ink/10 bg-sand/90">
         <Container className="flex h-20 items-center justify-between">
-          <Link href="/" className="focus-ring font-serif text-xl font-bold tracking-tight">
-            St. Paul&apos;s
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/" className="focus-ring font-serif text-xl font-bold tracking-tight">
+              St. Paul&apos;s
+            </Link>
+            <span className="rounded-full bg-mist px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink/55">
+              Rev. {SITE_REVISION}
+            </span>
+          </div>
           <nav aria-label="Primary navigation" className="flex items-center gap-5 text-sm font-medium">
             <Link className="focus-ring hover:text-coral" href="#gather">
               Gather
@@ -29,4 +35,3 @@ export default function PublicLayout({ children }: Readonly<{ children: React.Re
     </div>
   );
 }
-
