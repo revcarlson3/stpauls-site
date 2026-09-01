@@ -1,15 +1,17 @@
-import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireRole, type User } from "@/lib/auth";
+
+type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
+type JsonObject = { [key: string]: JsonValue };
 
 export type PageBlock = {
   id: string;
   type: string;
-  props: Record<string, unknown>;
+  props: JsonObject;
 };
 
-function blocksValue(blocks: PageBlock[]): Prisma.InputJsonValue {
-  return blocks as unknown as Prisma.InputJsonValue;
+function blocksValue(blocks: PageBlock[]): JsonValue[] {
+  return blocks;
 }
 
 export async function listPages() {
@@ -67,4 +69,3 @@ export async function createMenu(input: { name: string; slug: string }) {
   await requireRole("admin");
   return db.menu.create({ data: input });
 }
-
