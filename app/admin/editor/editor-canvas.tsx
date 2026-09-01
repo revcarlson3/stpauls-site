@@ -4,12 +4,12 @@ import { useState } from "react";
 import { Button, Card } from "@/components/ui";
 import { blockDefinitions, type BlockType } from "@/lib/blocks";
 
-type Block = { id: string; type: BlockType; title: string; span: number };
+type Block = { id: string; type: BlockType; title: string; content: string; mediaType?: "image" | "video"; mediaUrl?: string; span: number };
 
 const initialBlocks: Block[] = [
-  { id: "hero-1", type: "hero", title: "A place to belong.", span: 12 },
-  { id: "headline-1", type: "headline", title: "Make space for what matters.", span: 7 },
-  { id: "news-1", type: "news", title: "Latest from St. Paul's", span: 5 }
+  { id: "hero-1", type: "hero", title: "A place to belong.", content: "There is room for you here.", mediaType: "image", mediaUrl: "", span: 12 },
+  { id: "headline-1", type: "headline", title: "Make space for what matters.", content: "A community learning to live with courage and compassion.", span: 7 },
+  { id: "news-1", type: "news", title: "Latest from St. Paul's", content: "Choose a category for the latest updates.", span: 5 }
 ];
 
 export default function EditorCanvas() {
@@ -33,7 +33,7 @@ export default function EditorCanvas() {
 
   function addBlock(type: BlockType) {
     const definition = blockDefinitions[type];
-    setBlocks((current) => [...current, { id: `${type}-${Date.now()}`, type, title: `New ${definition.label.toLowerCase()} block`, span: definition.defaultSpan }]);
+    setBlocks((current) => [...current, { id: `${type}-${Date.now()}`, type, title: `New ${definition.label.toLowerCase()} block`, content: "", mediaType: type === "hero" ? "image" : undefined, mediaUrl: type === "hero" ? "" : undefined, span: definition.defaultSpan }]);
   }
 
   function updateBlock(id: string, changes: Partial<Block>) {
@@ -72,12 +72,25 @@ export default function EditorCanvas() {
                       onChange={(event) => updateBlock(block.id, { title: event.target.value })}
                     />
                   </label>
+                  <label className="mt-3 block">
+                    <span className="sr-only">Block content</span>
+                    <textarea className="focus-ring w-full resize-y rounded-lg border border-ink/10 px-3 py-2 text-sm leading-6 text-ink/70" rows={2} value={block.content} onChange={(event) => updateBlock(block.id, { content: event.target.value })} />
+                  </label>
                 </div>
                 <span className="rounded bg-mist px-2 py-1 text-[10px] font-semibold text-ink/60 opacity-0 transition group-hover:opacity-100">Drag</span>
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-ink/10 pt-3 text-xs text-ink/50">
                 <span>{blockDefinitions[block.type].description}</span>
                 <div className="flex items-center gap-3">
+                  {block.type === "hero" && (
+                    <label className="flex items-center gap-2">
+                      <span>Media</span>
+                      <select className="focus-ring rounded border border-ink/15 bg-white px-2 py-1 text-ink" value={block.mediaType} onChange={(event) => updateBlock(block.id, { mediaType: event.target.value as "image" | "video" })}>
+                        <option value="image">Image</option>
+                        <option value="video">Video</option>
+                      </select>
+                    </label>
+                  )}
                   <label className="flex items-center gap-2">
                     <span>Width</span>
                     <select className="focus-ring rounded border border-ink/15 bg-white px-2 py-1 text-ink" value={block.span} onChange={(event) => updateBlock(block.id, { span: Number(event.target.value) })}>
@@ -87,6 +100,12 @@ export default function EditorCanvas() {
                   <button type="button" className="focus-ring font-semibold text-coral hover:text-ink" onClick={() => removeBlock(block.id)}>Remove</button>
                 </div>
               </div>
+              {block.type === "hero" && (
+                <label className="mt-3 block text-xs text-ink/50">
+                  <span className="mr-2 font-semibold">Media URL</span>
+                  <input className="focus-ring mt-1 w-full rounded border border-ink/15 px-2 py-1 text-sm text-ink" placeholder="https://..." value={block.mediaUrl} onChange={(event) => updateBlock(block.id, { mediaUrl: event.target.value })} />
+                </label>
+              )}
             </article>
           ))}
         </div>
