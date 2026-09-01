@@ -13,7 +13,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return NextResponse.json(await updateSecurityGroup(params.id, { name: input.name, permissions: input.permissions }));
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Permission required." }, { status: 403 });
-    throw error;
+    return NextResponse.json({ error: "Unable to update the security group." }, { status: 500 });
   }
 }
 
@@ -25,6 +25,6 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Permission required." }, { status: 403 });
     if (error instanceof Error && error.message.includes("cannot be deleted")) return NextResponse.json({ error: error.message }, { status: 400 });
     if (error instanceof Error && error.message === "Security group not found.") return NextResponse.json({ error: error.message }, { status: 404 });
-    throw error;
+    return NextResponse.json({ error: "Unable to remove the security group." }, { status: 500 });
   }
 }

@@ -14,6 +14,15 @@ const permissionOptions = [
 
 type Group = { id: string; name: string; slug: string; permissions: { permission: string }[]; _count: { users: number } };
 
+async function responseError(response: Response, fallback: string) {
+  try {
+    const body = await response.json();
+    return typeof body.error === "string" ? body.error : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function SecurityPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [error, setError] = useState("");
@@ -34,7 +43,7 @@ export default function SecurityPage() {
       body: JSON.stringify({ name: group.name, permissions })
     });
     if (!response.ok) {
-      setError("Unable to save this security group.");
+      setError(await responseError(response, "Unable to save this security group."));
       return;
     }
     const updated = await response.json();
@@ -49,7 +58,7 @@ export default function SecurityPage() {
       body: JSON.stringify({ name: newName, slug: newSlug, permissions: [] })
     });
     if (!response.ok) {
-      setError((await response.json()).error ?? "Unable to create this security group.");
+      setError(await responseError(response, "Unable to create this security group."));
       return;
     }
     const created = await response.json();
@@ -62,7 +71,7 @@ export default function SecurityPage() {
     if (!window.confirm(`Remove the ${group.name} group? Users in it will become unassigned.`)) return;
     const response = await fetch(`/api/security-groups/${group.id}`, { method: "DELETE" });
     if (!response.ok) {
-      setError((await response.json()).error ?? "Unable to remove this security group.");
+      setError(await responseError(response, "Unable to remove this security group."));
       return;
     }
     setGroups((current) => current.filter((item) => item.id !== group.id));

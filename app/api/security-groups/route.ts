@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json(await createSecurityGroup(input), { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Permission required." }, { status: 403 });
-    throw error;
+    if (error instanceof Error && error.message.includes("Unique constraint")) return NextResponse.json({ error: "A security group with that slug already exists." }, { status: 409 });
+    return NextResponse.json({ error: "Unable to create the security group." }, { status: 500 });
   }
 }
