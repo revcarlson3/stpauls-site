@@ -1,5 +1,6 @@
 import { Card, Container } from "@/components/ui";
 import { blockDefinitions } from "@/lib/blocks";
+import { SiteHeader } from "@/components/site-header";
 
 type RenderBlock = {
   id: string;
@@ -14,7 +15,7 @@ function isRenderBlock(value: unknown): value is RenderBlock {
   return typeof block.id === "string" && typeof block.type === "string";
 }
 
-export function PageRenderer({ blocks }: { blocks: unknown }) {
+export async function PageRenderer({ blocks }: { blocks: unknown }) {
   const validBlocks = Array.isArray(blocks) ? blocks.filter(isRenderBlock) : [];
 
   return (
@@ -23,6 +24,8 @@ export function PageRenderer({ blocks }: { blocks: unknown }) {
         const definition = blockDefinitions[block.type as keyof typeof blockDefinitions];
         const label = definition?.label ?? block.type;
         const title = block.title ?? definition?.label ?? "Content block";
+
+        if (block.type === "header") return <SiteHeader key={block.id} />;
 
         return (
           <section key={block.id} className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
@@ -38,7 +41,7 @@ export function PageRenderer({ blocks }: { blocks: unknown }) {
   );
 }
 
-export function PublishedPageShell({ title, blocks }: { title: string; blocks: unknown }) {
+export async function PublishedPageShell({ title, blocks }: { title: string; blocks: unknown }) {
   return (
     <main className="py-12 sm:py-20">
       <Container>
@@ -51,4 +54,3 @@ export function PublishedPageShell({ title, blocks }: { title: string; blocks: u
     </main>
   );
 }
-

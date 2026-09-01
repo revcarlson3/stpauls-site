@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { Button, Card, Container } from "@/components/ui";
+import { SiteHeader } from "@/components/site-header";
 
 export default function HomePage() {
   return (
     <main>
+      <SiteHeader />
       <section className="bg-sand pb-20 pt-16 sm:pb-28 sm:pt-24">
         <Container className="grid items-center gap-12 md:grid-cols-[1.1fr_.9fr]">
           <div>
@@ -44,4 +46,3 @@ export default function HomePage() {
     </main>
   );
 }
-
