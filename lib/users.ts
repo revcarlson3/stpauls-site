@@ -29,11 +29,12 @@ export async function listSecurityGroups() {
 }
 
 export async function listUsers() {
-  await requirePermission("MANAGE_USERS");
-  return db.user.findMany({
+  const actor = await requirePermission("MANAGE_USERS");
+  const users = await db.user.findMany({
     orderBy: { email: "asc" },
     select: { id: true, email: true, name: true, role: true, groupId: true, group: { select: { name: true } } }
   });
+  return users.map((user) => ({ ...user, isCurrent: user.id === actor.id }));
 }
 
 export async function assignUserGroup(id: string, groupId: string | null) {
@@ -46,18 +47,29 @@ export async function assignUserGroup(id: string, groupId: string | null) {
 }
 
 export async function updateUserAccount(input: { id: string; name: string; email: string; password?: string; groupId: string | null }) {
-  await requirePermission("MANAGE_USERS");
+  const actor = await requirePermission("MANAGE_USERS");
+  if (actor.id === input.id) {
+    const current = await db.user.findUnique({ where: { id: input.id }, select: { groupId: true } });
+    if (current?.groupId !== input.groupId) throw new Error("You cannot change your own security group.");
+  }
   const data: { name: string; email: string; groupId: string | null; passwordHash?: string } = {
     name: input.name.trim(),
     email: input.email.toLowerCase().trim(),
     groupId: input.groupId
   };
   if (input.password) data.passwordHash = await bcrypt.hash(input.password, 12);
-  return db.user.update({
+  const updated = await db.user.update({
     where: { id: input.id },
     data,
     select: { id: true, email: true, name: true, role: true, groupId: true, group: { select: { name: true } } }
   });
+  return { ...updated, isCurrent: updated.id === actor.id };
+}
+
+export async function deleteUser(id: string) {
+  const actor = await requirePermission("MANAGE_USERS");
+  if (actor.id === id) throw new Error("You cannot delete your own account.");
+  await db.user.delete({ where: { id } });
 }
 
 export async function updateSecurityGroup(id: string, input: { name: string; permissions: Permission[] }) {

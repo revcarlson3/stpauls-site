@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, Container } from "@/components/ui";
 
 type Group = { id: string; name: string };
-type User = { id: string; email: string; name: string; role: string; groupId: string | null; group?: { name: string } | null };
+type User = { id: string; email: string; name: string; role: string; groupId: string | null; group?: { name: string } | null; isCurrent: boolean };
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -32,11 +32,23 @@ export default function UsersPage() {
       setError(body.error ?? "Unable to update this user.");
       return;
     }
+
     const updated = await response.json();
     setUsers((current) => current.map((item) => item.id === updated.id ? updated : item));
     const passwordInput = form.elements.namedItem("password");
     if (passwordInput instanceof HTMLInputElement) passwordInput.value = "";
     setError("");
+  }
+
+  async function removeUser(user: User) {
+    if (!window.confirm(`Delete the account for ${user.email}? This cannot be undone.`)) return;
+    const response = await fetch(`/api/users/${user.id}`, { method: "DELETE" });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setError(body.error ?? "Unable to delete this user.");
+      return;
+    }
+    setUsers((current) => current.filter((item) => item.id !== user.id));
   }
 
   return <main><Container className="py-10 sm:py-14">
@@ -49,9 +61,9 @@ export default function UsersPage() {
       <form className="mt-6 grid gap-4" onSubmit={(event) => { event.preventDefault(); void saveUser(user, event.currentTarget); }}>
         <label className="grid gap-1 text-sm font-semibold">Name<input name="name" required minLength={2} defaultValue={user.name} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
         <label className="grid gap-1 text-sm font-semibold">Email<input name="email" required type="email" defaultValue={user.email} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
-        <label className="grid gap-1 text-sm font-semibold">Security group<select name="groupId" defaultValue={user.groupId ?? ""} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">No group assigned</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
+        <label className="grid gap-1 text-sm font-semibold">Security group<select name="groupId" disabled={user.isCurrent} defaultValue={user.groupId ?? ""} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">No group assigned</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select>{user.isCurrent && <span className="text-xs font-normal text-ink/50">You cannot change your own security group.</span>}</label>
         <label className="grid gap-1 text-sm font-semibold">Reset password <span className="font-normal text-ink/50">(leave blank to keep current password)</span><input name="password" type="password" minLength={12} autoComplete="new-password" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
-        <button type="submit" className="focus-ring w-fit rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white hover:bg-[#d95f43]">Save user</button>
+        <div className="flex flex-wrap gap-3"><button type="submit" className="focus-ring w-fit rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white hover:bg-[#d95f43]">Save user</button>{!user.isCurrent && <button type="button" onClick={() => void removeUser(user)} className="focus-ring w-fit rounded-full border border-coral px-5 py-3 text-sm font-semibold text-coral hover:bg-coral hover:text-white">Delete user</button>}</div>
       </form>
     </Card>)}</div>
   </Container></main>;

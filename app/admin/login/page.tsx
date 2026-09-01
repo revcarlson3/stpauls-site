@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { Button, Card, Container } from "@/components/ui";
+import Link from "next/link";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -37,6 +38,7 @@ export default function AdminLoginPage() {
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} /> Remember me for 60 days</label>
             {error && <p role="alert" className="text-sm font-semibold text-coral">{error}</p>}
             <Button type="submit">Sign in</Button>
+            <Link href="/forgot-password" className="text-center text-sm font-semibold text-coral hover:underline">Forgot your password?</Link>
           </form>
         </Card>
       </Container>
