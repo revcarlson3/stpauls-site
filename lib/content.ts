@@ -19,13 +19,15 @@ export async function listPages() {
   return db.page.findMany({ orderBy: { updatedAt: "desc" } });
 }
 
-export async function createPage(input: { title: string; slug: string; blocks: PageBlock[] }) {
+export async function createPage(input: { title: string; slug: string; blocks: PageBlock[]; menuId?: string | null }) {
   const author = await requireRole("editor");
+  await validateMenu(input.menuId);
   return db.page.create({
     data: {
       title: input.title,
       slug: input.slug,
       blocks: blocksValue(input.blocks),
+      menuId: input.menuId,
       revisions: {
         create: revisionData(input, author)
       }
@@ -33,14 +35,16 @@ export async function createPage(input: { title: string; slug: string; blocks: P
   });
 }
 
-export async function updatePage(id: string, input: { title: string; slug: string; blocks: PageBlock[] }) {
+export async function updatePage(id: string, input: { title: string; slug: string; blocks: PageBlock[]; menuId?: string | null }) {
   const author = await requireRole("editor");
+  await validateMenu(input.menuId);
   return db.page.update({
     where: { id },
     data: {
       title: input.title,
       slug: input.slug,
       blocks: blocksValue(input.blocks),
+      menuId: input.menuId,
       revisions: {
         create: revisionData(input, author)
       }
@@ -58,6 +62,12 @@ export async function publishPage(id: string) {
 
 function revisionData(input: { title: string; blocks: PageBlock[] }, author: User) {
   return { title: input.title, blocks: blocksValue(input.blocks), authorId: author.id };
+}
+
+async function validateMenu(menuId: string | null | undefined) {
+  if (menuId === undefined || menuId === null) return;
+  const menu = await db.menu.findUnique({ where: { id: menuId }, select: { id: true } });
+  if (!menu) throw new Error("Invalid menu assignment.");
 }
 
 export async function listMenus() {

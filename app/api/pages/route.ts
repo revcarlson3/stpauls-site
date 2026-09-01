@@ -17,6 +17,9 @@ export async function POST(request: Request) {
   try {
     return NextResponse.json(await createPage(input), { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === "Invalid menu assignment.") {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     return unauthorizedResponse(error);
   }
 }
@@ -27,4 +30,3 @@ function unauthorizedResponse(error: unknown) {
   }
   throw error;
 }
-

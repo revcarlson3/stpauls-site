@@ -46,6 +46,7 @@ npm run build
 - `lib/site.ts` holds the displayed revision. Every `npm run build` increments its final build component automatically, so a deployed build can be identified from the public header.
 - `components/page-renderer.tsx` and `app/(public)/[slug]/page.tsx` provide the first published-page path: only pages with `PUBLISHED` status are rendered publicly, while unknown/unpublished slugs return 404.
 - `app/api/pages` exposes protected GET/POST/PATCH endpoints for validated page drafts; unauthenticated requests return `401` until the real session provider is connected.
+- Page drafts accept an optional `menuId`, validated server-side so a page can use the global menu by default or an explicitly assigned per-page menu.
 - `app/api/menus` exposes protected menu listing/creation endpoints; the Prisma menu model supports global menus and per-page assignment through `Page.menuId`, with nested ordered items.
 - `app/admin/editor/editor-canvas.tsx` is a client-side prototype using a responsive 12-column grid. Blocks can be reordered and moved between columns with native drag-and-drop.
 

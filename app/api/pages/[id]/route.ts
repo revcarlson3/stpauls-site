@@ -9,10 +9,12 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   try {
     return NextResponse.json(await updatePage(params.id, input));
   } catch (error) {
+    if (error instanceof Error && error.message === "Invalid menu assignment.") {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     }
     throw error;
   }
 }
-

@@ -4,6 +4,7 @@ export type PageInput = {
   title: string;
   slug: string;
   blocks: PageBlock[];
+  menuId?: string | null;
 };
 
 export function parsePageInput(value: unknown): PageInput | null {
@@ -21,7 +22,8 @@ export function parsePageInput(value: unknown): PageInput | null {
 
   const blocks = input.blocks.filter(isPageBlock);
   if (blocks.length !== input.blocks.length) return null;
-  return { title: input.title.trim(), slug: input.slug, blocks };
+  if (input.menuId !== undefined && input.menuId !== null && typeof input.menuId !== "string") return null;
+  return { title: input.title.trim(), slug: input.slug, blocks, menuId: input.menuId as string | null | undefined };
 }
 
 function isPageBlock(value: unknown): value is PageBlock {
@@ -33,4 +35,3 @@ function isPageBlock(value: unknown): value is PageBlock {
 function isJsonObject(value: unknown): value is Record<string, never> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-
