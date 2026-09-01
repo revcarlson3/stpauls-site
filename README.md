@@ -36,7 +36,7 @@ Security groups are stored in `SecurityGroup` and `GroupPermission`. The seed co
 npm run groups:seed
 ```
 
-Users will be assigned to a group as the administration UI is added. Server-side writes use permission checks rather than trusting client-side switches. The existing `role` field remains during this transition and should not be treated as the long-term permission source.
+Users can be assigned to groups from the Users administration screen. Server-side writes use group permission checks rather than trusting client-side switches. The existing `role` field remains for compatibility and session display, but is not used for authorization.
 
 Set `NEXTAUTH_SECRET` to a long random value and set `NEXTAUTH_URL` to the deployed HTTPS URL. After adding `passwordHash` to the schema, run `npm run db:push` again. Users must be provisioned through a controlled administrative process; this scaffold intentionally provides no default credentials or public registration.
 

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { requireRole, type User } from "@/lib/auth";
+import { requirePermission, type User } from "@/lib/auth";
 
 type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
 type JsonObject = { [key: string]: JsonValue };
@@ -15,12 +15,12 @@ function blocksValue(blocks: PageBlock[]): JsonValue[] {
 }
 
 export async function listPages() {
-  await requireRole("editor");
+  await requirePermission("EDIT_PAGES");
   return db.page.findMany({ orderBy: { updatedAt: "desc" } });
 }
 
 export async function createPage(input: { title: string; slug: string; blocks: PageBlock[]; menuId?: string | null }) {
-  const author = await requireRole("editor");
+  const author = await requirePermission("EDIT_PAGES");
   await validateMenu(input.menuId);
   return db.page.create({
     data: {
@@ -36,7 +36,7 @@ export async function createPage(input: { title: string; slug: string; blocks: P
 }
 
 export async function updatePage(id: string, input: { title: string; slug: string; blocks: PageBlock[]; menuId?: string | null }) {
-  const author = await requireRole("editor");
+  const author = await requirePermission("EDIT_PAGES");
   await validateMenu(input.menuId);
   return db.page.update({
     where: { id },
@@ -53,7 +53,7 @@ export async function updatePage(id: string, input: { title: string; slug: strin
 }
 
 export async function publishPage(id: string) {
-  const author = await requireRole("admin");
+  const author = await requirePermission("PUBLISH_PAGES");
   return db.page.update({
     where: { id },
     data: { status: "PUBLISHED", publishedAt: new Date(), publishedById: author.id }
@@ -71,11 +71,11 @@ async function validateMenu(menuId: string | null | undefined) {
 }
 
 export async function listMenus() {
-  await requireRole("editor");
+  await requirePermission("MANAGE_MENUS");
   return db.menu.findMany({ include: { items: { orderBy: { position: "asc" } } }, orderBy: { name: "asc" } });
 }
 
 export async function createMenu(input: { name: string; slug: string }) {
-  await requireRole("admin");
+  await requirePermission("MANAGE_MENUS");
   return db.menu.create({ data: input });
 }

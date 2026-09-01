@@ -11,8 +11,6 @@ export type User = {
   role: Role;
 };
 
-const roleRank: Record<Role, number> = { viewer: 1, editor: 2, admin: 3 };
-
 export function getCurrentUser() {
   return getServerSession(authOptions).then((session) => {
     const role = session?.user?.role;
@@ -21,17 +19,8 @@ export function getCurrentUser() {
   });
 }
 
-export async function requireRole(requiredRole: Role): Promise<User> {
-  const user = await getCurrentUser();
-  if (!user || roleRank[user.role] < roleRank[requiredRole]) {
-    throw new Error("Unauthorized: a server-side authenticated session is required.");
-  }
-  return user;
-}
-
 export async function requirePermission(permission: Permission): Promise<User> {
   const user = await requireAuthenticatedUser();
-  if (user.role === "admin") return user;
   const membership = await db.user.findUnique({
     where: { id: user.id },
     select: { group: { select: { permissions: { where: { permission }, select: { permission: true } } } } }
