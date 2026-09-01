@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
-import { createUser } from "@/lib/users";
+import { createUser, listUsers } from "@/lib/users";
 import type { Role } from "@/lib/auth";
+
+export async function GET() {
+  try {
+    return NextResponse.json(await listUsers());
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Permission required." }, { status: 403 });
+    return NextResponse.json({ error: "Unable to load users." }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request) {
   const input = await request.json();
@@ -30,4 +39,3 @@ export async function POST(request: Request) {
 function isRole(value: unknown): value is Role {
   return value === "viewer" || value === "editor" || value === "admin";
 }
-

@@ -28,6 +28,23 @@ export async function listSecurityGroups() {
   });
 }
 
+export async function listUsers() {
+  await requirePermission("MANAGE_USERS");
+  return db.user.findMany({
+    orderBy: { email: "asc" },
+    select: { id: true, email: true, name: true, role: true, groupId: true, group: { select: { name: true } } }
+  });
+}
+
+export async function assignUserGroup(id: string, groupId: string | null) {
+  await requirePermission("MANAGE_USERS");
+  return db.user.update({
+    where: { id },
+    data: { groupId },
+    select: { id: true, email: true, name: true, role: true, groupId: true, group: { select: { name: true } } }
+  });
+}
+
 export async function updateSecurityGroup(id: string, input: { name: string; permissions: Permission[] }) {
   await requirePermission("MANAGE_USERS");
   return db.securityGroup.update({

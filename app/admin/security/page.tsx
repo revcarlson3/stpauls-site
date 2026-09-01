@@ -18,6 +18,7 @@ const permissionOptions = [
 ] as const;
 
 type Group = { id: string; name: string; slug: string; permissions: { permission: string }[]; _count: { users: number } };
+type User = { id: string; email: string; name: string; role: string; groupId: string | null };
 
 function normalizeGroup(group: Omit<Group, "_count"> & { _count?: { users: number } }): Group {
   return { ...group, _count: group._count ?? { users: 0 } };
@@ -34,14 +35,16 @@ async function responseError(response: Response, fallback: string) {
 
 export default function SecurityPage() {
   const [groups, setGroups] = useState<Group[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState("");
   const [newName, setNewName] = useState("");
   const [newSlug, setNewSlug] = useState("");
 
   useEffect(() => {
-    fetch("/api/security-groups").then(async (response) => {
-      if (!response.ok) throw new Error("You do not have permission to manage security groups.");
-      setGroups((await response.json()).map(normalizeGroup));
+    Promise.all([fetch("/api/security-groups"), fetch("/api/users")]).then(async ([groupsResponse, usersResponse]) => {
+      if (!groupsResponse.ok || !usersResponse.ok) throw new Error("You do not have permission to manage security groups.");
+      setGroups((await groupsResponse.json()).map(normalizeGroup));
+      setUsers(await usersResponse.json());
     }).catch((reason: Error) => setError(reason.message));
   }, []);
 
@@ -83,7 +86,22 @@ export default function SecurityPage() {
       setError(await responseError(response, "Unable to remove this security group."));
       return;
     }
+
     setGroups((current) => current.filter((item) => item.id !== group.id));
+  }
+
+  async function assignGroup(user: User, groupId: string) {
+    const response = await fetch(`/api/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupId: groupId || null })
+    });
+    if (!response.ok) {
+      setError(await responseError(response, "Unable to assign this user."));
+      return;
+    }
+    const updated = await response.json();
+    setUsers((current) => current.map((item) => item.id === updated.id ? updated : item));
   }
 
   return (
@@ -98,6 +116,7 @@ export default function SecurityPage() {
           <button type="submit" className="focus-ring rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white hover:bg-[#d95f43]">Add group</button>
         </form>
         {error ? <p className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p> : (
+          <div>
           <div className="mt-8 grid gap-6 lg:grid-cols-2">
             {groups.map((group) => {
               const selected = new Set(group.permissions.map((item) => item.permission));
@@ -118,6 +137,20 @@ export default function SecurityPage() {
                 </div>
               </Card>;
             })}
+          </div>
+          <Card className="mt-8">
+            <h2 className="font-serif text-2xl">User assignments</h2>
+            <p className="mt-1 text-sm text-ink/60">Assign each account to the group that matches its responsibilities.</p>
+            <div className="mt-6 grid gap-3">
+              {users.map((user) => <div key={user.id} className="flex flex-col gap-2 border-t border-ink/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <div><p className="font-semibold">{user.name}</p><p className="text-xs text-ink/55">{user.email} · {user.role}</p></div>
+                <select aria-label={`Security group for ${user.email}`} value={user.groupId ?? ""} onChange={(event) => void assignGroup(user, event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm">
+                  <option value="">No group assigned</option>
+                  {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                </select>
+              </div>)}
+            </div>
+          </Card>
           </div>
         )}
       </Container>

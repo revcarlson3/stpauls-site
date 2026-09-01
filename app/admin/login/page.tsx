@@ -7,6 +7,7 @@ import { Button, Card, Container } from "@/components/ui";
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -15,6 +16,7 @@ export default function AdminLoginPage() {
     const result = await signIn("credentials", {
       email,
       password,
+      rememberMe: String(rememberMe),
       callbackUrl: "/admin/editor",
       redirect: false
     });
@@ -32,6 +34,7 @@ export default function AdminLoginPage() {
           <form className="mt-8 grid gap-4" onSubmit={handleSubmit}>
             <label className="grid gap-1 text-sm font-semibold">Email<input required type="email" autoComplete="email" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
             <label className="grid gap-1 text-sm font-semibold">Password<input required type="password" autoComplete="current-password" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} /> Remember me for 60 days</label>
             {error && <p role="alert" className="text-sm font-semibold text-coral">{error}</p>}
             <Button type="submit">Sign in</Button>
           </form>
