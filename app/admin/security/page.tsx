@@ -19,6 +19,10 @@ const permissionOptions = [
 
 type Group = { id: string; name: string; slug: string; permissions: { permission: string }[]; _count: { users: number } };
 
+function normalizeGroup(group: Omit<Group, "_count"> & { _count?: { users: number } }): Group {
+  return { ...group, _count: group._count ?? { users: 0 } };
+}
+
 async function responseError(response: Response, fallback: string) {
   try {
     const body = await response.json();
@@ -37,7 +41,7 @@ export default function SecurityPage() {
   useEffect(() => {
     fetch("/api/security-groups").then(async (response) => {
       if (!response.ok) throw new Error("You do not have permission to manage security groups.");
-      setGroups(await response.json());
+      setGroups((await response.json()).map(normalizeGroup));
     }).catch((reason: Error) => setError(reason.message));
   }, []);
 
@@ -52,7 +56,7 @@ export default function SecurityPage() {
       return;
     }
     const updated = await response.json();
-    setGroups((current) => current.map((item) => item.id === updated.id ? updated : item));
+    setGroups((current) => current.map((item) => item.id === updated.id ? normalizeGroup(updated) : item));
   }
 
   async function addGroup(event: React.FormEvent<HTMLFormElement>) {
@@ -67,7 +71,7 @@ export default function SecurityPage() {
       return;
     }
     const created = await response.json();
-    setGroups((current) => [...current, created]);
+    setGroups((current) => [...current, normalizeGroup(created)]);
     setNewName("");
     setNewSlug("");
   }
