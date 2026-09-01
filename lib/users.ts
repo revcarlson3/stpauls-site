@@ -45,6 +45,21 @@ export async function assignUserGroup(id: string, groupId: string | null) {
   });
 }
 
+export async function updateUserAccount(input: { id: string; name: string; email: string; password?: string; groupId: string | null }) {
+  await requirePermission("MANAGE_USERS");
+  const data: { name: string; email: string; groupId: string | null; passwordHash?: string } = {
+    name: input.name.trim(),
+    email: input.email.toLowerCase().trim(),
+    groupId: input.groupId
+  };
+  if (input.password) data.passwordHash = await bcrypt.hash(input.password, 12);
+  return db.user.update({
+    where: { id: input.id },
+    data,
+    select: { id: true, email: true, name: true, role: true, groupId: true, group: { select: { name: true } } }
+  });
+}
+
 export async function updateSecurityGroup(id: string, input: { name: string; permissions: Permission[] }) {
   await requirePermission("MANAGE_USERS");
   return db.securityGroup.update({

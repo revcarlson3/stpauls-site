@@ -13,6 +13,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
           <nav aria-label="Admin navigation" className="flex gap-4 text-sm font-medium">
             <Link className="focus-ring text-coral" href="/admin/editor">Editor</Link>
             <Link className="focus-ring text-ink/60 hover:text-coral" href="/admin/security">Security</Link>
+            <Link className="focus-ring text-ink/60 hover:text-coral" href="/admin/users">Users</Link>
             <Link className="focus-ring text-ink/60 hover:text-coral" href="/">View site</Link>
           </nav>
         </Container>
