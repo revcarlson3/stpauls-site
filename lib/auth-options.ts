@@ -3,8 +3,11 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 
+const REMEMBERED_SESSION_SECONDS = 60 * 24 * 60 * 60;
+
 export const authOptions: NextAuthOptions = {
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: REMEMBERED_SESSION_SECONDS },
+  jwt: { maxAge: REMEMBERED_SESSION_SECONDS },
   pages: { signIn: "/admin/login" },
   providers: [
     CredentialsProvider({
@@ -38,4 +41,3 @@ export const authOptions: NextAuthOptions = {
     }
   }
 };
-
