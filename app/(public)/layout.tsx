@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { Container } from "@/components/ui";
 import { SITE_REVISION } from "@/lib/site";
+import { getCurrentUser } from "@/lib/auth";
+import { PublicAccountNav } from "@/components/public-account-nav";
 
-export default function PublicLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function PublicLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const user = await getCurrentUser();
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-ink/10 bg-sand/90">
@@ -22,12 +26,7 @@ export default function PublicLayout({ children }: Readonly<{ children: React.Re
             <Link className="focus-ring hover:text-coral" href="#belong">
               Belong
             </Link>
-            <Link className="focus-ring hover:text-coral" href="/register">
-              Join
-            </Link>
-            <Link className="focus-ring rounded-full border border-ink/20 px-4 py-2 hover:border-coral hover:text-coral" href="/admin/editor">
-              Editor
-            </Link>
+            <PublicAccountNav authenticated={Boolean(user)} />
           </nav>
         </Container>
       </header>
