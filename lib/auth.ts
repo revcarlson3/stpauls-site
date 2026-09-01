@@ -1,3 +1,6 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
+
 export type Role = "viewer" | "editor" | "admin";
 
 export type User = {
@@ -8,12 +11,12 @@ export type User = {
 
 const roleRank: Record<Role, number> = { viewer: 1, editor: 2, admin: 3 };
 
-/**
- * Integration seam for a real server-side session provider.
- * Deliberately returns null until authentication is implemented.
- */
-export async function getCurrentUser(): Promise<User | null> {
-  return null;
+export function getCurrentUser() {
+  return getServerSession(authOptions).then((session) => {
+    const role = session?.user?.role;
+    if (!session?.user?.id || !isRole(role)) return null;
+    return { id: session.user.id, name: session.user.name ?? session.user.email ?? "User", role };
+  });
 }
 
 export async function requireRole(requiredRole: Role): Promise<User> {
@@ -24,3 +27,6 @@ export async function requireRole(requiredRole: Role): Promise<User> {
   return user;
 }
 
+function isRole(value: unknown): value is Role {
+  return value === "viewer" || value === "editor" || value === "admin";
+}

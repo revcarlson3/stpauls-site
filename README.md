@@ -8,6 +8,7 @@ Barebones mobile-first public site foundation with a separately routed editor ar
 - Tailwind CSS
 - Native HTML5 drag-and-drop for the editor prototype (no editor dependency yet)
 - PostgreSQL + Prisma for the CMS foundation
+- NextAuth credentials sessions with role claims
 
 ## Local setup
 
@@ -27,6 +28,8 @@ npm run db:push
 
 `db:push` is appropriate for this early prototype. Use reviewed Prisma migrations before production data is introduced.
 
+Set `NEXTAUTH_SECRET` to a long random value and set `NEXTAUTH_URL` to the deployed HTTPS URL. After adding `passwordHash` to the schema, run `npm run db:push` again. Users must be provisioned through a controlled administrative process; this scaffold intentionally provides no default credentials or public registration.
+
 Available checks:
 
 ```bash
@@ -40,6 +43,7 @@ npm run build
 - `app/admin` contains the admin route boundary, admin navigation, and editor experience.
 - `components/ui` contains shared design-system primitives used by both boundaries.
 - `lib/auth.ts` defines the authorization seam and `viewer`/`editor`/`admin` role model.
+- `lib/auth-options.ts`, `app/api/auth`, `middleware.ts`, and `app/admin/login` implement the server-side session boundary. Admin routes redirect to sign-in, and page/menu writes still enforce role checks server-side.
 - `prisma/schema.prisma` defines PostgreSQL persistence for users, pages, page revisions, menus, and nested menu items.
 - `lib/content.ts` provides server-side page/menu CRUD and requires `editor` or `admin` authorization for each operation.
 - `lib/blocks.ts` is the shared block catalog for the page builder; it keeps the initial block types and their responsive defaults in one place.

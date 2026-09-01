@@ -23,6 +23,7 @@ model User {
   id           String         @id @default(cuid())
   email        String         @unique
   name         String
+  passwordHash String?
   role         Role           @default(viewer)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
@@ -86,4 +87,3 @@ model MenuItem {
 
   @@index([menuId, position])
 }
-
