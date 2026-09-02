@@ -12,7 +12,8 @@
     "db:studio": "prisma studio",
     "user:create": "node scripts/create-user.mjs",
     "groups:seed": "node scripts/seed-groups.mjs",
-    "membership:seed": "node scripts/seed-membership.mjs"
+    "membership:seed": "node scripts/seed-membership.mjs",
+    "membership:seed-demo": "node scripts/seed-membership-demo.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.7.0",

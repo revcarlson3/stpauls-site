@@ -43,6 +43,8 @@ Site Settings includes a Modules block for users with `MANAGE_MODULES`. It store
 
 The membership foundation uses separate family and individual records, configurable family roles and member types, soft lifecycle states (`ACTIVE`, `INACTIVE`, `DECEASED`, and `REMOVED`), custom-field definitions, private document metadata, and authored notes. After applying the schema, seed the initial reference data with `npm run membership:seed`.
 
+The Membership landing page includes a responsive directory preview with partial first/last-name search, member-type filtering, and selected individual/family details. For local visual data, apply the schema and reference seed, then run `npm run membership:seed-demo`; this creates five clearly fake example families and ten example members and can be run repeatedly without duplicating them.
+
 Login protection limits an account to five failed password attempts within a 15-minute window, followed by a 15-minute temporary lockout. A successful login clears the failed-attempt counter. Password recovery remains available for locked accounts.
 
 Set `NEXTAUTH_SECRET` to a long random value and set `NEXTAUTH_URL` to the deployed HTTPS URL. After adding `passwordHash` or MFA fields to the schema, run `npm run db:push` again. Users must be provisioned through a controlled administrative process; this scaffold intentionally provides no default credentials or public registration.
