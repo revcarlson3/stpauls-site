@@ -102,3 +102,13 @@ export async function createMenu(input: { name: string; slug: string }) {
   await requirePermission("MANAGE_MENUS");
   return db.menu.create({ data: input });
 }
+
+export async function getMenu(id: string) {
+  await requirePermission("MANAGE_MENUS");
+  return db.menu.findUnique({ where: { id }, include: { items: { orderBy: { position: "asc" } } } });
+}
+
+export async function updateMenu(id: string, input: { name: string; slug: string }) {
+  await requirePermission("MANAGE_MENUS");
+  return db.menu.update({ where: { id }, data: input, include: { items: { orderBy: { position: "asc" } } } });
+}

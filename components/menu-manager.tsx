@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { Button, Card } from "@/components/ui";
 
 type Menu = {
@@ -55,7 +56,7 @@ export function MenuManager() {
               <h2 className="font-serif text-2xl">{menu.name}</h2>
               <p className="mt-1 text-sm text-ink/55">/{menu.slug} · {menu.items.length} {menu.items.length === 1 ? "item" : "items"}</p>
             </div>
-            <Button type="button" className="bg-ink hover:bg-ink/90">Edit menu</Button>
+            <Link href={`/admin/navigation/${menu.id}`} className="focus-ring rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white hover:bg-ink/90">Edit menu</Link>
           </Card>
         ))}
         {message && <p role="status" className="text-sm text-ink/60">{message}</p>}

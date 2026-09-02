@@ -6,6 +6,13 @@ export type MenuItemInput = {
   parentId?: string | null;
 };
 
+export function parseMenuDetails(value: unknown): { name: string; slug: string } | null {
+  if (!value || typeof value !== "object") return null;
+  const input = value as Record<string, unknown>;
+  if (typeof input.name !== "string" || typeof input.slug !== "string" || !input.name.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(input.slug)) return null;
+  return { name: input.name.trim(), slug: input.slug };
+}
+
 export function parseMenuInput(value: unknown): { name: string; slug: string; items: MenuItemInput[] } | null {
   if (!value || typeof value !== "object") return null;
   const input = value as Record<string, unknown>;
@@ -38,4 +45,3 @@ function parseMenuItem(value: unknown): MenuItemInput | null {
     parentId: item.parentId as string | null | undefined
   };
 }
-
