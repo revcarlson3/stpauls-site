@@ -23,7 +23,7 @@ export default function AdminLoginPage() {
       rememberMe: String(rememberMe),
       captchaToken: captcha?.token,
       captchaAnswer,
-      callbackUrl: "/admin/editor",
+      callbackUrl: "/",
       redirect: false
     });
     if (result?.error) setError("Email or password was not accepted.");
