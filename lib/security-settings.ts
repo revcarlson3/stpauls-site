@@ -4,7 +4,7 @@ import { requirePermission } from "@/lib/auth";
 export const defaultSecuritySettings = { loginProtectionEnabled: true, maxFailedAttempts: 5, lockoutMinutes: 15 };
 
 export async function getSecuritySettings() {
-  return db.securitySettings.findUnique({ where: { id: 1 } }) ?? defaultSecuritySettings;
+  return (await db.securitySettings.findUnique({ where: { id: 1 } })) ?? defaultSecuritySettings;
 }
 
 export async function updateSecuritySettings(input: typeof defaultSecuritySettings) {
