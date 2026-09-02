@@ -54,6 +54,14 @@ model User {
   published    Page[]         @relation("PublishedBy")
 }
 
+model SecuritySettings {
+  id                   Int      @id @default(1)
+  loginProtectionEnabled Boolean @default(true)
+  maxFailedAttempts   Int      @default(5)
+  lockoutMinutes      Int      @default(15)
+  updatedAt           DateTime @updatedAt
+}
+
 model SecurityGroup {
   id          String             @id @default(cuid())
   name        String
