@@ -136,3 +136,22 @@ export async function listMenuPageOptions() {
   await requirePermission("MANAGE_MENUS");
   return db.page.findMany({ where: { status: "PUBLISHED" }, select: { id: true, title: true, slug: true }, orderBy: { title: "asc" } });
 }
+
+const defaultMenuLocations = [
+  { slug: "primary", name: "Primary navigation" },
+  { slug: "mobile", name: "Mobile navigation" },
+  { slug: "footer", name: "Footer navigation" },
+  { slug: "utility", name: "Utility navigation" }
+];
+
+export async function listMenuLocations() {
+  await requirePermission("MANAGE_MENUS");
+  await db.$transaction(defaultMenuLocations.map((location) => db.menuLocation.upsert({ where: { slug: location.slug }, create: location, update: { name: location.name } })));
+  return db.menuLocation.findMany({ include: { menu: { select: { id: true, name: true, slug: true } } }, orderBy: { id: "asc" } });
+}
+
+export async function updateMenuLocation(id: string, menuId: string | null) {
+  await requirePermission("MANAGE_MENUS");
+  if (menuId && !(await db.menu.findUnique({ where: { id: menuId }, select: { id: true } }))) throw new Error("Invalid menu assignment.");
+  return db.menuLocation.update({ where: { id }, data: { menuId }, include: { menu: { select: { id: true, name: true, slug: true } } } });
+}
