@@ -4,10 +4,10 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { Button, Card } from "@/components/ui";
 
-type MenuItem = { id?: string; tempId?: string; label: string; href: string; position: number; itemType: "INTERNAL" | "EXTERNAL"; openInNewTab: boolean };
+type MenuItem = { id?: string; tempId?: string; label: string; href: string; position: number; parentId?: string | null; itemType: "INTERNAL" | "EXTERNAL"; openInNewTab: boolean };
 type Menu = { name: string; slug: string; items: MenuItem[] };
 type PageOption = { id: string; title: string; slug: string };
-const emptyItem = (): MenuItem => ({ label: "", href: "", position: 0, itemType: "INTERNAL", openInNewTab: false });
+const emptyItem = (): MenuItem => ({ label: "", href: "", position: 0, parentId: null, itemType: "INTERNAL", openInNewTab: false });
 
 export function MenuEditor({ id }: { id: string }) {
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -32,7 +32,7 @@ export function MenuEditor({ id }: { id: string }) {
   function addOrUpdateItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft.label.trim() || !draft.href.trim() || !menu) return;
-    const items = editingId ? menu.items.map((item) => (item.id ?? item.tempId) === editingId ? { ...draft } : item) : [...menu.items, { ...draft, tempId: `new-${Date.now()}`, position: menu.items.length }];
+    const items = editingId ? menu.items.map((item) => (item.id ?? item.tempId) === editingId ? { ...draft } : item) : [...menu.items, { ...draft, parentId: draft.parentId && menu.items.some((item) => item.id === draft.parentId) ? draft.parentId : null, tempId: `new-${Date.now()}`, position: menu.items.length }];
     setMenu({ ...menu, items }); setDraft(emptyItem()); setEditingId(undefined);
   }
   function removeItem(itemKey: string) { if (menu) setMenu({ ...menu, items: menu.items.filter((item) => (item.id ?? item.tempId) !== itemKey).map((item, position) => ({ ...item, position })) }); }
@@ -58,13 +58,14 @@ export function MenuEditor({ id }: { id: string }) {
       <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-serif text-2xl">Menu items</h2><p className="mt-1 text-sm text-ink/55">Add internal pages or external URLs, then reorder them.</p></div></div>
       <div className="mt-5 grid gap-2">
         {menu.items.length === 0 && <p className="rounded-lg bg-mist p-4 text-sm text-ink/60">This menu has no items yet.</p>}
-        {menu.items.map((item, index) => <div key={item.id ?? item.tempId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ink/10 px-4 py-3 text-sm"><div><p className="font-semibold">{item.label}</p><p className="text-ink/50">{item.href} · {item.itemType === "EXTERNAL" ? "external" : "internal"}{item.openInNewTab ? " · new tab" : ""}</p></div><div className="flex gap-2"><button type="button" className="focus-ring rounded px-2 py-1 hover:bg-mist" onClick={() => moveItem(index, -1)} disabled={index === 0}>↑</button><button type="button" className="focus-ring rounded px-2 py-1 hover:bg-mist" onClick={() => moveItem(index, 1)} disabled={index === menu.items.length - 1}>↓</button><button type="button" className="focus-ring rounded px-2 py-1 text-coral hover:bg-sand" onClick={() => editItem(item)}>Edit</button><button type="button" className="focus-ring rounded px-2 py-1 text-coral hover:bg-sand" onClick={() => removeItem(item.id ?? item.tempId ?? "")}>Delete</button></div></div>)}
+        {menu.items.map((item, index) => <div key={item.id ?? item.tempId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ink/10 px-4 py-3 text-sm" style={{ marginLeft: item.parentId ? "1.25rem" : undefined }}><div><p className="font-semibold">{item.label}</p><p className="text-ink/50">{item.href} · {item.itemType === "EXTERNAL" ? "external" : "internal"}{item.parentId ? " · submenu item" : ""}{item.openInNewTab ? " · new tab" : ""}</p></div><div className="flex gap-2"><button type="button" className="focus-ring rounded px-2 py-1 hover:bg-mist" onClick={() => moveItem(index, -1)} disabled={index === 0}>↑</button><button type="button" className="focus-ring rounded px-2 py-1 hover:bg-mist" onClick={() => moveItem(index, 1)} disabled={index === menu.items.length - 1}>↓</button><button type="button" className="focus-ring rounded px-2 py-1 text-coral hover:bg-sand" onClick={() => editItem(item)}>Edit</button><button type="button" className="focus-ring rounded px-2 py-1 text-coral hover:bg-sand" onClick={() => removeItem(item.id ?? item.tempId ?? "")}>Delete</button></div></div>)}
       </div>
       <form className="mt-6 grid gap-3 border-t border-ink/10 pt-5" onSubmit={addOrUpdateItem}>
         <h3 className="font-semibold">{editingId ? "Edit item" : "Add item"}</h3>
         <input required placeholder="Link label" value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink" />
         <select value={draft.itemType} onChange={(event) => setDraft({ ...draft, itemType: event.target.value as MenuItem["itemType"], href: event.target.value === "INTERNAL" ? "/" : "" })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink"><option value="INTERNAL">Internal page</option><option value="EXTERNAL">External URL</option></select>
         {draft.itemType === "INTERNAL" ? <select required value={draft.href} onChange={(event) => setDraft({ ...draft, href: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink"><option value="">Select a published page</option>{pages.map((page) => <option key={page.id} value={`/${page.slug}`}>{page.title}</option>)}</select> : <input required type="url" placeholder="https://example.com" value={draft.href} onChange={(event) => setDraft({ ...draft, href: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink" />}
+        <select value={draft.parentId ?? ""} onChange={(event) => setDraft({ ...draft, parentId: event.target.value || null })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink"><option value="">Top-level item</option>{menu.items.filter((item) => item.id && item.id !== editingId).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.openInNewTab} onChange={(event) => setDraft({ ...draft, openInNewTab: event.target.checked })} /> Open in a new tab</label>
         <Button type="submit">{editingId ? "Update item" : "Add item"}</Button>
       </form>

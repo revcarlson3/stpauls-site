@@ -122,9 +122,23 @@ export async function updateMenuItems(id: string, input: { name: string; slug: s
     const existingIds = new Set(existing.map((item) => item.id));
     const submittedIds = input.items.flatMap((item) => item.id ? [item.id] : []);
     if (submittedIds.some((itemId) => !existingIds.has(itemId))) throw new Error("Invalid menu item.");
+    const submittedIdSet = new Set(submittedIds);
+    for (const item of input.items) {
+      if (item.parentId && (!submittedIdSet.has(item.parentId) || item.parentId === item.id)) throw new Error("Invalid menu item parent.");
+    }
+    const parents = new Map(input.items.flatMap((item) => item.id ? [[item.id, item.parentId ?? null] as const] : []));
+    for (const item of input.items) {
+      const seen = new Set<string>();
+      let parent = item.parentId ?? null;
+      while (parent) {
+        if (seen.has(parent)) throw new Error("Invalid menu item parent.");
+        seen.add(parent);
+        parent = parents.get(parent) ?? null;
+      }
+    }
     await tx.menuItem.deleteMany({ where: { menuId: id, id: { notIn: submittedIds } } });
     for (const item of input.items) {
-      const data = { label: item.label, href: item.href, itemType: item.itemType, openInNewTab: item.openInNewTab, position: item.position, parentId: null };
+      const data = { label: item.label, href: item.href, itemType: item.itemType, openInNewTab: item.openInNewTab, position: item.position, parentId: item.parentId ?? null };
       if (item.id) await tx.menuItem.update({ where: { id: item.id }, data });
       else await tx.menuItem.create({ data: { ...data, menuId: id } });
     }
