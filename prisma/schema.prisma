@@ -39,6 +39,9 @@ model User {
   name         String
   passwordHash String?
   emailVerifiedAt DateTime?
+  failedLoginAttempts Int      @default(0)
+  loginWindowStartedAt DateTime?
+  lockedUntil DateTime?
   memberProfile MemberProfile?
   verificationTokens EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
