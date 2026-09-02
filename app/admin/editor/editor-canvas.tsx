@@ -138,11 +138,11 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
         <div className="mt-4 grid gap-3">
           <label className="grid gap-1 text-xs font-semibold uppercase tracking-wider text-ink/55">
             Title
-            <input className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm font-normal normal-case tracking-normal text-ink" value={pageTitle} onChange={(event) => setPageTitle(event.target.value)} />
+            <input required className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm font-normal normal-case tracking-normal text-ink" value={pageTitle} onChange={(event) => setPageTitle(event.target.value)} />
           </label>
           <label className="grid gap-1 text-xs font-semibold uppercase tracking-wider text-ink/55">
             URL slug
-            <input className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm font-normal normal-case tracking-normal text-ink" value={slug} onChange={(event) => setSlug(event.target.value)} />
+            <input required className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm font-normal normal-case tracking-normal text-ink" value={slug} onChange={(event) => setSlug(event.target.value)} />
           </label>
         </div>
         <h2 className="mt-7 font-semibold">Add a block</h2>
