@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button, Card } from "@/components/ui";
 import { blockDefinitions, type BlockType } from "@/lib/blocks";
 
@@ -13,6 +14,7 @@ const initialBlocks: Block[] = [
 ];
 
 export default function EditorCanvas({ pageId, empty = false }: { pageId?: string; empty?: boolean }) {
+  const router = useRouter();
   const [blocks, setBlocks] = useState(empty ? [] : initialBlocks);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [pageTitle, setPageTitle] = useState(empty ? "" : "Welcome page");
@@ -26,7 +28,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
       const page = await response.json();
       setPageTitle(page.title);
       setSlug(page.slug);
-      setBlocks((page.blocks as Array<{ id: string; type: BlockType; props: Partial<Block> }>).map((block) => ({ id: block.id, type: block.type, title: block.props.title ?? "", content: block.props.content ?? "", mediaType: block.props.mediaType, mediaUrl: block.props.mediaUrl, span: block.props.span ?? 12 })));
+      setBlocks((page.blocks as Array<{ id: string; type: BlockType; props: Partial<Block> }>).filter((block) => block.type in blockDefinitions).map((block) => ({ id: block.id, type: block.type, title: block.props.title ?? "", content: block.props.content ?? "", mediaType: block.props.mediaType, mediaUrl: block.props.mediaUrl, span: block.props.span ?? 12 })));
     }).catch((error: Error) => setMessage(error.message));
   }, [pageId]);
 
@@ -35,7 +37,8 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     const response = await fetch(pageId ? `/api/pages/${pageId}` : "/api/pages", { method: pageId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) { setMessage(body.error ?? "Unable to save draft."); return; }
-    setMessage("Draft saved.");
+    setMessage(pageId ? "Draft saved." : "Page created.");
+    if (!pageId && body.id) router.replace(`/admin/editor/${body.id}`);
   }
 
   function moveBlock(targetId: string) {
