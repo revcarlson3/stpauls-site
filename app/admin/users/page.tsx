@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Card, Container } from "@/components/ui";
 
 type Group = { id: string; name: string };
@@ -54,7 +55,7 @@ export default function UsersPage() {
 
   return <main><Container className="py-10 sm:py-14">
     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Administration</p>
-    <h1 className="mt-2 font-serif text-4xl">Users</h1>
+    <div className="flex flex-wrap items-center justify-between gap-4"><h1 className="mt-2 font-serif text-4xl">Users</h1><Link href="/admin/users/invite" className="focus-ring rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Invite user</Link></div>
     <p className="mt-2 max-w-2xl text-ink/60">Update account details, reset passwords, and assign security groups. Profile images will connect to membership and media storage in a later module.</p>
     {error && <p className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p>}
     <label className="mt-8 block max-w-xl text-sm font-semibold">Search users<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, email, or group" className="focus-ring mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>

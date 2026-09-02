@@ -53,6 +53,23 @@ model User {
   updatedAt    DateTime       @updatedAt
   revisions    PageRevision[] @relation("RevisionAuthor")
   published    Page[]         @relation("PublishedBy")
+  invitations  UserInvitation[] @relation("InvitationCreator")
+}
+
+model UserInvitation {
+  id String @id @default(cuid())
+  email String
+  name String
+  role Role @default(viewer)
+  groupId String?
+  group SecurityGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  tokenHash String @unique
+  expiresAt DateTime
+  acceptedAt DateTime?
+  createdById String
+  createdBy User @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([email, expiresAt])
 }
 
 model SecuritySettings {
@@ -93,6 +110,7 @@ model SecurityGroup {
   name        String
   slug        String             @unique
   users       User[]
+  invitations UserInvitation[]
   permissions GroupPermission[]
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
