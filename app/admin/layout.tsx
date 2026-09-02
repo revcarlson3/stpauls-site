@@ -7,18 +7,41 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
       <header className="border-b border-ink/10 bg-white">
         <Container className="flex min-h-20 flex-wrap items-center justify-between gap-4 py-4">
           <div>
-            <Link href="/admin/editor" className="focus-ring font-serif text-xl font-bold">Site studio</Link>
-            <p className="text-xs text-ink/55">Content workspace</p>
+            <Link href="/admin" className="focus-ring font-serif text-xl font-bold">Site administration</Link>
+            <p className="text-xs text-ink/55">Management workspace</p>
           </div>
-          <nav aria-label="Admin navigation" className="flex gap-4 text-sm font-medium">
-            <Link className="focus-ring text-coral" href="/admin/editor">Editor</Link>
-            <Link className="focus-ring text-ink/60 hover:text-coral" href="/admin/security">Security</Link>
-            <Link className="focus-ring text-ink/60 hover:text-coral" href="/admin/users">Users</Link>
-            <Link className="focus-ring text-ink/60 hover:text-coral" href="/">View site</Link>
-          </nav>
+          <Link className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href="/">View site</Link>
         </Container>
       </header>
-      {children}
+      <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
+        <aside className="border-b border-ink/10 bg-white lg:min-h-[calc(100vh-5rem)] lg:w-64 lg:border-b-0 lg:border-r">
+          <nav aria-label="Admin navigation" className="grid gap-1 p-4 sm:p-6">
+            <Link className="focus-ring rounded-lg bg-mist px-4 py-3 font-semibold hover:bg-coral hover:text-white" href="/admin">Admin Dashboard</Link>
+            <details open className="group">
+              <summary className="focus-ring cursor-pointer list-none rounded-lg px-4 py-3 font-semibold hover:bg-mist">Pages <span className="float-right text-ink/50 group-open:rotate-180">⌄</span></summary>
+              <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/editor">Pages</Link>
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/pages/add">Add a Page</Link>
+              </div>
+            </details>
+            <details open className="group">
+              <summary className="focus-ring cursor-pointer list-none rounded-lg px-4 py-3 font-semibold hover:bg-mist">Security <span className="float-right text-ink/50 group-open:rotate-180">⌄</span></summary>
+              <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/security">Security Groups</Link>
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/security/settings">Settings</Link>
+              </div>
+            </details>
+            <details open className="group">
+              <summary className="focus-ring cursor-pointer list-none rounded-lg px-4 py-3 font-semibold hover:bg-mist">Users <span className="float-right text-ink/50 group-open:rotate-180">⌄</span></summary>
+              <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/users/add">Add User</Link>
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/users">Edit Users</Link>
+              </div>
+            </details>
+          </nav>
+        </aside>
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
     </div>
   );
 }
