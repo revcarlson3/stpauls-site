@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, HTMLAttributes } from "react";
 
 export function Container({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={`mx-auto w-full max-w-6xl px-5 sm:px-8 ${className}`} {...props} />;
+  return <div className={`mx-auto w-full max-w-screen-2xl px-5 sm:px-8 lg:px-10 ${className}`} {...props} />;
 }
 
 export function Button({
@@ -19,4 +19,3 @@ export function Button({
 export function Card({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={`rounded-2xl border border-ink/10 bg-white p-6 shadow-sm ${className}`} {...props} />;
 }
-

@@ -23,8 +23,8 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
           <Link className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href="/">View site</Link>
         </Container>
       </header>
-      <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
-        <aside className="border-b border-ink/10 bg-white lg:min-h-[calc(100vh-5rem)] lg:w-64 lg:border-b-0 lg:border-r">
+      <div className="flex w-full flex-col lg:flex-row">
+        <aside className="border-b border-ink/10 bg-white lg:min-h-[calc(100vh-5rem)] lg:w-72 lg:shrink-0 lg:border-b-0 lg:border-r">
           <nav aria-label="Admin navigation" className="grid gap-1 p-4 sm:p-6">
             <Link className="focus-ring rounded-lg bg-mist px-4 py-3 font-semibold hover:bg-coral hover:text-white" href="/admin">Admin Dashboard</Link>
             <details open className="group">
