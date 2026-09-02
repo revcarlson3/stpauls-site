@@ -10,6 +10,7 @@ const permissionOptions = [
   ["MANAGE_MENUS", "Manage menus"],
   ["MANAGE_USERS", "Manage users and groups"],
   ["MANAGE_SETTINGS", "Manage settings"],
+  ["MANAGE_MODULES", "Manage Modules"],
   ["MANAGE_MEMBERSHIP", "Manage membership"],
   ["MANAGE_EVENTS", "Manage events and scheduling"],
   ["MANAGE_GIVING", "Manage giving and pledges"],

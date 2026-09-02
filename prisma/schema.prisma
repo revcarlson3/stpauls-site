@@ -31,6 +31,7 @@ enum Permission {
   MANAGE_GIVING
   MANAGE_ACCOUNTING
   MANAGE_SERVICES
+  MANAGE_MODULES
 }
 
 model User {
