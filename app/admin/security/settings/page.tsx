@@ -20,7 +20,8 @@ export default function SecuritySettingsPage() {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const response = await fetch("/api/security-settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
-    setMessage(response.ok ? "Security settings saved." : "Unable to save security settings.");
+    const body = await response.json().catch(() => ({}));
+    setMessage(response.ok ? "Security settings saved." : body.error ?? "Unable to save security settings.");
     if (response.ok) setSettings((current) => ({ ...current, recaptchaSecret: "", smsAuthSecret: "" }));
   }
   return <main><Container className="py-10 sm:py-14"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Security</p><h1 className="mt-2 font-serif text-4xl">Settings</h1><form onSubmit={(event) => void save(event)} className="mt-8 grid gap-6 xl:grid-cols-2">

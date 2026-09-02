@@ -28,7 +28,7 @@ export async function getSecuritySettings() {
   return { ...safeSettings, recaptchaSecret: "", recaptchaConfigured: Boolean(recaptchaSecretEncrypted), smsAuthSecret: "", smsConfigured: Boolean(smsAuthSecretEncrypted) };
 }
 
-export async function updateSecuritySettings(input: typeof defaultSecuritySettings) {
+export async function updateSecuritySettings(input: Omit<typeof defaultSecuritySettings, "recaptchaConfigured" | "smsConfigured">) {
   await requirePermission("MANAGE_SETTINGS");
   const current = await db.securitySettings.findUnique({ where: { id: 1 }, select: { recaptchaSecretEncrypted: true, smsAuthSecretEncrypted: true } });
   const data = {
