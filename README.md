@@ -39,7 +39,7 @@ npm run groups:seed
 
 Users can be assigned to groups from the Users administration screen. Server-side writes use group permission checks rather than trusting client-side switches. The existing `role` field remains for compatibility and session display, but is not used for authorization.
 
-Planned site settings include a Modules page where church-management modules (membership, events and scheduling, giving and pledges, accounting and budget, and services and sermons) can be enabled or disabled. Enabled modules will add their own admin navigation entries for authenticated users whose security groups grant the corresponding permission.
+Site Settings includes a Modules block for users with `MANAGE_MODULES`. It stores enabled modules in `SecuritySettings`; enabled modules add admin navigation entries only for authenticated users whose security groups grant the corresponding permission. Membership currently has a protected placeholder route at `/admin/membership`; the other catalog entries are skeletons for future work.
 
 Login protection limits an account to five failed password attempts within a 15-minute window, followed by a 15-minute temporary lockout. A successful login clears the failed-attempt counter. Password recovery remains available for locked accounts.
 

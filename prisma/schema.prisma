@@ -155,6 +155,7 @@ model SecuritySettings {
   smtpPasswordEncrypted String?
   emailFrom         String?
   registrationCodeEncrypted String?
+  enabledModules Json @default("[]")
   updatedAt           DateTime @updatedAt
 }
 

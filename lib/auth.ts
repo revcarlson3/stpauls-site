@@ -44,6 +44,14 @@ export async function requirePermission(permission: Permission): Promise<User> {
   return user;
 }
 
+export async function hasPermission(userId: string, permission: Permission) {
+  const membership = await db.user.findUnique({
+    where: { id: userId },
+    select: { group: { select: { permissions: { where: { permission }, select: { permission: true } } } } }
+  });
+  return Boolean(membership?.group?.permissions.length);
+}
+
 async function requireAuthenticatedUser(): Promise<User> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized: a server-side authenticated session is required.");

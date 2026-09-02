@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Container } from "@/components/ui";
+import { ModuleNavigation } from "@/components/module-navigation";
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
@@ -56,6 +57,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
             </details>
             <Link className="focus-ring rounded-lg px-4 py-3 font-semibold hover:bg-mist" href="/admin/theme">Theme</Link>
             <Link className="focus-ring rounded-lg px-4 py-3 font-semibold hover:bg-mist" href="/admin/site-settings">Site Settings</Link>
+            <ModuleNavigation />
           </nav>
         </aside>
         <div className="min-w-0 flex-1">{children}</div>
