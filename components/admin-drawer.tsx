@@ -15,7 +15,7 @@ export function AdminDrawer() {
         type="button"
         aria-controls="admin-drawer"
         aria-expanded={open}
-        className="focus-ring fixed left-0 top-1/2 z-40 -translate-y-1/2 rounded-r-full bg-ink px-3 py-4 text-xs font-semibold uppercase tracking-wider text-white shadow-lg hover:bg-coral"
+        className="focus-ring fixed left-0 top-1/2 z-40 hidden -translate-y-1/2 rounded-r-full bg-ink px-3 py-4 text-xs font-semibold uppercase tracking-wider text-white shadow-lg hover:bg-coral lg:block"
         onClick={() => setOpen((current) => !current)}
       >
         Admin
@@ -24,7 +24,7 @@ export function AdminDrawer() {
         <button
           type="button"
           aria-label="Close admin menu"
-          className="fixed inset-0 z-40 cursor-default bg-ink/20"
+          className="fixed inset-0 z-40 hidden cursor-default bg-ink/20 lg:block"
           onClick={() => setOpen(false)}
         />
       )}
@@ -32,7 +32,7 @@ export function AdminDrawer() {
         id="admin-drawer"
         aria-label="Administrator menu"
         aria-hidden={!open}
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white p-6 shadow-2xl transition-transform duration-200 ${open ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-50 hidden w-72 bg-white p-6 shadow-2xl transition-transform duration-200 lg:block ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
         <div className="flex items-start justify-between">
           <div>
