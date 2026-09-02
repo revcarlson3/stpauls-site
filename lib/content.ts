@@ -75,6 +75,14 @@ export async function deletePage(id: string) {
   return db.page.delete({ where: { id } });
 }
 
+export async function setHomePage(id: string) {
+  await requirePermission("EDIT_PAGES");
+  return db.$transaction(async (tx) => {
+    await tx.page.updateMany({ data: { isHome: false } });
+    return tx.page.update({ where: { id }, data: { isHome: true } });
+  });
+}
+
 function revisionData(input: { title: string; blocks: PageBlock[] }, author: User) {
   return { title: input.title, blocks: blocksValue(input.blocks), authorId: author.id };
 }

@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { Button, Card, Container } from "@/components/ui";
 import { SiteHeader } from "@/components/site-header";
+import { db } from "@/lib/db";
+import { PublishedPageShell } from "@/components/page-renderer";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const homePage = await db.page.findFirst({ where: { isHome: true, status: "PUBLISHED" }, select: { title: true, blocks: true } });
+  if (homePage) return <PublishedPageShell title={homePage.title} blocks={homePage.blocks} />;
   return (
     <main>
       <SiteHeader />

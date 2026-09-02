@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { archivePage, deletePage, getPage, publishPage, updatePage } from "@/lib/content";
+import { archivePage, deletePage, getPage, publishPage, setHomePage, updatePage } from "@/lib/content";
 import { parsePageInput } from "@/lib/page-input";
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
@@ -27,6 +27,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   try {
     if (input.action === "publish") return NextResponse.json(await publishPage(params.id));
     if (input.action === "archive") return NextResponse.json(await archivePage(params.id));
+    if (input.action === "home") return NextResponse.json(await setHomePage(params.id));
     return NextResponse.json({ error: "Unknown page action." }, { status: 400 });
   } catch (error) {
     return unauthorizedResponse(error);

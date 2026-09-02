@@ -85,6 +85,7 @@ model Page {
   slug              String        @unique
   title             String
   status            PageStatus    @default(DRAFT)
+  isHome            Boolean       @default(false)
   blocks            Json
   menuId            String?
   menu              Menu?         @relation(fields: [menuId], references: [id], onDelete: SetNull)
