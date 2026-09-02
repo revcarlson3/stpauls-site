@@ -12,9 +12,9 @@ export function ResponsivePublicNav({ items, authenticated }: { items: MenuItem[
   const fallback = <><Link className="focus-ring hover:text-coral" href="#gather">Gather</Link><Link className="focus-ring hover:text-coral" href="#belong">Belong</Link></>;
   return <>
     <button type="button" aria-controls="public-navigation" aria-expanded={open} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm font-semibold lg:hidden" onClick={() => setOpen((current) => !current)}>{open ? "Close" : "Menu"}</button>
-    <div id="public-navigation" className={`${open ? "block" : "hidden"} absolute left-0 right-0 top-20 border-b border-ink/10 bg-sand p-5 lg:static lg:block lg:border-0 lg:bg-transparent lg:p-0`}>
-      <nav aria-label="Primary navigation" className="text-sm font-medium">
-        {items.length ? <MenuLinks items={items} className="grid gap-4 lg:flex lg:flex-wrap lg:items-center lg:gap-5" /> : <div className="flex flex-col gap-4 lg:flex-row lg:items-center">{fallback}</div>}
+    <div id="public-navigation" className={`${open ? "block" : "hidden"} absolute left-0 right-0 top-20 border-b border-ink/10 bg-sand p-5 lg:static lg:block lg:min-w-0 lg:overflow-x-auto lg:border-0 lg:bg-transparent lg:p-0`}>
+      <nav aria-label="Primary navigation" className="text-sm font-medium lg:whitespace-nowrap">
+        {items.length ? <MenuLinks items={items} className="grid gap-4 lg:flex lg:flex-nowrap lg:items-center lg:gap-5" /> : <div className="flex flex-col gap-4 lg:flex-row lg:flex-nowrap lg:items-center">{fallback}</div>}
         {authenticated ? <button type="button" className="focus-ring mt-4 text-left text-ink/70 hover:text-coral lg:mt-0 lg:ml-2" onClick={() => signOut({ callbackUrl: "/" })}>Logout</button> : <Link className="focus-ring mt-4 block hover:text-coral lg:mt-0 lg:ml-2" href="/register">Join</Link>}
       </nav>
     </div>
