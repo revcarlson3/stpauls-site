@@ -45,6 +45,7 @@ model User {
   lockedUntil DateTime?
   memberProfile MemberProfile?
   verificationTokens EmailVerificationToken[]
+  emailChangeTokens EmailChangeToken[]
   passwordResetTokens PasswordResetToken[]
   role         Role           @default(viewer)
   groupId      String?
@@ -54,6 +55,17 @@ model User {
   revisions    PageRevision[] @relation("RevisionAuthor")
   published    Page[]         @relation("PublishedBy")
   invitations  UserInvitation[] @relation("InvitationCreator")
+}
+
+model EmailChangeToken {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email String
+  tokenHash String @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId, expiresAt])
 }
 
 model UserInvitation {
