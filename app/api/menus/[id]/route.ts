@@ -15,7 +15,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const input = parseMenuInput(await request.json());
   if (!input) return NextResponse.json({ error: "Invalid menu input." }, { status: 400 });
   try {
-    return NextResponse.json(await updateMenuItems(params.id, input.items));
+    return NextResponse.json(await updateMenuItems(params.id, input));
   } catch (error) {
     return authResponse(error);
   }

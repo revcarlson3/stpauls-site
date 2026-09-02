@@ -114,15 +114,16 @@ export async function updateMenu(id: string, input: { name: string; slug: string
   return db.menu.update({ where: { id }, data: input, include: { items: { orderBy: { position: "asc" } } } });
 }
 
-export async function updateMenuItems(id: string, input: MenuItemInput[]) {
+export async function updateMenuItems(id: string, input: { name: string; slug: string; items: MenuItemInput[] }) {
   await requirePermission("MANAGE_MENUS");
   return db.$transaction(async (tx) => {
+    await tx.menu.update({ where: { id }, data: { name: input.name, slug: input.slug } });
     const existing = await tx.menuItem.findMany({ where: { menuId: id }, select: { id: true } });
     const existingIds = new Set(existing.map((item) => item.id));
-    const submittedIds = input.flatMap((item) => item.id ? [item.id] : []);
+    const submittedIds = input.items.flatMap((item) => item.id ? [item.id] : []);
     if (submittedIds.some((itemId) => !existingIds.has(itemId))) throw new Error("Invalid menu item.");
     await tx.menuItem.deleteMany({ where: { menuId: id, id: { notIn: submittedIds } } });
-    for (const item of input) {
+    for (const item of input.items) {
       const data = { label: item.label, href: item.href, itemType: item.itemType, openInNewTab: item.openInNewTab, position: item.position, parentId: null };
       if (item.id) await tx.menuItem.update({ where: { id: item.id }, data });
       else await tx.menuItem.create({ data: { ...data, menuId: id } });
