@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requirePermission, type Role } from "@/lib/auth";
 import { getMailSettings } from "@/lib/app-config";
 import { validatePassword } from "@/lib/password-policy";
+import { notifyUserCreated } from "@/lib/user-notifications";
 
 function hash(token: string) { return createHash("sha256").update(token).digest("hex"); }
 
@@ -63,5 +64,6 @@ export async function acceptInvitation(token: string, password: string) {
     await tx.userInvitation.update({ where: { id: invitation.id }, data: { acceptedAt: new Date() } });
     return created;
   });
+  await notifyUserCreated({ name: user.name, createdAt: user.createdAt, source: "invitation" });
   return user.id;
 }

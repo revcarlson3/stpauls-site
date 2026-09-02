@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { getMailSettings, getRegistrationCode } from "@/lib/app-config";
 import { validatePassword } from "@/lib/password-policy";
+import { notifyUserCreated } from "@/lib/user-notifications";
 
 type RegistrationInput = { firstName: string; lastName: string; email: string; churchCode?: string };
 
@@ -34,6 +35,7 @@ export async function registerUser(input: RegistrationInput) {
   });
 
   await sendVerificationEmail(email, `${firstName} ${lastName}`, token);
+  await notifyUserCreated({ name: user.name, createdAt: user.createdAt, source: "self-registration" });
   return { id: user.id, memberLinked: Boolean(member) };
 }
 

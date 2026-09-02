@@ -3,13 +3,16 @@ import { db } from "@/lib/db";
 import { getCurrentUser, requirePermission, type Role } from "@/lib/auth";
 import type { Permission } from "@prisma/client";
 import { validatePassword } from "@/lib/password-policy";
+import { notifyUserCreated } from "@/lib/user-notifications";
 
 export async function createUser(input: { email: string; name: string; password: string; role: Role; groupId?: string | null }) {
   await requirePermission("MANAGE_USERS");
   if (input.groupId && !(await db.securityGroup.findUnique({ where: { id: input.groupId }, select: { id: true } }))) {
     throw new Error("Invalid security group.");
   }
-  return saveUser(input);
+  const user = await saveUser(input);
+  await notifyUserCreated({ name: user.name, createdAt: user.createdAt, source: "administrator" });
+  return user;
 }
 
 export async function createSecurityGroup(input: { name: string; slug: string; permissions: Permission[] }) {
