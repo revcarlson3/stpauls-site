@@ -6,21 +6,43 @@ import { Card, Container } from "@/components/ui";
 
 type Group = { id: string; name: string };
 type User = { id: string; email: string; name: string; role: string; isActive: boolean; groupId: string | null; group?: { name: string } | null; isCurrent: boolean };
+type Invitation = { id: string; email: string; name: string; role: string; expiresAt: string; createdAt: string; group?: { name: string } | null };
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    Promise.all([fetch("/api/users"), fetch("/api/security-groups")]).then(async ([usersResponse, groupsResponse]) => {
-      if (!usersResponse.ok || !groupsResponse.ok) throw new Error("You do not have permission to manage users.");
+    Promise.all([fetch("/api/users"), fetch("/api/security-groups"), fetch("/api/users/invitations")]).then(async ([usersResponse, groupsResponse, invitationsResponse]) => {
+      if (!usersResponse.ok || !groupsResponse.ok || !invitationsResponse.ok) throw new Error("You do not have permission to manage users.");
       setUsers(await usersResponse.json());
       setGroups((await groupsResponse.json()).map((group: Group) => ({ id: group.id, name: group.name })));
+      setInvitations(await invitationsResponse.json());
     }).catch((reason: Error) => setError(reason.message));
   }, []);
+
+  async function updateInvitation(invitation: Invitation, action: "resend" | "revoke") {
+    setError("");
+    setSuccess("");
+    if (action === "revoke" && !window.confirm(`Revoke the invitation for ${invitation.email}?`)) return;
+    const response = await fetch(`/api/users/invitations/${invitation.id}`, { method: action === "resend" ? "POST" : "DELETE" });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(body.error ?? "Unable to update this invitation.");
+      return;
+    }
+    if (action === "revoke") {
+      setInvitations((current) => current.filter((item) => item.id !== invitation.id));
+      setSuccess("Invitation revoked.");
+    } else {
+      setInvitations((current) => current.map((item) => item.id === invitation.id ? { ...item, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), createdAt: new Date().toISOString() } : item));
+      setSuccess("Invitation resent.");
+    }
+  }
 
   async function saveUser(user: User, form: HTMLFormElement) {
     setError("");
@@ -62,6 +84,18 @@ export default function UsersPage() {
     <p className="mt-2 max-w-2xl text-ink/60">Update account details, reset passwords, and assign security groups. Profile images will connect to membership and media storage in a later module.</p>
     {error && <p role="alert" className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p>}
     {success && <p role="status" className="mt-6 rounded-lg bg-mist p-4 text-sm text-ink">{success}</p>}
+    <section className="mt-8">
+      <h2 className="font-serif text-2xl">Pending invitations</h2>
+      <p className="mt-1 text-sm text-ink/60">Manage invitations that have not yet been accepted. Resending replaces the previous link and extends it for seven days.</p>
+      {invitations.length ? <div className="mt-4 grid gap-4 lg:grid-cols-2">{invitations.map((invitation) => {
+        const expired = new Date(invitation.expiresAt).getTime() <= Date.now();
+        return <Card key={invitation.id} className="p-5">
+          <div className="flex items-start justify-between gap-4"><div><h3 className="font-semibold">{invitation.name}</h3><p className="mt-1 text-sm text-ink/60">{invitation.email}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${expired ? "bg-red-100 text-red-700" : "bg-mist"}`}>{expired ? "Expired" : "Pending"}</span></div>
+          <p className="mt-3 text-xs text-ink/50">Role: {invitation.role}{invitation.group?.name ? ` · Group: ${invitation.group.name}` : ""} · Expires {new Date(invitation.expiresAt).toLocaleDateString()}</p>
+          <div className="mt-4 flex flex-wrap gap-3"><button type="button" onClick={() => void updateInvitation(invitation, "resend")} className="focus-ring rounded-full bg-coral px-4 py-2 text-sm font-semibold text-white hover:bg-[#d95f43]">Resend</button><button type="button" onClick={() => void updateInvitation(invitation, "revoke")} className="focus-ring rounded-full border border-coral px-4 py-2 text-sm font-semibold text-coral hover:bg-coral hover:text-white">Revoke</button></div>
+        </Card>;
+      })}</div> : <p className="mt-4 rounded-lg border border-dashed border-ink/15 p-4 text-sm text-ink/60">No pending invitations.</p>}
+    </section>
     <label className="mt-8 block max-w-xl text-sm font-semibold">Search users<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, email, or group" className="focus-ring mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
     <div className="mt-6 grid gap-6 lg:grid-cols-2">{users.filter((user) => `${user.name} ${user.email} ${user.group?.name ?? ""}`.toLowerCase().includes(query.toLowerCase())).map((user) => <Card key={user.id}>
       <div className="flex items-start justify-between gap-4"><div><h2 className="font-serif text-2xl">{user.name}</h2><p className="mt-1 text-xs text-ink/50">{user.email} · legacy role: {user.role}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${user.isActive ? "bg-mist" : "bg-red-100 text-red-700"}`}>{user.isActive ? "Active" : "Inactive"}</span></div>
