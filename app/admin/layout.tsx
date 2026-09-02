@@ -1,7 +1,16 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Container } from "@/components/ui";
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const pathname = usePathname();
+
+  if (pathname === "/admin/login") {
+    return <div className="min-h-screen bg-mist/40">{children}</div>;
+  }
+
   return (
     <div className="min-h-screen bg-mist/40">
       <header className="border-b border-ink/10 bg-white">
