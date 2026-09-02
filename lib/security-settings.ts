@@ -18,7 +18,9 @@ export const defaultSecuritySettings = {
   smsAuthSecret: "",
   smsConfigured: false,
   smsFrom: "",
-  totpIssuer: "St. Paul's Site"
+  totpIssuer: "St. Paul's Site",
+  mfaChallengePolicy: "every-login" as "every-login" | "trusted-device",
+  trustedDeviceDays: 30
 };
 
 export async function getSecuritySettings() {
@@ -36,7 +38,8 @@ export async function updateSecuritySettings(input: Omit<typeof defaultSecurityS
     captchaMode: input.captchaMode, emailMfaEnabled: input.emailMfaEnabled, smsMfaEnabled: input.smsMfaEnabled, authenticatorMfaEnabled: input.authenticatorMfaEnabled,
     recaptchaSiteKey: input.recaptchaSiteKey.trim(), recaptchaSecretEncrypted: input.recaptchaSecret ? encryptConfig(input.recaptchaSecret) : current?.recaptchaSecretEncrypted ?? null,
     smsProvider: input.smsProvider, smsAccountId: input.smsAccountId.trim(), smsAuthSecretEncrypted: input.smsAuthSecret ? encryptConfig(input.smsAuthSecret) : current?.smsAuthSecretEncrypted ?? null,
-    smsFrom: input.smsFrom.trim(), totpIssuer: input.totpIssuer.trim() || "St. Paul's Site"
+    smsFrom: input.smsFrom.trim(), totpIssuer: input.totpIssuer.trim() || "St. Paul's Site",
+    mfaChallengePolicy: input.mfaChallengePolicy, trustedDeviceDays: input.trustedDeviceDays
   };
   return db.securitySettings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } }).then((settings) => {
     const { recaptchaSecretEncrypted, smsAuthSecretEncrypted, ...safeSettings } = settings;

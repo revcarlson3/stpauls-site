@@ -71,6 +71,8 @@ model SecuritySettings {
   smsAuthSecretEncrypted String?
   smsFrom String?
   totpIssuer String @default("St. Paul's Site")
+  mfaChallengePolicy String @default("every-login")
+  trustedDeviceDays Int @default(30)
   smtpHost          String?
   smtpPort          Int      @default(587)
   smtpUser          String?
