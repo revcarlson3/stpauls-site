@@ -18,7 +18,7 @@ export default function EditIndividualPage() {
       const member = (await memberResponse.json()).selected;
       const familyData = await familyResponse.json();
       const referenceData = await referenceResponse.json();
-      setData({ ...member, familyId: member.family.id, memberTypeId: member.memberType.id, familyRoleId: member.familyRole.id, birthday: member.birthday.slice(0, 10), weddingDate: member.weddingDate?.slice(0, 10) ?? "" });
+      setData({ ...member, lastName: member.lastName ?? member.family.lastName, familyId: member.family.id, memberTypeId: member.memberType.id, familyRoleId: member.familyRole.id, birthday: member.birthday.slice(0, 10), weddingDate: member.weddingDate?.slice(0, 10) ?? "" });
       setFamilies(familyData.families ?? []); setRoles(referenceData.roles ?? []); setTypes(referenceData.types ?? []);
     }).catch(() => setMessage("Unable to load individual."));
   }, [params.id]);
