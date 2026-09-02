@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Container } from "@/components/ui";
 import { signOut } from "next-auth/react";
+import QRCode from "qrcode";
+import Image from "next/image";
 
 type Account = { name: string; email: string; emailVerifiedAt: string | null };
 type MfaState = { available: boolean; issuer: string; enabled: boolean; recoveryCodesRemaining: number; emailAvailable: boolean; emailEnabled: boolean; emailVerified: boolean; smsAvailable: boolean; smsEnabled: boolean; phoneNumber: string | null; phoneVerified: boolean };
@@ -12,6 +14,7 @@ export default function AccountPage() {
   const [account, setAccount] = useState<Account | null>(null);
   const [mfa, setMfa] = useState<MfaState | null>(null);
   const [enrollment, setEnrollment] = useState<{ secret: string; otpauthUri: string } | null>(null);
+  const [enrollmentQrCode, setEnrollmentQrCode] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaPassword, setMfaPassword] = useState("");
@@ -30,6 +33,16 @@ export default function AccountPage() {
       if (response.ok) setMfa(await response.json());
     }).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!enrollment) {
+      setEnrollmentQrCode("");
+      return;
+    }
+    void QRCode.toDataURL(enrollment.otpauthUri, { width: 240, margin: 2 })
+      .then(setEnrollmentQrCode)
+      .catch(() => setMessage("Unable to generate the authenticator QR code."));
+  }, [enrollment]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,7 +87,7 @@ export default function AccountPage() {
     if (response.ok) {
       setEnrollment(body);
       setMfaCode("");
-      setMessage("Scan the authenticator link or enter the secret in your app, then verify a code.");
+      setMessage("Scan the QR code with your authenticator app, then verify a code.");
     } else {
       setMessage(body.error ?? "Unable to start MFA enrollment.");
     }
@@ -161,9 +174,8 @@ export default function AccountPage() {
                 <button className="focus-ring w-fit rounded-full border border-coral px-5 py-3 text-sm font-semibold text-coral" type="submit">Disable MFA</button>
               </form>
             </> : enrollment ? <form onSubmit={(event) => void enableMfa(event)} className="mt-4 grid gap-3">
-              <p className="text-sm text-ink/60">Add this account to your authenticator app using the link or secret below. Issuer: {mfa.issuer}</p>
-              <a className="break-all text-sm text-coral underline" href={enrollment.otpauthUri}>{enrollment.otpauthUri}</a>
-              <code className="rounded bg-ink/5 p-3 text-sm">{enrollment.secret}</code>
+              <p className="text-sm text-ink/60">Scan this QR code with your authenticator app. Issuer: {mfa.issuer}</p>
+              {enrollmentQrCode && <Image src={enrollmentQrCode} alt="Authenticator app setup QR code" width={240} height={240} unoptimized className="rounded-lg border border-ink/10" />}
               <label className="grid gap-1 text-sm font-semibold">Verification code<input required inputMode="numeric" autoComplete="one-time-code" value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
               <button className="focus-ring w-fit rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white" type="submit">Verify and enable</button>
             </form> : <>
