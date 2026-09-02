@@ -21,7 +21,7 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) return null;
         const user = await db.user.findUnique({ where: { email: credentials.email.toLowerCase().trim() } });
-        if (!user?.passwordHash) return null;
+        if (!user?.passwordHash || !user.isActive) return null;
         const now = new Date();
         const settings = await db.securitySettings.findUnique({ where: { id: 1 } }) ?? { loginProtectionEnabled: true, maxFailedAttempts: 5, lockoutMinutes: 15 };
         if (settings.loginProtectionEnabled && user.lockedUntil && user.lockedUntil > now) return null;
