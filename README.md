@@ -41,6 +41,8 @@ Users can be assigned to groups from the Users administration screen. Server-sid
 
 Site Settings includes a Modules block for users with `MANAGE_MODULES`. It stores enabled modules in `SecuritySettings`; enabled modules add admin navigation entries only for authenticated users whose security groups grant the corresponding permission. Membership currently has a protected placeholder route at `/admin/membership`; the other catalog entries are skeletons for future work.
 
+The membership foundation uses separate family and individual records, configurable family roles and member types, soft lifecycle states (`ACTIVE`, `INACTIVE`, `DECEASED`, and `REMOVED`), custom-field definitions, private document metadata, and authored notes. After applying the schema, seed the initial reference data with `npm run membership:seed`.
+
 Login protection limits an account to five failed password attempts within a 15-minute window, followed by a 15-minute temporary lockout. A successful login clears the failed-attempt counter. Password recovery remains available for locked accounts.
 
 Set `NEXTAUTH_SECRET` to a long random value and set `NEXTAUTH_URL` to the deployed HTTPS URL. After adding `passwordHash` or MFA fields to the schema, run `npm run db:push` again. Users must be provisioned through a controlled administrative process; this scaffold intentionally provides no default credentials or public registration.
