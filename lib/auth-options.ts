@@ -42,7 +42,8 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
         await db.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginWindowStartedAt: null, lockedUntil: null } });
-        return { id: user.id, name: user.name, email: user.email, role: user.role, rememberMe: credentials.rememberMe === "true" };
+        const access = await db.groupPermission.findUnique({ where: { groupId_permission: { groupId: user.groupId ?? "", permission: "ACCESS_ADMIN" } } });
+        return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true" };
       }
     })
   ],
@@ -51,6 +52,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.canAccessAdmin = Boolean(user.canAccessAdmin);
         token.exp = Math.floor(Date.now() / 1000) + (user.rememberMe ? REMEMBERED_SESSION_SECONDS : STANDARD_SESSION_SECONDS);
       }
       return token;
@@ -59,6 +61,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id;
         session.user.role = token.role;
+        session.user.canAccessAdmin = token.canAccessAdmin;
       }
       return session;
     }

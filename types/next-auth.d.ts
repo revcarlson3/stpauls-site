@@ -5,12 +5,14 @@ declare module "next-auth" {
   interface User {
     role: "viewer" | "editor" | "admin";
     rememberMe?: boolean;
+    canAccessAdmin?: boolean;
   }
 
   interface Session {
     user: {
       id: string;
       role: "viewer" | "editor" | "admin";
+      canAccessAdmin: boolean;
     } & DefaultSession["user"];
   }
 }
@@ -19,5 +21,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     id: string;
     role: "viewer" | "editor" | "admin";
+    canAccessAdmin: boolean;
   }
 }

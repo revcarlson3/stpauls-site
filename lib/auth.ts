@@ -15,7 +15,12 @@ export function getCurrentUser() {
   return getServerSession(authOptions).then((session) => {
     const role = session?.user?.role;
     if (!session?.user?.id || !isRole(role)) return null;
-    return { id: session.user.id, name: session.user.name ?? session.user.email ?? "User", role };
+    return db.user.findUnique({ where: { id: session.user.id }, select: { group: { select: { permissions: { where: { permission: "ACCESS_ADMIN" }, select: { permission: true } } } } } }).then((membership) => ({
+      id: session.user.id,
+      name: session.user.name ?? session.user.email ?? "User",
+      role,
+      canAccessAdmin: Boolean(membership?.group?.permissions.length)
+    }));
   });
 }
 

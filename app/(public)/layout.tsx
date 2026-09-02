@@ -7,7 +7,7 @@ export default async function PublicLayout({ children }: Readonly<{ children: Re
 
   return (
     <div className="min-h-screen">
-      {user && <AdminDrawer />}
+      {user?.canAccessAdmin && <AdminDrawer />}
       {children}
       <footer className="border-t border-ink/10 py-8">
         <Container className="text-sm text-ink/60">St. Paul&apos;s · A place to belong</Container>
