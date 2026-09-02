@@ -43,6 +43,7 @@ model User {
   failedLoginAttempts Int      @default(0)
   loginWindowStartedAt DateTime?
   lockedUntil DateTime?
+  sessionVersion Int @default(0)
   memberProfile MemberProfile?
   verificationTokens EmailVerificationToken[]
   emailChangeTokens EmailChangeToken[]

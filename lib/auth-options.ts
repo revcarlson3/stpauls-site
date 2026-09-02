@@ -58,6 +58,11 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role;
         token.canAccessAdmin = Boolean(user.canAccessAdmin);
         token.exp = Math.floor(Date.now() / 1000) + (user.rememberMe ? REMEMBERED_SESSION_SECONDS : STANDARD_SESSION_SECONDS);
+        token.sessionVersion = (await db.user.findUnique({ where: { id: user.id }, select: { sessionVersion: true } }))?.sessionVersion ?? 0;
+      } else if (token.id) {
+        const current = await db.user.findUnique({ where: { id: token.id }, select: { sessionVersion: true, isActive: true } });
+        if (current && token.sessionVersion === undefined) token.sessionVersion = current.sessionVersion;
+        token.invalid = !current?.isActive || current.sessionVersion !== token.sessionVersion;
       }
       return token;
     },
@@ -66,6 +71,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id;
         session.user.role = token.role;
         session.user.canAccessAdmin = token.canAccessAdmin;
+        if (token.invalid) session.user.id = "";
       }
       return session;
     }

@@ -86,6 +86,11 @@ export async function getOwnAccount() {
   return db.user.findUnique({ where: { id: actor.id }, select: { id: true, email: true, name: true, emailVerifiedAt: true } });
 }
 
+export async function signOutAllSessions() {
+  const actor = await requireOwnAccount();
+  await db.user.update({ where: { id: actor.id }, data: { sessionVersion: { increment: 1 } } });
+}
+
 export async function updateOwnAccount(input: { name: string; currentPassword?: string; newPassword?: string }) {
   const actor = await requireOwnAccount();
   if (input.name.trim().length < 2) throw new Error("Name must be at least 2 characters.");

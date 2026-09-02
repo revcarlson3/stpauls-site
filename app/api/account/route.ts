@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
-import { getOwnAccount, updateOwnAccount } from "@/lib/users";
+import { getOwnAccount, signOutAllSessions, updateOwnAccount } from "@/lib/users";
 import { requestEmailChange } from "@/lib/email-change";
 
 export async function GET() {
-  try { return NextResponse.json(await getOwnAccount()); }
-  catch (error) { if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Sign-in required." }, { status: 401 }); return NextResponse.json({ error: "Unable to load account." }, { status: 500 }); }
+  try {
+    return NextResponse.json(await getOwnAccount());
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Sign-in required." }, { status: 401 });
+    return NextResponse.json({ error: "Unable to load account." }, { status: 500 });
+  }
 }
 
 export async function PATCH(request: Request) {
@@ -17,10 +21,19 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ...account, message: "Confirmation sent to your new email address. Your current email remains active until confirmed." });
     }
     return NextResponse.json(await updateOwnAccount(input));
-  }
-  catch (error) {
+  } catch (error) {
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Sign-in required." }, { status: 401 });
     if (error instanceof Error && ["Name must", "Current password", "New password", "Provide", "That email", "Email delivery"].some((prefix) => error.message.startsWith(prefix))) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ error: "Unable to update account." }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  try {
+    await signOutAllSessions();
+    return NextResponse.json({ message: "All sessions have been signed out." });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Sign-in required." }, { status: 401 });
+    return NextResponse.json({ error: "Unable to sign out sessions." }, { status: 500 });
   }
 }
