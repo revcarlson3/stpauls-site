@@ -2,8 +2,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { SITE_REVISION } from "@/lib/site";
 import { Container } from "@/components/ui";
-import { PublicAccountNav } from "@/components/public-account-nav";
-import { MenuLinks } from "@/components/menu-links";
+import { ResponsivePublicNav } from "@/components/responsive-public-nav";
 import { resolvePublicMenu } from "@/lib/content";
 
 export async function SiteHeader({ menuId = null, menuLocationId = null }: { menuId?: string | null; menuLocationId?: string | null }) {
@@ -21,10 +20,7 @@ export async function SiteHeader({ menuId = null, menuLocationId = null }: { men
             Rev. {SITE_REVISION}
           </span>
         </div>
-        <nav aria-label="Primary navigation" className="flex items-center gap-5 text-sm font-medium">
-          {menu?.items.length ? <MenuLinks items={menu.items} /> : <><Link className="focus-ring hover:text-coral" href="#gather">Gather</Link><Link className="focus-ring hover:text-coral" href="#belong">Belong</Link></>}
-          <PublicAccountNav authenticated={Boolean(user)} />
-        </nav>
+        <ResponsivePublicNav items={menu?.items ?? []} authenticated={Boolean(user)} />
       </Container>
     </header>
   );
