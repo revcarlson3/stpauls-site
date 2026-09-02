@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
 
 export async function GET(request: Request) {
   try {
@@ -30,5 +31,37 @@ export async function GET(request: Request) {
     });
   } catch {
     return NextResponse.json({ error: "Unable to load membership records." }, { status: 403 });
+  }
+}
+
+export async function POST(request: Request) {
+    try {
+      const user = await requirePermission("MANAGE_MEMBERSHIP");
+      await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
+      const input = await request.json();
+      if (!input || typeof input.lastName !== "string" || !input.lastName.trim() || typeof input.firstName !== "string" || !input.firstName.trim() || typeof input.phone !== "string" || !input.phone.trim() || typeof input.email !== "string" || !input.email.trim() || !["ACTIVE", "INACTIVE"].includes(input.status)) {
+        return NextResponse.json({ error: "Last name, first name, phone, email, and status are required." }, { status: 400 });
+      }
+      const [role, type, highest] = await Promise.all([
+        db.membershipFamilyRole.findUnique({ where: { slug: "head-of-household" } }),
+        db.membershipMemberType.findFirst({ orderBy: { name: "asc" } }),
+        db.membershipIndividual.aggregate({ _max: { memberNumber: true } })
+      ]);
+      if (!role || !type) return NextResponse.json({ error: "Membership reference data has not been seeded." }, { status: 503 });
+      const family = await db.membershipFamily.create({
+        data: {
+          lastName: input.lastName.trim(), phone: input.phone.trim(), email: input.email.trim().toLowerCase(), status: input.status,
+          addressStreet: typeof input.addressStreet === "string" ? input.addressStreet.trim() : null,
+          addressCity: typeof input.addressCity === "string" ? input.addressCity.trim() : null,
+          addressState: typeof input.addressState === "string" ? input.addressState.trim() : null,
+          addressZip: typeof input.addressZip === "string" ? input.addressZip.trim() : null,
+          individuals: { create: { firstName: input.firstName.trim(), memberNumber: (highest._max.memberNumber ?? 0) + 1, birthday: new Date(input.birthday), gender: input.gender === "FEMALE" ? "FEMALE" : "MALE", maritalStatus: typeof input.maritalStatus === "string" && input.maritalStatus ? input.maritalStatus : "Unspecified", memberTypeId: type.id, familyRoleId: role.id, status: input.status } }
+        },
+        include: { individuals: true }
+      });
+      await logAudit({ activityType: "membership-family-created", summary: `Created membership family ${family.lastName}.`, actorId: user.id });
+      return NextResponse.json({ family }, { status: 201 });
+    } catch {
+      return NextResponse.json({ error: "Unable to create membership family." }, { status: 500 });
   }
 }
