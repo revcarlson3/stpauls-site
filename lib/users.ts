@@ -4,20 +4,22 @@ import { getCurrentUser, requirePermission, type Role } from "@/lib/auth";
 import type { Permission } from "@prisma/client";
 import { validatePassword } from "@/lib/password-policy";
 import { notifyUserCreated } from "@/lib/user-notifications";
+import { logAudit } from "@/lib/audit";
 
 export async function createUser(input: { email: string; name: string; password: string; role: Role; groupId?: string | null }) {
-  await requirePermission("MANAGE_USERS");
+  const actor = await requirePermission("MANAGE_USERS");
   if (input.groupId && !(await db.securityGroup.findUnique({ where: { id: input.groupId }, select: { id: true } }))) {
     throw new Error("Invalid security group.");
   }
   const user = await saveUser(input);
+  await logAudit({ activityType: "user-created", summary: `Created user ${user.name}`, details: `Email: ${user.email}. Source: administrator.`, actorId: actor.id });
   await notifyUserCreated({ name: user.name, createdAt: user.createdAt, source: "administrator" });
   return user;
 }
 
 export async function createSecurityGroup(input: { name: string; slug: string; permissions: Permission[] }) {
-  await requirePermission("MANAGE_USERS");
-  return db.securityGroup.create({
+  const actor = await requirePermission("MANAGE_USERS");
+  const group = await db.securityGroup.create({
     data: {
       name: input.name.trim(),
       slug: input.slug,
@@ -25,6 +27,8 @@ export async function createSecurityGroup(input: { name: string; slug: string; p
     },
     include: { permissions: true, _count: { select: { users: true } } }
   });
+  await logAudit({ activityType: "group-created", summary: `Created security group ${group.name}`, actorId: actor.id });
+  return group;
 }
 
 export async function listSecurityGroups() {
@@ -72,6 +76,7 @@ export async function updateUserAccount(input: { id: string; name: string; email
     data,
     select: { id: true, email: true, name: true, role: true, isActive: true, groupId: true, group: { select: { name: true } } }
   });
+  await logAudit({ activityType: "user-updated", summary: `Updated user ${updated.name}`, details: `Email: ${updated.email}.`, actorId: actor.id });
   return { ...updated, isCurrent: updated.id === actor.id };
 }
 
@@ -79,6 +84,7 @@ export async function deleteUser(id: string) {
   const actor = await requirePermission("MANAGE_USERS");
   if (actor.id === id) throw new Error("You cannot delete your own account.");
   await db.user.delete({ where: { id } });
+  await logAudit({ activityType: "user-deleted", summary: `Deleted user account`, details: `User ID: ${id}.`, actorId: actor.id });
 }
 
 export async function getOwnAccount() {
@@ -89,6 +95,7 @@ export async function getOwnAccount() {
 export async function signOutAllSessions() {
   const actor = await requireOwnAccount();
   await db.user.update({ where: { id: actor.id }, data: { sessionVersion: { increment: 1 } } });
+  await logAudit({ activityType: "sessions-revoked", summary: "Revoked all sessions", actorId: actor.id });
 }
 
 export async function updateOwnAccount(input: { name: string; currentPassword?: string; newPassword?: string }) {

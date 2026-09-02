@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getMailSettings, getRegistrationCode } from "@/lib/app-config";
 import { validatePassword } from "@/lib/password-policy";
 import { notifyUserCreated } from "@/lib/user-notifications";
+import { logAudit } from "@/lib/audit";
 
 type RegistrationInput = { firstName: string; lastName: string; email: string; churchCode?: string };
 
@@ -36,6 +37,7 @@ export async function registerUser(input: RegistrationInput) {
 
   await sendVerificationEmail(email, `${firstName} ${lastName}`, token);
   await notifyUserCreated({ name: user.name, createdAt: user.createdAt, source: "self-registration" });
+  await logAudit({ activityType: "user-created", summary: `Created user ${user.name}`, details: `Email: ${user.email}. Source: self-registration.` });
   return { id: user.id, memberLinked: Boolean(member) };
 }
 

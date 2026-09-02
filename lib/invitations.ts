@@ -5,6 +5,7 @@ import { requirePermission, type Role } from "@/lib/auth";
 import { getMailSettings } from "@/lib/app-config";
 import { validatePassword } from "@/lib/password-policy";
 import { notifyUserCreated } from "@/lib/user-notifications";
+import { logAudit } from "@/lib/audit";
 
 function hash(token: string) { return createHash("sha256").update(token).digest("hex"); }
 
@@ -25,6 +26,7 @@ export async function createInvitation(input: { email: string; name: string; rol
   await db.userInvitation.deleteMany({ where: { email, acceptedAt: null } });
   await db.userInvitation.create({ data: { email, name: input.name.trim(), role: input.role, groupId: input.groupId, tokenHash: hash(token), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), createdById: creator.id } });
   await sendInvitationEmail(email, input.name.trim(), token);
+  await logAudit({ activityType: "invitation-created", summary: `Invited ${input.name.trim()}`, details: `Email: ${email}.`, actorId: creator.id });
 }
 
 export async function listPendingInvitations() {
@@ -37,20 +39,22 @@ export async function listPendingInvitations() {
 }
 
 export async function resendInvitation(id: string) {
-  await requirePermission("MANAGE_USERS");
+  const actor = await requirePermission("MANAGE_USERS");
   const invitation = await db.userInvitation.findUnique({ where: { id }, select: { id: true, email: true, name: true, acceptedAt: true } });
   if (!invitation || invitation.acceptedAt) throw new Error("Invitation is no longer pending.");
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   await db.userInvitation.update({ where: { id }, data: { tokenHash: hash(token), expiresAt, createdAt: new Date() } });
   await sendInvitationEmail(invitation.email, invitation.name, token);
+  await logAudit({ activityType: "invitation-resent", summary: `Resent invitation to ${invitation.name}`, details: `Email: ${invitation.email}.`, actorId: actor.id });
 }
 
 export async function revokeInvitation(id: string) {
-  await requirePermission("MANAGE_USERS");
+  const actor = await requirePermission("MANAGE_USERS");
   const invitation = await db.userInvitation.findUnique({ where: { id }, select: { id: true, acceptedAt: true } });
   if (!invitation || invitation.acceptedAt) throw new Error("Invitation is no longer pending.");
   await db.userInvitation.delete({ where: { id } });
+  await logAudit({ activityType: "invitation-revoked", summary: "Revoked invitation", details: `Invitation ID: ${id}.`, actorId: actor.id });
 }
 
 export async function acceptInvitation(token: string, password: string) {
@@ -65,5 +69,6 @@ export async function acceptInvitation(token: string, password: string) {
     return created;
   });
   await notifyUserCreated({ name: user.name, createdAt: user.createdAt, source: "invitation" });
+  await logAudit({ activityType: "invitation-accepted", summary: `Accepted invitation for ${user.name}`, details: `Email: ${user.email}.` });
   return user.id;
 }
