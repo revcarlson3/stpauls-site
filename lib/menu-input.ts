@@ -36,10 +36,10 @@ export function parseMenuInput(value: unknown): { name: string; slug: string; it
 function parseMenuItem(value: unknown): MenuItemInput | null {
   if (!value || typeof value !== "object") return null;
   const item = value as Record<string, unknown>;
-  if (typeof item.label !== "string" || !item.label.trim() || typeof item.href !== "string" || !item.href.trim() || typeof item.position !== "number") return null;
+  if (typeof item.label !== "string" || !item.label.trim() || typeof item.href !== "string" || typeof item.position !== "number") return null;
   const itemType = item.itemType === "EXTERNAL" ? "EXTERNAL" : item.itemType === "INTERNAL" ? "INTERNAL" : null;
   if (!itemType || typeof item.openInNewTab !== "boolean") return null;
-  if (itemType === "INTERNAL" && !item.href.startsWith("/")) return null;
+  if (itemType === "INTERNAL" && item.href && !item.href.startsWith("/")) return null;
   if (itemType === "EXTERNAL" && !/^https?:\/\//i.test(item.href)) return null;
   if (item.id !== undefined && typeof item.id !== "string") return null;
   if (item.parentId !== undefined && item.parentId !== null && typeof item.parentId !== "string") return null;

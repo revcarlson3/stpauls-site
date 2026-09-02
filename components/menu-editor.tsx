@@ -31,7 +31,7 @@ export function MenuEditor({ id }: { id: string }) {
   function editItem(item: MenuItem) { setDraft({ ...item }); setEditingId(item.id ?? item.tempId); }
   function addOrUpdateItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!draft.label.trim() || !draft.href.trim() || !menu) return;
+    if (!draft.label.trim() || (draft.itemType === "EXTERNAL" && !draft.href.trim()) || !menu) return;
     const items = editingId ? menu.items.map((item) => (item.id ?? item.tempId) === editingId ? { ...draft } : item) : [...menu.items, { ...draft, parentId: draft.parentId && menu.items.some((item) => item.id === draft.parentId) ? draft.parentId : null, tempId: `new-${Date.now()}`, position: menu.items.length }];
     setMenu({ ...menu, items }); setDraft(emptyItem()); setEditingId(undefined);
   }
@@ -64,7 +64,7 @@ export function MenuEditor({ id }: { id: string }) {
         <h3 className="font-semibold">{editingId ? "Edit item" : "Add item"}</h3>
         <input required placeholder="Link label" value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink" />
         <select value={draft.itemType} onChange={(event) => setDraft({ ...draft, itemType: event.target.value as MenuItem["itemType"], href: event.target.value === "INTERNAL" ? "/" : "" })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink"><option value="INTERNAL">Internal page</option><option value="EXTERNAL">External URL</option></select>
-        {draft.itemType === "INTERNAL" ? <select required value={draft.href} onChange={(event) => setDraft({ ...draft, href: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink"><option value="">Select a published page</option>{pages.map((page) => <option key={page.id} value={`/${page.slug}`}>{page.title}</option>)}</select> : <input required type="url" placeholder="https://example.com" value={draft.href} onChange={(event) => setDraft({ ...draft, href: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink" />}
+        {draft.itemType === "INTERNAL" ? <select value={draft.href} onChange={(event) => setDraft({ ...draft, href: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink"><option value="">No page (parent only)</option>{pages.map((page) => <option key={page.id} value={`/${page.slug}`}>{page.title}</option>)}</select> : <input required type="url" placeholder="https://example.com" value={draft.href} onChange={(event) => setDraft({ ...draft, href: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink" />}
         <select value={draft.parentId ?? ""} onChange={(event) => setDraft({ ...draft, parentId: event.target.value || null })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm text-ink"><option value="">Top-level item</option>{menu.items.filter((item) => item.id && item.id !== editingId).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.openInNewTab} onChange={(event) => setDraft({ ...draft, openInNewTab: event.target.checked })} /> Open in a new tab</label>
         <Button type="submit">{editingId ? "Update item" : "Add item"}</Button>
