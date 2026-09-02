@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { verifyCaptcha } from "@/lib/captcha";
 
 const REMEMBERED_SESSION_SECONDS = 60 * 24 * 60 * 60;
 const STANDARD_SESSION_SECONDS = 24 * 60 * 60;
@@ -17,13 +18,16 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
         rememberMe: { label: "Remember me", type: "text" }
+        ,captchaToken: { label: "Captcha token", type: "text" }
+        ,captchaAnswer: { label: "Captcha answer", type: "text" }
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) return null;
         const user = await db.user.findUnique({ where: { email: credentials.email.toLowerCase().trim() } });
+        const settings = await db.securitySettings.findUnique({ where: { id: 1 } }) ?? { loginProtectionEnabled: true, maxFailedAttempts: 5, lockoutMinutes: 15, captchaMode: "off" };
+        if (settings.captchaMode === "challenge" && !verifyCaptcha(credentials.captchaToken, credentials.captchaAnswer)) return null;
         if (!user?.passwordHash || !user.isActive) return null;
         const now = new Date();
-        const settings = await db.securitySettings.findUnique({ where: { id: 1 } }) ?? { loginProtectionEnabled: true, maxFailedAttempts: 5, lockoutMinutes: 15 };
         if (settings.loginProtectionEnabled && user.lockedUntil && user.lockedUntil > now) return null;
         const windowMs = settings.lockoutMinutes * 60 * 1000;
         const windowExpired = !user.loginWindowStartedAt || now.getTime() - user.loginWindowStartedAt.getTime() >= windowMs;
