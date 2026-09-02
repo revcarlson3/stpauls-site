@@ -38,6 +38,8 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/users">Edit Users</Link>
               </div>
             </details>
+            <Link className="focus-ring rounded-lg px-4 py-3 font-semibold hover:bg-mist" href="/admin/theme">Theme</Link>
+            <Link className="focus-ring rounded-lg px-4 py-3 font-semibold hover:bg-mist" href="/admin/site-settings">Site Settings</Link>
           </nav>
         </aside>
         <div className="min-w-0 flex-1">{children}</div>
