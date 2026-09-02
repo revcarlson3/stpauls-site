@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Card } from "@/components/ui";
 import { blockDefinitions, type BlockType } from "@/lib/blocks";
 
@@ -12,11 +12,31 @@ const initialBlocks: Block[] = [
   { id: "news-1", type: "news", title: "Latest from St. Paul's", content: "Choose a category for the latest updates.", span: 5 }
 ];
 
-export default function EditorCanvas() {
+export default function EditorCanvas({ pageId }: { pageId?: string }) {
   const [blocks, setBlocks] = useState(initialBlocks);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [pageTitle, setPageTitle] = useState("Welcome page");
   const [slug, setSlug] = useState("welcome");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!pageId) return;
+    fetch(`/api/pages/${pageId}`).then(async (response) => {
+      if (!response.ok) throw new Error("Unable to load this page.");
+      const page = await response.json();
+      setPageTitle(page.title);
+      setSlug(page.slug);
+      setBlocks((page.blocks as Array<{ id: string; type: BlockType; props: Partial<Block> }>).map((block) => ({ id: block.id, type: block.type, title: block.props.title ?? "", content: block.props.content ?? "", mediaType: block.props.mediaType, mediaUrl: block.props.mediaUrl, span: block.props.span ?? 12 })));
+    }).catch((error: Error) => setMessage(error.message));
+  }, [pageId]);
+
+  async function saveDraft() {
+    const input = { title: pageTitle, slug, blocks: blocks.map(({ id, type, title, content, mediaType, mediaUrl, span }) => ({ id, type, props: { title, content, mediaType: mediaType ?? null, mediaUrl: mediaUrl ?? null, span } })) };
+    const response = await fetch(pageId ? `/api/pages/${pageId}` : "/api/pages", { method: pageId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) { setMessage(body.error ?? "Unable to save draft."); return; }
+    setMessage("Draft saved.");
+  }
 
   function moveBlock(targetId: string) {
     if (!draggedId || draggedId === targetId) return;
@@ -127,8 +147,9 @@ export default function EditorCanvas() {
         <div className="mt-5 grid gap-2">
           {(Object.keys(blockDefinitions) as BlockType[]).map((type) => <Button key={type} title={blockDefinitions[type].description} className="w-full justify-start bg-ink hover:bg-ink/90" onClick={() => addBlock(type)}>+ {blockDefinitions[type].label}</Button>)}
         </div>
-        <button type="button" disabled className="mt-6 w-full cursor-not-allowed rounded-full bg-ink/20 px-5 py-3 text-sm font-semibold text-ink/50">Save draft (authentication required)</button>
-        <p className="mt-5 border-t border-ink/10 pt-4 text-xs leading-5 text-ink/50">Changes live only in this browser session. Saving will call the protected page service after a real server-side session is connected.</p>
+        <button type="button" onClick={() => void saveDraft()} className="mt-6 w-full rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white hover:bg-[#d95f43]">Save draft</button>
+        {message && <p role="status" className="mt-3 text-sm text-ink/60">{message}</p>}
+        <p className="mt-5 border-t border-ink/10 pt-4 text-xs leading-5 text-ink/50">Draft changes are saved through the protected page API.</p>
       </Card>
     </div>
   );

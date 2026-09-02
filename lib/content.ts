@@ -52,12 +52,27 @@ export async function updatePage(id: string, input: { title: string; slug: strin
   });
 }
 
+export async function getPage(id: string) {
+  await requirePermission("EDIT_PAGES");
+  return db.page.findUnique({ where: { id } });
+}
+
 export async function publishPage(id: string) {
   const author = await requirePermission("PUBLISH_PAGES");
   return db.page.update({
     where: { id },
     data: { status: "PUBLISHED", publishedAt: new Date(), publishedById: author.id }
   });
+}
+
+export async function archivePage(id: string) {
+  await requirePermission("EDIT_PAGES");
+  return db.page.update({ where: { id }, data: { status: "ARCHIVED" } });
+}
+
+export async function deletePage(id: string) {
+  await requirePermission("EDIT_PAGES");
+  return db.page.delete({ where: { id } });
 }
 
 function revisionData(input: { title: string; blocks: PageBlock[] }, author: User) {
