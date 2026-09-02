@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  viewer
+  editor
+  admin
+}
+
+enum PageStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum Permission {
+  ACCESS_ADMIN
+  EDIT_PAGES
+  PUBLISH_PAGES
+  MANAGE_MENUS
+  MANAGE_USERS
+  MANAGE_SETTINGS
+  MANAGE_MEMBERSHIP
+  MANAGE_EVENTS
+  MANAGE_GIVING
+  MANAGE_ACCOUNTING
+  MANAGE_SERVICES
+  MANAGE_MODULES
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  name         String
+  passwordHash String?
+  isActive Boolean @default(true)
+  emailVerifiedAt DateTime?
+  failedLoginAttempts Int      @default(0)
+  loginWindowStartedAt DateTime?
+  lockedUntil DateTime?
+  sessionVersion Int @default(0)
+  mfaEnabled Boolean @default(false)
+  mfaSecretEncrypted String?
+  mfaRecoveryCodesEncrypted String?
+  mfaEnrolledAt DateTime?
+  emailMfaEnabled Boolean @default(false)
+  smsMfaEnabled Boolean @default(false)
+  phoneNumber String? @unique
+  phoneVerifiedAt DateTime?
+  memberProfile MemberProfile?
+  verificationTokens EmailVerificationToken[]
+  emailChangeTokens EmailChangeToken[]
+  passwordResetTokens PasswordResetToken[]
+  role         Role           @default(viewer)
+  groupId      String?
+  group        SecurityGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  revisions    PageRevision[] @relation("RevisionAuthor")
+  published    Page[]         @relation("PublishedBy")
+  invitations  UserInvitation[] @relation("InvitationCreator")
+  auditLogs    AuditLog[] @relation("AuditActor")
+  mfaChallenges MfaChallenge[]
+}
+
+model MfaChallenge {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel String
+  purpose String @default("login")
+  recipient String
+  codeHash String
+  expiresAt DateTime
+  attempts Int @default(0)
+  lastSentAt DateTime @default(now())
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, channel, purpose, expiresAt])
+  @@index([userId, consumedAt])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  activityType String
+  summary String
+  details String?
+  actorId String?
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  @@index([activityType, createdAt])
+  @@index([createdAt])
+}
+
+model EmailChangeToken {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email String
+  tokenHash String @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId, expiresAt])
+}
+
+model UserInvitation {
+  id String @id @default(cuid())
+  email String
+  name String
+  role Role @default(viewer)
+  groupId String?
+  group SecurityGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  tokenHash String @unique
+  expiresAt DateTime
+  acceptedAt DateTime?
+  createdById String
+  createdBy User @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([email, expiresAt])
+}
+
+model SecuritySettings {
+  id                   Int      @id @default(1)
+  loginProtectionEnabled Boolean @default(true)
+  maxFailedAttempts   Int      @default(5)
+  lockoutMinutes      Int      @default(15)
+  captchaMode      String   @default("off")
+  emailMfaEnabled  Boolean  @default(false)
+  smsMfaEnabled    Boolean  @default(false)
+  authenticatorMfaEnabled Boolean @default(false)
+  recaptchaSiteKey String?
+  recaptchaSecretEncrypted String?
+  smsProvider String @default("twilio")
+  smsAccountId String?
+  smsAuthSecretEncrypted String?
+  smsFrom String?
+  totpIssuer String @default("St. Paul's Site")
+  mfaChallengePolicy String @default("every-login")
+  trustedDeviceDays Int @default(30)
+  minPasswordLength Int @default(12)
+  passwordRequireUppercase Boolean @default(true)
+  passwordRequireLowercase Boolean @default(true)
+  passwordRequireNumber Boolean @default(true)
+  passwordRequireSymbol Boolean @default(true)
+  passwordExcludeAmbiguous Boolean @default(true)
+  smtpHost          String?
+  smtpPort          Int      @default(587)
+  smtpUser          String?
+  smtpPasswordEncrypted String?
+  emailFrom         String?
+  registrationCodeEncrypted String?
+  updatedAt           DateTime @updatedAt
+}
+
+model SecurityGroup {
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  users       User[]
+  invitations UserInvitation[]
+  permissions GroupPermission[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model GroupPermission {
+  groupId    String
+  permission Permission
+  group      SecurityGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, permission])
+}
+
+model Page {
+  id                String        @id @default(cuid())
+  slug              String        @unique
+  title             String
+  status            PageStatus    @default(DRAFT)
+  isHome            Boolean       @default(false)
+  blocks            Json
+  menuId            String?
+  menu              Menu?         @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  revisions         PageRevision[]
+  publishedAt       DateTime?
+  publishedById     String?
+  publishedBy       User?         @relation("PublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([status])
+}
+
+model MemberProfile {
+  id         String   @id @default(cuid())
+  firstName  String
+  lastName   String
+  email      String   @unique
+  userId     String?  @unique
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model PageRevision {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      Page    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  blocks    Json
+  title     String
+  authorId  String
+  author    User     @relation("RevisionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@index([pageId, createdAt])
+}
+
+model Menu {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  items     MenuItem[]
+  pages     Page[]
+  locations MenuLocation[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model MenuLocation {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  menuId    String?
+  menu      Menu?    @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MenuItem {
+  id        String    @id @default(cuid())
+  menuId    String
+  menu      Menu      @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  label     String
+  href      String
+  itemType  String    @default("INTERNAL")
+  openInNewTab Boolean @default(false)
+  position  Int       @default(0)
+  parentId  String?
+  parent    MenuItem? @relation("MenuTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  MenuItem[] @relation("MenuTree")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([menuId, position])
+}
