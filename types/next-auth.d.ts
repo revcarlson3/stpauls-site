@@ -6,6 +6,8 @@ declare module "next-auth" {
     role: "viewer" | "editor" | "admin";
     rememberMe?: boolean;
     canAccessAdmin?: boolean;
+    mfaPending?: boolean;
+    mfaPendingUserId?: string;
   }
 
   interface Session {
@@ -13,6 +15,8 @@ declare module "next-auth" {
       id: string;
       role: "viewer" | "editor" | "admin";
       canAccessAdmin: boolean;
+      mfaPending?: boolean;
+      mfaPendingUserId?: string;
     } & DefaultSession["user"];
   }
 }
@@ -22,5 +26,7 @@ declare module "next-auth/jwt" {
     id: string;
     role: "viewer" | "editor" | "admin";
     canAccessAdmin: boolean;
+    mfaPending?: boolean;
+    mfaPendingUserId?: string;
   }
 }
