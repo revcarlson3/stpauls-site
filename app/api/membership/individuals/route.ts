@@ -28,6 +28,20 @@ export async function POST(request: Request) {
     if (!input || typeof input.familyId !== "string" || typeof input.firstName !== "string" || !input.firstName.trim() || Number.isNaN(birthday.getTime()) || typeof input.memberTypeId !== "string" || typeof input.familyRoleId !== "string" || !["MALE", "FEMALE"].includes(input.gender) || typeof input.maritalStatus !== "string" || !input.maritalStatus.trim() || !["ACTIVE", "INACTIVE"].includes(input.status)) {
       return NextResponse.json({ error: "Family, first name, birthday, member type, family role, gender, marital status, and status are required." }, { status: 400 });
     }
+    const possibleDuplicates = await db.membershipIndividual.findMany({
+      where: {
+        status: { not: "REMOVED" },
+        OR: [
+          ...(typeof input.email === "string" && input.email.trim() ? [{ email: { equals: input.email.trim(), mode: "insensitive" as const } }] : []),
+          { familyId: input.familyId, firstName: { equals: input.firstName.trim(), mode: "insensitive" }, birthday }
+        ]
+      },
+      select: { id: true, firstName: true, lastName: true, email: true, memberNumber: true, family: { select: { lastName: true } } },
+      take: 5
+    });
+    if (possibleDuplicates.length && input.confirmDuplicate !== true) {
+      return NextResponse.json({ error: "A possible matching individual was found. Review it before continuing.", duplicate: true, candidates: possibleDuplicates.map((person) => ({ id: person.id, name: `${person.firstName} ${person.lastName ?? person.family.lastName}`, email: person.email, memberNumber: person.memberNumber })) }, { status: 409 });
+    }
     const [family, role, type, highest] = await Promise.all([
       db.membershipFamily.findUnique({ where: { id: input.familyId }, select: { id: true, status: true } }),
       db.membershipFamilyRole.findUnique({ where: { id: input.familyRoleId }, select: { id: true } }),
