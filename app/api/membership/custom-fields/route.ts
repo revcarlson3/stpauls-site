@@ -28,7 +28,8 @@ export async function POST(request: Request) {
     await authorize(user.id);
     const input = await request.json();
     const name = typeof input?.name === "string" ? input.name.trim() : "";
-    const slug = typeof input?.slug === "string" ? input.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "";
+    const slugSource = typeof input?.slug === "string" && input.slug.trim() ? input.slug : name;
+    const slug = slugSource.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const appliesTo = typeof input?.appliesTo === "string" ? input.appliesTo : "";
     const type = typeof input?.type === "string" ? input.type : "";
     if (!name || !slug || !targets.includes(appliesTo) || !fieldTypes.includes(type)) return NextResponse.json({ error: "Name, type, and target are required." }, { status: 400 });
