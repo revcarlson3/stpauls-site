@@ -1,7 +1,11 @@
 import crypto from "node:crypto";
 import { decryptConfig, encryptConfig } from "@/lib/app-config";
+import { db } from "@/lib/db";
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+export const OTP_EXPIRY_MS = 10 * 60 * 1000;
+export const OTP_RESEND_INTERVAL_MS = 60 * 1000;
+export const OTP_MAX_ATTEMPTS = 5;
 
 export function createTotpSecret() {
   return encodeBase32(crypto.randomBytes(20));
@@ -46,6 +50,65 @@ export function consumeRecoveryCode(encrypted: string | null, code: string) {
 
 export function hashRecoveryCode(code: string) {
   return crypto.createHash("sha256").update(code.replace(/\s/g, "").toUpperCase()).digest("hex");
+}
+
+export function normalizePhoneNumber(value: string) {
+  const phone = value.trim().replace(/[()\s-]/g, "");
+  return /^\+[1-9]\d{7,14}$/.test(phone) ? phone : null;
+}
+
+export function createOtpCode() {
+  return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+export function hashOtpCode(code: string) {
+  return crypto.createHmac("sha256", process.env.NEXTAUTH_SECRET ?? "development-only-config-key")
+    .update(code.replace(/\s/g, ""))
+    .digest("hex");
+}
+
+export async function createOtpChallenge(input: {
+  userId: string;
+  channel: "email" | "sms";
+  purpose: "login" | "enrollment";
+  recipient: string;
+}) {
+  const now = new Date();
+  const recent = await db.mfaChallenge.findFirst({
+    where: { userId: input.userId, channel: input.channel, purpose: input.purpose, consumedAt: null, createdAt: { gt: new Date(now.getTime() - OTP_RESEND_INTERVAL_MS) } },
+    select: { id: true }
+  });
+  if (recent) throw new Error("A verification code was already sent. Please wait before requesting another.");
+  const code = createOtpCode();
+  const challenge = await db.mfaChallenge.create({
+    data: {
+      userId: input.userId,
+      channel: input.channel,
+      purpose: input.purpose,
+      recipient: input.recipient,
+      codeHash: hashOtpCode(code),
+      expiresAt: new Date(now.getTime() + OTP_EXPIRY_MS)
+    },
+    select: { id: true, expiresAt: true, recipient: true }
+  });
+  return { ...challenge, code };
+}
+
+export async function verifyOtpChallenge(input: { userId: string; channel: "email" | "sms"; purpose: "login" | "enrollment"; code: string }) {
+  const challenge = await db.mfaChallenge.findFirst({
+    where: { userId: input.userId, channel: input.channel, purpose: input.purpose, consumedAt: null },
+    orderBy: { createdAt: "desc" }
+  });
+  if (!challenge || challenge.expiresAt <= new Date()) return { valid: false, reason: "expired" as const };
+  if (challenge.attempts >= OTP_MAX_ATTEMPTS) return { valid: false, reason: "locked" as const };
+  const claimed = await db.mfaChallenge.updateMany({
+    where: { id: challenge.id, consumedAt: null, attempts: { lt: OTP_MAX_ATTEMPTS } },
+    data: { attempts: { increment: 1 } }
+  });
+  if (claimed.count !== 1) return { valid: false, reason: "locked" as const };
+  if (!timingSafeEqual(challenge.codeHash, hashOtpCode(input.code))) return { valid: false, reason: "invalid" as const };
+  await db.mfaChallenge.updateMany({ where: { id: challenge.id, consumedAt: null }, data: { consumedAt: new Date() } });
+  return { valid: true, recipient: challenge.recipient };
 }
 
 function encodeBase32(value: Buffer) {

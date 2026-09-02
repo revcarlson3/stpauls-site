@@ -28,7 +28,7 @@ export async function getSecuritySettings() {
   const settings = await db.securitySettings.findUnique({ where: { id: 1 } });
   if (!settings) return defaultSecuritySettings;
   const { recaptchaSecretEncrypted, smsAuthSecretEncrypted, ...safeSettings } = settings;
-  return { ...safeSettings, recaptchaSecret: "", recaptchaConfigured: Boolean(recaptchaSecretEncrypted), smsAuthSecret: "", smsConfigured: Boolean(smsAuthSecretEncrypted) };
+  return { ...safeSettings, recaptchaSecret: "", recaptchaConfigured: Boolean(recaptchaSecretEncrypted), smsAuthSecret: "", smsConfigured: Boolean(smsAuthSecretEncrypted && settings.smsAccountId && settings.smsFrom) };
 }
 
 export async function updateSecuritySettings(input: Omit<typeof defaultSecuritySettings, "recaptchaConfigured" | "smsConfigured">) {
@@ -45,6 +45,6 @@ export async function updateSecuritySettings(input: Omit<typeof defaultSecurityS
   };
   return db.securitySettings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } }).then((settings) => {
     const { recaptchaSecretEncrypted, smsAuthSecretEncrypted, ...safeSettings } = settings;
-    return { ...safeSettings, recaptchaSecret: "", recaptchaConfigured: Boolean(recaptchaSecretEncrypted), smsAuthSecret: "", smsConfigured: Boolean(smsAuthSecretEncrypted) };
+    return { ...safeSettings, recaptchaSecret: "", recaptchaConfigured: Boolean(recaptchaSecretEncrypted), smsAuthSecret: "", smsConfigured: Boolean(smsAuthSecretEncrypted && settings.smsAccountId && settings.smsFrom) };
   });
 }

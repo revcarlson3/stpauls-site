@@ -36,3 +36,13 @@ export async function getRegistrationCode() {
   const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { registrationCodeEncrypted: true } });
   return decryptConfig(settings?.registrationCodeEncrypted ?? null);
 }
+
+export async function getSmsSettings() {
+  const settings = await db.securitySettings.findUnique({ where: { id: 1 } });
+  return {
+    provider: settings?.smsProvider ?? "twilio",
+    accountId: settings?.smsAccountId ?? "",
+    authSecret: decryptConfig(settings?.smsAuthSecretEncrypted ?? null),
+    from: settings?.smsFrom ?? ""
+  };
+}

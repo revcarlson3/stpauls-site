@@ -4,8 +4,9 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { db } from "@/lib/db";
 import { verifyCaptcha } from "@/lib/captcha";
-import { consumeRecoveryCode, verifyTotp } from "@/lib/mfa";
+import { consumeRecoveryCode, createOtpChallenge, verifyOtpChallenge, verifyTotp } from "@/lib/mfa";
 import { decryptConfig } from "@/lib/app-config";
+import { sendEmailMfaCode, sendSmsMfaCode } from "@/lib/mfa-delivery";
 
 const REMEMBERED_SESSION_SECONDS = 60 * 24 * 60 * 60;
 const STANDARD_SESSION_SECONDS = 24 * 60 * 60;
@@ -24,11 +25,12 @@ export const authOptions: NextAuthOptions = {
         ,captchaToken: { label: "Captcha token", type: "text" }
         ,captchaAnswer: { label: "Captcha answer", type: "text" }
         ,mfaCode: { label: "Authenticator code", type: "text" }
+        ,mfaChannel: { label: "MFA delivery method", type: "text" }
       },
       async authorize(credentials, req) {
         if (!credentials?.email || !credentials.password) return null;
         const user = await db.user.findUnique({ where: { email: credentials.email.toLowerCase().trim() } });
-        const settings = await db.securitySettings.findUnique({ where: { id: 1 } }) ?? { loginProtectionEnabled: true, maxFailedAttempts: 5, lockoutMinutes: 15, captchaMode: "off", authenticatorMfaEnabled: false, mfaChallengePolicy: "every-login" };
+        const settings = await db.securitySettings.findUnique({ where: { id: 1 } }) ?? { loginProtectionEnabled: true, maxFailedAttempts: 5, lockoutMinutes: 15, captchaMode: "off", authenticatorMfaEnabled: false, emailMfaEnabled: false, smsMfaEnabled: false, mfaChallengePolicy: "every-login" };
         if (settings.captchaMode === "challenge" && !verifyCaptcha(credentials.captchaToken, credentials.captchaAnswer)) return null;
         if (!user?.passwordHash || !user.isActive) return null;
         const now = new Date();
@@ -51,11 +53,31 @@ export const authOptions: NextAuthOptions = {
         }
         const access = await db.groupPermission.findUnique({ where: { groupId_permission: { groupId: user.groupId ?? "", permission: "ACCESS_ADMIN" } } });
         const trusted = settings.mfaChallengePolicy === "trusted-device" && await isTrustedDevice(req.headers?.cookie, user.id);
-        const mfaRequired = Boolean(settings.authenticatorMfaEnabled && user.mfaEnabled && user.mfaSecretEncrypted && !trusted);
+        const availableChannels = [
+          settings.emailMfaEnabled && user.emailMfaEnabled && user.emailVerifiedAt ? "email" : "",
+          settings.smsMfaEnabled && user.smsMfaEnabled && user.phoneVerifiedAt && user.phoneNumber ? "sms" : ""
+        ].filter(Boolean) as Array<"email" | "sms">;
+        const authenticatorAvailable = Boolean(settings.authenticatorMfaEnabled && user.mfaEnabled && user.mfaSecretEncrypted);
+        const mfaRequired = Boolean(!trusted && (authenticatorAvailable || availableChannels.length));
         if (mfaRequired) {
           const mfaCode = typeof credentials.mfaCode === "string" ? credentials.mfaCode : "";
-          if (!mfaCode) return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id };
-          let valid = verifyTotp(decryptConfig(user.mfaSecretEncrypted), mfaCode);
+          const requestedChannel = ["authenticator", "sms", "email"].includes(credentials.mfaChannel) ? credentials.mfaChannel as "authenticator" | "email" | "sms" : undefined;
+          const channel = requestedChannel === "authenticator" && authenticatorAvailable ? requestedChannel : requestedChannel && requestedChannel !== "authenticator" && availableChannels.includes(requestedChannel) ? requestedChannel : availableChannels[0];
+          if (channel && channel !== "authenticator" && !mfaCode) {
+            const recipient = channel === "email" ? user.email : user.phoneNumber as string;
+            const challenge = await createOtpChallenge({ userId: user.id, channel, purpose: "login", recipient });
+            try {
+              if (channel === "email") await sendEmailMfaCode(recipient, challenge.code);
+              else await sendSmsMfaCode(recipient, challenge.code);
+            } catch {
+              await db.mfaChallenge.delete({ where: { id: challenge.id } });
+              return null;
+            }
+            return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: channel, mfaAvailableChannels: [...(authenticatorAvailable ? ["authenticator" as const] : []), ...availableChannels] };
+          }
+          if (!mfaCode) return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: "authenticator", mfaAvailableChannels: ["authenticator"] };
+          let valid = Boolean(user.mfaSecretEncrypted && verifyTotp(decryptConfig(user.mfaSecretEncrypted), mfaCode));
+          if (!valid && channel && channel !== "authenticator" && mfaCode) valid = (await verifyOtpChallenge({ userId: user.id, channel, purpose: "login", code: mfaCode })).valid;
           if (!valid) {
             const recovery = consumeRecoveryCode(user.mfaRecoveryCodesEncrypted, mfaCode);
             valid = recovery.valid;
@@ -92,6 +114,8 @@ export const authOptions: NextAuthOptions = {
         token.canAccessAdmin = Boolean(user.canAccessAdmin);
         token.mfaPending = Boolean(user.mfaPending);
         token.mfaPendingUserId = user.mfaPendingUserId;
+        token.mfaPendingChannel = user.mfaPendingChannel;
+        token.mfaAvailableChannels = user.mfaAvailableChannels;
         token.exp = Math.floor(Date.now() / 1000) + (user.rememberMe ? REMEMBERED_SESSION_SECONDS : STANDARD_SESSION_SECONDS);
         token.sessionVersion = (await db.user.findUnique({ where: { id: user.id }, select: { sessionVersion: true } }))?.sessionVersion ?? 0;
       } else if (token.id) {
@@ -108,6 +132,8 @@ export const authOptions: NextAuthOptions = {
         session.user.canAccessAdmin = token.canAccessAdmin;
         session.user.mfaPending = token.mfaPending;
         session.user.mfaPendingUserId = token.mfaPendingUserId;
+        session.user.mfaPendingChannel = token.mfaPendingChannel;
+        session.user.mfaAvailableChannels = token.mfaAvailableChannels;
         if (token.invalid || token.mfaPending) session.user.id = "";
       }
       return session;

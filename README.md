@@ -10,6 +10,7 @@ Barebones mobile-first public site foundation with a separately routed editor ar
 - PostgreSQL + Prisma for the CMS foundation
 - NextAuth credentials sessions with role claims
 - SMTP-backed member-aware account registration
+- Per-user authenticator, email-code, and SMS-code MFA with recovery codes and trusted devices
 - Configurable security groups and permissions
 
 ## Local setup
@@ -42,7 +43,7 @@ Planned site settings include a Modules page where church-management modules (me
 
 Login protection limits an account to five failed password attempts within a 15-minute window, followed by a 15-minute temporary lockout. A successful login clears the failed-attempt counter. Password recovery remains available for locked accounts.
 
-Set `NEXTAUTH_SECRET` to a long random value and set `NEXTAUTH_URL` to the deployed HTTPS URL. After adding `passwordHash` to the schema, run `npm run db:push` again. Users must be provisioned through a controlled administrative process; this scaffold intentionally provides no default credentials or public registration.
+Set `NEXTAUTH_SECRET` to a long random value and set `NEXTAUTH_URL` to the deployed HTTPS URL. After adding `passwordHash` or MFA fields to the schema, run `npm run db:push` again. Users must be provisioned through a controlled administrative process; this scaffold intentionally provides no default credentials or public registration.
 
 Registration is now available at `/register`. It is not open until SMTP variables and `CHURCH_REGISTRATION_CODE` are configured. A blank/incorrect code creates an unlinked viewer account; a valid code links an exact, currently unassigned `MemberProfile` match. Verification tokens are stored hashed and expire after 24 hours; the verification link leads to password setup before sign-in is available.
 

@@ -6,7 +6,7 @@ import { Container } from "@/components/ui";
 import { signOut } from "next-auth/react";
 
 type Account = { name: string; email: string; emailVerifiedAt: string | null };
-type MfaState = { available: boolean; issuer: string; enabled: boolean; recoveryCodesRemaining: number };
+type MfaState = { available: boolean; issuer: string; enabled: boolean; recoveryCodesRemaining: number; emailAvailable: boolean; emailEnabled: boolean; emailVerified: boolean; smsAvailable: boolean; smsEnabled: boolean; phoneNumber: string | null; phoneVerified: boolean };
 
 export default function AccountPage() {
   const [account, setAccount] = useState<Account | null>(null);
@@ -16,6 +16,10 @@ export default function AccountPage() {
   const [mfaCode, setMfaCode] = useState("");
   const [mfaPassword, setMfaPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [channelCode, setChannelCode] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phonePassword, setPhonePassword] = useState("");
+  const [pendingChannel, setPendingChannel] = useState<"email" | "sms" | null>(null);
 
   useEffect(() => {
     void fetch("/api/account").then(async (response) => {
@@ -111,6 +115,25 @@ export default function AccountPage() {
     } else {
       setMessage(body.error ?? "Unable to disable MFA.");
     }
+
+  }
+
+  async function beginChannel(channel: "email" | "sms") {
+      const body = channel === "email" ? { action: "begin-email" } : { action: "begin-phone", phoneNumber, currentPassword: phonePassword };
+      const response = await fetch("/api/account/mfa", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) { setMessage(result.error ?? "Unable to send verification code."); return; }
+      setPendingChannel(channel); setChannelCode(""); setMessage(`A verification code was sent by ${channel === "email" ? "email" : "text message"}.`);
+  }
+
+  async function verifyChannel(event: FormEvent<HTMLFormElement>) {
+      event.preventDefault();
+      if (!pendingChannel) return;
+      const response = await fetch("/api/account/mfa", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: pendingChannel === "email" ? "verify-email" : "verify-phone", code: channelCode }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) { setMessage(result.error ?? "Unable to verify code."); return; }
+      setMfa((current) => current ? pendingChannel === "email" ? { ...current, emailEnabled: true } : { ...current, smsEnabled: true, phoneNumber: result.phoneNumber, phoneVerified: true } : current);
+      setPendingChannel(null); setChannelCode(""); setPhonePassword(""); setMessage(`${pendingChannel === "email" ? "Email" : "Text-message"} MFA is enabled.`);
   }
 
   return (
@@ -129,8 +152,8 @@ export default function AccountPage() {
             {message && <p role="status" className="text-sm">{message}</p>}
           </form>
           {mfa && <section className="mt-8 max-w-xl rounded-2xl border border-ink/10 bg-white p-6">
-            <h2 className="font-serif text-2xl">Authenticator app MFA</h2>
-            {!mfa.available ? <p className="mt-2 text-sm text-ink/60">Authenticator apps are not enabled by the site administrator. Email and text-message MFA enrollment are not supported.</p> : mfa.enabled ? <>
+            <h2 className="font-serif text-2xl">Multi-factor authentication</h2>
+            {!mfa.available ? <p className="mt-2 text-sm text-ink/60">Authenticator apps are not enabled by the site administrator.</p> : mfa.enabled ? <>
               <p className="mt-2 text-sm text-ink/60">Enabled. {mfa.recoveryCodesRemaining} recovery codes remain.</p>
               <form onSubmit={(event) => void disableMfa(event)} className="mt-4 grid gap-3">
                 <label className="grid gap-1 text-sm font-semibold">Current password<input required type="password" value={mfaPassword} onChange={(event) => setMfaPassword(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
@@ -144,9 +167,17 @@ export default function AccountPage() {
               <label className="grid gap-1 text-sm font-semibold">Verification code<input required inputMode="numeric" autoComplete="one-time-code" value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
               <button className="focus-ring w-fit rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white" type="submit">Verify and enable</button>
             </form> : <>
-              <p className="mt-2 text-sm text-ink/60">Use an authenticator app for a six-digit login code. Email and text-message MFA enrollment are not supported.</p>
+              <p className="mt-2 text-sm text-ink/60">Use an authenticator app for a six-digit login code.</p>
               <button type="button" onClick={() => void beginMfa()} className="focus-ring mt-4 rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Set up authenticator app</button>
             </>}
+            <div className="mt-8 border-t border-ink/10 pt-6">
+              <h3 className="font-serif text-xl">Email-code MFA</h3>
+              {!mfa.emailAvailable ? <p className="mt-2 text-sm text-ink/60">Email-code MFA is not enabled by the site administrator.</p> : mfa.emailEnabled ? <p className="mt-2 text-sm text-ink/60">Enabled for {account.email}.</p> : !mfa.emailVerified ? <p className="mt-2 text-sm text-ink/60">Verify your account email before enrolling this method.</p> : pendingChannel === "email" ? <form onSubmit={(event) => void verifyChannel(event)} className="mt-3 grid gap-3"><label className="grid gap-1 text-sm font-semibold">Email verification code<input required inputMode="numeric" autoComplete="one-time-code" value={channelCode} onChange={(event) => setChannelCode(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label><button className="focus-ring w-fit rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Verify email MFA</button></form> : <button type="button" onClick={() => void beginChannel("email")} className="focus-ring mt-3 rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Set up email MFA</button>}
+            </div>
+            <div className="mt-8 border-t border-ink/10 pt-6">
+              <h3 className="font-serif text-xl">Text-message MFA</h3>
+              {!mfa.smsAvailable ? <p className="mt-2 text-sm text-ink/60">Text-message MFA is not configured by the site administrator.</p> : mfa.smsEnabled ? <p className="mt-2 text-sm text-ink/60">Enabled for {mfa.phoneNumber}.</p> : pendingChannel === "sms" ? <form onSubmit={(event) => void verifyChannel(event)} className="mt-3 grid gap-3"><p className="text-sm text-ink/60">Code sent to {phoneNumber}.</p><label className="grid gap-1 text-sm font-semibold">Text-message verification code<input required inputMode="numeric" autoComplete="one-time-code" value={channelCode} onChange={(event) => setChannelCode(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label><button className="focus-ring w-fit rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Verify phone</button></form> : <div className="mt-3 grid gap-3"><label className="grid gap-1 text-sm font-semibold">Phone number<span className="font-normal text-ink/50">Use international format, for example +15551234567.</span><input required type="tel" value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label><label className="grid gap-1 text-sm font-semibold">Current password<input required type="password" value={phonePassword} onChange={(event) => setPhonePassword(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label><button type="button" onClick={() => void beginChannel("sms")} className="focus-ring w-fit rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Verify phone and enable MFA</button></div>}
+            </div>
             {recoveryCodes && <div className="mt-5 rounded-lg bg-amber-50 p-4"><p className="text-sm font-semibold">Save these recovery codes now. Each works once.</p><code className="mt-2 block whitespace-pre-wrap text-sm">{recoveryCodes.join("\n")}</code></div>}
           </section>}
           <section className="mt-8 max-w-xl rounded-2xl border border-ink/10 bg-white p-6">

@@ -48,6 +48,10 @@ model User {
   mfaSecretEncrypted String?
   mfaRecoveryCodesEncrypted String?
   mfaEnrolledAt DateTime?
+  emailMfaEnabled Boolean @default(false)
+  smsMfaEnabled Boolean @default(false)
+  phoneNumber String? @unique
+  phoneVerifiedAt DateTime?
   memberProfile MemberProfile?
   verificationTokens EmailVerificationToken[]
   emailChangeTokens EmailChangeToken[]
@@ -61,6 +65,24 @@ model User {
   published    Page[]         @relation("PublishedBy")
   invitations  UserInvitation[] @relation("InvitationCreator")
   auditLogs    AuditLog[] @relation("AuditActor")
+  mfaChallenges MfaChallenge[]
+}
+
+model MfaChallenge {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel String
+  purpose String @default("login")
+  recipient String
+  codeHash String
+  expiresAt DateTime
+  attempts Int @default(0)
+  lastSentAt DateTime @default(now())
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, channel, purpose, expiresAt])
+  @@index([userId, consumedAt])
 }
 
 model AuditLog {
