@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { CustomFieldValidationError, saveCustomFieldValues, validateCustomFieldValues } from "@/lib/membership-custom-fields";
 
 export async function GET(request: Request) {
   try {
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
         ...(search ? { OR: [{ firstName: { contains: search, mode: "insensitive" } }, { lastName: { contains: search, mode: "insensitive" } }, { family: { lastName: { contains: search, mode: "insensitive" } } }] } : {})
       },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      include: { family: true, memberType: true, familyRole: true },
+      include: { family: true, memberType: true, familyRole: true, customValues: { where: { definition: { isActive: true } }, select: { definitionId: true, value: true } } },
       take: 200
     });
     const selected = id ? members.find((member) => member.id === id) ?? null : members[0] ?? null;
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
       if (!input || typeof input.lastName !== "string" || !input.lastName.trim() || typeof input.firstName !== "string" || !input.firstName.trim() || typeof input.phone !== "string" || !input.phone.trim() || typeof input.email !== "string" || !input.email.trim() || !["ACTIVE", "INACTIVE"].includes(input.status)) {
         return NextResponse.json({ error: "Last name, first name, phone, email, and status are required." }, { status: 400 });
       }
+      const customFields = await validateCustomFieldValues(input.customFieldValues, "FAMILY");
       const possibleDuplicates = await db.membershipFamily.findMany({
         where: {
           OR: [
@@ -62,20 +64,25 @@ export async function POST(request: Request) {
         db.membershipIndividual.aggregate({ _max: { memberNumber: true } })
       ]);
       if (!role || !type) return NextResponse.json({ error: "Membership reference data has not been seeded." }, { status: 503 });
-      const family = await db.membershipFamily.create({
-        data: {
-          lastName: input.lastName.trim(), phone: input.phone.trim(), email: input.email.trim().toLowerCase(), status: input.status,
-          addressStreet: typeof input.addressStreet === "string" ? input.addressStreet.trim() : null,
-          addressCity: typeof input.addressCity === "string" ? input.addressCity.trim() : null,
-          addressState: typeof input.addressState === "string" ? input.addressState.trim() : null,
-          addressZip: typeof input.addressZip === "string" ? input.addressZip.trim() : null,
-          individuals: { create: { firstName: input.firstName.trim(), memberNumber: (highest._max.memberNumber ?? 0) + 1, birthday: new Date(input.birthday), gender: input.gender === "FEMALE" ? "FEMALE" : "MALE", maritalStatus: typeof input.maritalStatus === "string" && input.maritalStatus ? input.maritalStatus : "Unspecified", memberTypeId: type.id, familyRoleId: role.id, status: input.status } }
-        },
-        include: { individuals: true }
+      const family = await db.$transaction(async (transaction) => {
+        const created = await transaction.membershipFamily.create({
+          data: {
+            lastName: input.lastName.trim(), phone: input.phone.trim(), email: input.email.trim().toLowerCase(), status: input.status,
+            addressStreet: typeof input.addressStreet === "string" ? input.addressStreet.trim() : null,
+            addressCity: typeof input.addressCity === "string" ? input.addressCity.trim() : null,
+            addressState: typeof input.addressState === "string" ? input.addressState.trim() : null,
+            addressZip: typeof input.addressZip === "string" ? input.addressZip.trim() : null,
+            individuals: { create: { firstName: input.firstName.trim(), memberNumber: (highest._max.memberNumber ?? 0) + 1, birthday: new Date(input.birthday), gender: input.gender === "FEMALE" ? "FEMALE" : "MALE", maritalStatus: typeof input.maritalStatus === "string" && input.maritalStatus ? input.maritalStatus : "Unspecified", memberTypeId: type.id, familyRoleId: role.id, status: input.status } }
+          },
+          include: { individuals: true }
+        });
+        await saveCustomFieldValues(transaction, "FAMILY", created.id, customFields);
+        return created;
       });
       await logAudit({ activityType: "membership-family-created", summary: `Created membership family ${family.lastName}.`, actorId: user.id });
       return NextResponse.json({ family }, { status: 201 });
-    } catch {
+    } catch (error) {
+      if (error instanceof CustomFieldValidationError) return NextResponse.json({ error: error.message }, { status: 400 });
       return NextResponse.json({ error: "Unable to create membership family." }, { status: 500 });
   }
 }

@@ -4,6 +4,7 @@ import { requireEnabledModule } from "@/lib/modules";
 import { MARITAL_STATUSES } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { CustomFieldValidationError, saveCustomFieldValues, validateCustomFieldValues } from "@/lib/membership-custom-fields";
 
 export async function GET() {
   try {
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
     if (!input || typeof input.familyId !== "string" || typeof input.firstName !== "string" || !input.firstName.trim() || Number.isNaN(birthday.getTime()) || typeof input.memberTypeId !== "string" || typeof input.familyRoleId !== "string" || !["MALE", "FEMALE"].includes(input.gender) || !MARITAL_STATUSES.includes(input.maritalStatus) || !["ACTIVE", "INACTIVE"].includes(input.status)) {
       return NextResponse.json({ error: "Family, first name, birthday, member type, family role, gender, marital status, and status are required." }, { status: 400 });
     }
+    const customFields = await validateCustomFieldValues(input.customFieldValues, "INDIVIDUAL");
     const possibleDuplicates = await db.membershipIndividual.findMany({
       where: {
         status: { not: "REMOVED" },
@@ -50,14 +52,19 @@ export async function POST(request: Request) {
       db.membershipIndividual.aggregate({ _max: { memberNumber: true } })
     ]);
     if (!family || family.status === "REMOVED" || !role || !type) return NextResponse.json({ error: "The selected family or membership reference is unavailable." }, { status: 400 });
-    const individual = await db.membershipIndividual.create({ data: {
-      familyId: family.id, firstName: input.firstName.trim(), middleName: typeof input.middleName === "string" ? input.middleName.trim() || null : null, lastName: typeof input.lastName === "string" ? input.lastName.trim() || null : null,
-      birthday, memberNumber: (highest._max.memberNumber ?? 0) + 1, gender: input.gender, maritalStatus: input.maritalStatus.trim(), status: input.status, memberTypeId: type.id, familyRoleId: role.id,
-      ageCategoryOverride: typeof input.ageCategoryOverride === "string" ? input.ageCategoryOverride.trim() || null : null, cellphone: typeof input.cellphone === "string" ? input.cellphone.trim() || null : null, otherPhone: typeof input.otherPhone === "string" ? input.otherPhone.trim() || null : null, otherPhoneType: typeof input.otherPhoneType === "string" ? input.otherPhoneType.trim() || null : null, email: typeof input.email === "string" ? input.email.trim().toLowerCase() || null : null, gradeLevel: typeof input.gradeLevel === "string" ? input.gradeLevel.trim() || null : null, weddingDate: typeof input.weddingDate === "string" && input.weddingDate ? new Date(input.weddingDate) : null
-    } });
+    const individual = await db.$transaction(async (transaction) => {
+      const created = await transaction.membershipIndividual.create({ data: {
+        familyId: family.id, firstName: input.firstName.trim(), middleName: typeof input.middleName === "string" ? input.middleName.trim() || null : null, lastName: typeof input.lastName === "string" ? input.lastName.trim() || null : null,
+        birthday, memberNumber: (highest._max.memberNumber ?? 0) + 1, gender: input.gender, maritalStatus: input.maritalStatus.trim(), status: input.status, memberTypeId: type.id, familyRoleId: role.id,
+        ageCategoryOverride: typeof input.ageCategoryOverride === "string" ? input.ageCategoryOverride.trim() || null : null, cellphone: typeof input.cellphone === "string" ? input.cellphone.trim() || null : null, otherPhone: typeof input.otherPhone === "string" ? input.otherPhone.trim() || null : null, otherPhoneType: typeof input.otherPhoneType === "string" ? input.otherPhoneType.trim() || null : null, email: typeof input.email === "string" ? input.email.trim().toLowerCase() || null : null, gradeLevel: typeof input.gradeLevel === "string" ? input.gradeLevel.trim() || null : null, weddingDate: typeof input.weddingDate === "string" && input.weddingDate ? new Date(input.weddingDate) : null
+      } });
+      await saveCustomFieldValues(transaction, "INDIVIDUAL", created.id, customFields);
+      return created;
+    });
     await logAudit({ activityType: "membership-individual-created", summary: `Created membership individual ${individual.firstName}.`, actorId: user.id });
     return NextResponse.json({ individual }, { status: 201 });
-  } catch {
+  } catch (error) {
+    if (error instanceof CustomFieldValidationError) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ error: "Unable to create membership individual." }, { status: 500 });
   }
 }

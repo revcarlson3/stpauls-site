@@ -11,11 +11,20 @@ async function authorize(userId: string) {
   await requireEnabledModule("membership", userId, "MANAGE_MEMBERSHIP");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await requirePermission("MANAGE_MEMBERSHIP");
     await authorize(user.id);
-    const fields = await db.membershipCustomFieldDefinition.findMany({ orderBy: [{ appliesTo: "asc" }, { position: "asc" }, { name: "asc" }] });
+    const url = new URL(request.url);
+    const appliesTo = url.searchParams.get("appliesTo");
+    const activeOnly = url.searchParams.get("active") === "1";
+    const fields = await db.membershipCustomFieldDefinition.findMany({
+      where: {
+        ...(targets.includes(appliesTo as (typeof targets)[number]) ? { appliesTo: appliesTo as string } : {}),
+        ...(activeOnly ? { isActive: true } : {})
+      },
+      orderBy: [{ appliesTo: "asc" }, { position: "asc" }, { name: "asc" }]
+    });
     return NextResponse.json({ fields });
   } catch {
     return NextResponse.json({ error: "Unable to load custom fields." }, { status: 403 });
@@ -33,7 +42,10 @@ export async function POST(request: Request) {
     const appliesTo = typeof input?.appliesTo === "string" ? input.appliesTo : "";
     const type = typeof input?.type === "string" ? input.type : "";
     if (!name || !slug || !targets.includes(appliesTo) || !fieldTypes.includes(type)) return NextResponse.json({ error: "Name, type, and target are required." }, { status: 400 });
-    const field = await db.membershipCustomFieldDefinition.create({ data: { name, slug, type: type as MembershipCustomFieldType, appliesTo, options: Array.isArray(input.options) ? input.options.filter((option: unknown): option is string => typeof option === "string" && Boolean(option.trim())).map((option: string) => option.trim()) : undefined, isRequired: input.isRequired === true } });
+    const options: string[] = Array.isArray(input.options) ? input.options.filter((option: unknown): option is string => typeof option === "string" && Boolean(option.trim())).map((option: string) => option.trim()) : [];
+    if (["SELECT", "RADIO"].includes(type) && !options.length) return NextResponse.json({ error: "Select and radio fields require at least one option." }, { status: 400 });
+    if (options.some((option) => option.length > 200) || options.length > 100) return NextResponse.json({ error: "Custom field options are too long or numerous." }, { status: 400 });
+    const field = await db.membershipCustomFieldDefinition.create({ data: { name, slug, type: type as MembershipCustomFieldType, appliesTo, options: options.length ? options : undefined, isRequired: input.isRequired === true } });
     return NextResponse.json({ field }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Unable to create custom field. Slugs must be unique." }, { status: 400 });

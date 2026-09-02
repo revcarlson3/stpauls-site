@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Container } from "@/components/ui";
 import { US_STATES } from "@/lib/us-states";
+import CustomFieldsInput, { CustomFieldValueMap } from "@/app/admin/membership/custom-fields-input";
 
 type Family = {
   lastName: string;
@@ -36,6 +37,7 @@ export default function EditFamilyPage() {
   const [family, setFamily] = useState<Family | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [message, setMessage] = useState("");
+  const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>({});
 
   useEffect(() => {
     void fetch(`/api/membership/families/${params.id}`)
@@ -43,6 +45,7 @@ export default function EditFamilyPage() {
         const body = await response.json();
         if (!response.ok) throw new Error(body.error ?? "Unable to load family.");
         setFamily(body.family);
+        setCustomFieldValues(Object.fromEntries((body.family.customValues ?? []).map((entry: { definitionId: string; value: string }) => [entry.definitionId, entry.value])));
       })
       .catch((error: Error) => setMessage(error.message));
   }, [params.id]);
@@ -74,7 +77,7 @@ export default function EditFamilyPage() {
     const response = await fetch(`/api/membership/families/${params.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(family)
+      body: JSON.stringify({ ...family, customFieldValues })
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -84,5 +87,5 @@ export default function EditFamilyPage() {
     router.push("/admin/membership");
   }
 
-  return <main><Container className="py-10 sm:py-14"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Membership</p><h1 className="mt-2 font-serif text-4xl">Edit family</h1>{family ? <form onSubmit={(event) => void submit(event)} className="mt-8 grid max-w-2xl gap-4 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">{fields.map(({ key, label, type }) => <label key={key} className="grid gap-1 text-sm font-semibold">{label}<input required={key === "lastName" || key === "phone" || key === "email"} type={type ?? "text"} value={family[key] ?? ""} onChange={(event) => change(key, event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>)}<label className="grid gap-1 text-sm font-semibold">State<select value={family.addressState ?? ""} onChange={(event) => change("addressState", event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">Choose a state</option>{US_STATES.map(([value, name]) => <option key={value} value={value}>{name}</option>)}</select></label><div className="grid gap-2"><label className="grid gap-1 text-sm font-semibold">Family photograph<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label><div className="flex flex-wrap gap-2">{photo && <button type="button" onClick={() => void uploadPhoto()} className="focus-ring rounded-full border border-coral px-3 py-2 text-sm font-semibold text-coral">Upload photograph</button>}{family.photographUrl && <button type="button" onClick={() => void removePhoto()} className="focus-ring rounded-full border border-ink/20 px-3 py-2 text-sm font-semibold text-ink/70">Remove photograph</button>}</div><p className="text-xs text-ink/55">JPG, PNG, or WebP up to 5 MB. Files are stored with a randomized filename.</p></div><label className="grid gap-1 text-sm font-semibold">Family status<select value={family.status} onChange={(event) => change("status", event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label><div className="flex items-center justify-between gap-4"><button className="focus-ring w-fit rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Save family</button><button type="button" onClick={() => router.back()} className="focus-ring rounded-full border border-ink/20 px-5 py-3 text-sm font-semibold text-ink/70">Cancel</button></div>{message && <p role="alert" className="text-sm text-coral">{message}</p>}</form> : <p className="mt-6 text-sm text-coral" role="alert">{message || "Loading family..."}</p>}</Container></main>;
+  return <main><Container className="py-10 sm:py-14"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Membership</p><h1 className="mt-2 font-serif text-4xl">Edit family</h1>{family ? <form onSubmit={(event) => void submit(event)} className="mt-8 grid max-w-2xl gap-4 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">{fields.map(({ key, label, type }) => <label key={key} className="grid gap-1 text-sm font-semibold">{label}<input required={key === "lastName" || key === "phone" || key === "email"} type={type ?? "text"} value={family[key] ?? ""} onChange={(event) => change(key, event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>)}<label className="grid gap-1 text-sm font-semibold">State<select value={family.addressState ?? ""} onChange={(event) => change("addressState", event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">Choose a state</option>{US_STATES.map(([value, name]) => <option key={value} value={value}>{name}</option>)}</select></label><div className="grid gap-2"><label className="grid gap-1 text-sm font-semibold">Family photograph<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label><div className="flex flex-wrap gap-2">{photo && <button type="button" onClick={() => void uploadPhoto()} className="focus-ring rounded-full border border-coral px-3 py-2 text-sm font-semibold text-coral">Upload photograph</button>}{family.photographUrl && <button type="button" onClick={() => void removePhoto()} className="focus-ring rounded-full border border-ink/20 px-3 py-2 text-sm font-semibold text-ink/70">Remove photograph</button>}</div><p className="text-xs text-ink/55">JPG, PNG, or WebP up to 5 MB. Files are stored with a randomized filename.</p></div><label className="grid gap-1 text-sm font-semibold">Family status<select value={family.status} onChange={(event) => change("status", event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option>  </select></label><CustomFieldsInput appliesTo="FAMILY" values={customFieldValues} onChange={setCustomFieldValues} /><div className="flex items-center justify-between gap-4"><button className="focus-ring w-fit rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Save family</button><button type="button" onClick={() => router.back()} className="focus-ring rounded-full border border-ink/20 px-5 py-3 text-sm font-semibold text-ink/70">Cancel</button></div>{message && <p role="alert" className="text-sm text-coral">{message}</p>}</form> : <p className="mt-6 text-sm text-coral" role="alert">{message || "Loading family..."}</p>}</Container></main>;
 }
