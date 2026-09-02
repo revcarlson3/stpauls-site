@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { Card, Container } from "@/components/ui";
 import { blockDefinitions } from "@/lib/blocks";
 import { SiteHeader } from "@/components/site-header";
 import { resolvePublicMenu } from "@/lib/content";
+import { MenuLinks } from "@/components/menu-links";
 
 type RenderBlock = {
   id: string;
@@ -36,7 +36,7 @@ export async function PageRenderer({ blocks }: { blocks: unknown }) {
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-coral">{label}</p>
         <h2 className="mt-2 font-serif text-3xl">{title}</h2>
         <p className="mt-3 text-ink/60">This {label.toLowerCase()} block is ready for its content fields.</p>
-        {menu && <nav aria-label={`${label} navigation`} className="mt-5 flex flex-wrap gap-4 border-t border-ink/10 pt-4 text-sm font-semibold">{menu.items.map((item) => <Link key={item.id} href={item.href} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noreferrer" : undefined} className="focus-ring hover:text-coral">{item.label}</Link>)}</nav>}
+        {menu && <nav aria-label={`${label} navigation`} className="mt-5 border-t border-ink/10 pt-4 text-sm font-semibold"><MenuLinks items={menu.items} /></nav>}
       </section>
     );
   }));
