@@ -9,6 +9,8 @@ export const MODULES = [
   { slug: "services", name: "Services and sermons", permission: "MANAGE_SERVICES" as Permission, href: "/admin/services" }
 ] as const;
 
+export const MARITAL_STATUSES = ["Single", "Married", "Separated", "Divorced", "Widowed", "Engaged", "Prefer not to say"] as const;
+
 export async function getEnabledModuleSlugs() {
   const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { enabledModules: true } });
   const enabled = settings?.enabledModules;

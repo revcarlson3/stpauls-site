@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
+import { MARITAL_STATUSES } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
     const input = await request.json();
     const birthday = typeof input?.birthday === "string" ? new Date(input.birthday) : new Date("invalid");
-    if (!input || typeof input.familyId !== "string" || typeof input.firstName !== "string" || !input.firstName.trim() || Number.isNaN(birthday.getTime()) || typeof input.memberTypeId !== "string" || typeof input.familyRoleId !== "string" || !["MALE", "FEMALE"].includes(input.gender) || typeof input.maritalStatus !== "string" || !input.maritalStatus.trim() || !["ACTIVE", "INACTIVE"].includes(input.status)) {
+    if (!input || typeof input.familyId !== "string" || typeof input.firstName !== "string" || !input.firstName.trim() || Number.isNaN(birthday.getTime()) || typeof input.memberTypeId !== "string" || typeof input.familyRoleId !== "string" || !["MALE", "FEMALE"].includes(input.gender) || !MARITAL_STATUSES.includes(input.maritalStatus) || !["ACTIVE", "INACTIVE"].includes(input.status)) {
       return NextResponse.json({ error: "Family, first name, birthday, member type, family role, gender, marital status, and status are required." }, { status: 400 });
     }
     const possibleDuplicates = await db.membershipIndividual.findMany({
