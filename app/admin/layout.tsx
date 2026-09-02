@@ -20,7 +20,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
             <details open className="group">
               <summary className="focus-ring cursor-pointer list-none rounded-lg px-4 py-3 font-semibold hover:bg-mist">Pages <span className="float-right text-ink/50 group-open:rotate-180">⌄</span></summary>
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/editor">Pages</Link>
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/pages">Pages</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/pages/add">Add a Page</Link>
               </div>
             </details>

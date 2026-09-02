@@ -12,11 +12,11 @@ const initialBlocks: Block[] = [
   { id: "news-1", type: "news", title: "Latest from St. Paul's", content: "Choose a category for the latest updates.", span: 5 }
 ];
 
-export default function EditorCanvas({ pageId }: { pageId?: string }) {
-  const [blocks, setBlocks] = useState(initialBlocks);
+export default function EditorCanvas({ pageId, empty = false }: { pageId?: string; empty?: boolean }) {
+  const [blocks, setBlocks] = useState(empty ? [] : initialBlocks);
   const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [pageTitle, setPageTitle] = useState("Welcome page");
-  const [slug, setSlug] = useState("welcome");
+  const [pageTitle, setPageTitle] = useState(empty ? "" : "Welcome page");
+  const [slug, setSlug] = useState(empty ? "" : "welcome");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
