@@ -17,7 +17,7 @@ function blocksValue(blocks: PageBlock[]): JsonValue[] {
 
 export async function listPages() {
   await requirePermission("EDIT_PAGES");
-  return db.page.findMany({ orderBy: { updatedAt: "desc" } });
+  return db.page.findMany({ orderBy: [{ isHome: "desc" }, { title: "asc" }] });
 }
 
 export async function createPage(input: { title: string; slug: string; blocks: PageBlock[]; menuId?: string | null }) {
