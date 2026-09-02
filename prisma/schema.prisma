@@ -64,6 +64,13 @@ model SecuritySettings {
   emailMfaEnabled  Boolean  @default(false)
   smsMfaEnabled    Boolean  @default(false)
   authenticatorMfaEnabled Boolean @default(false)
+  recaptchaSiteKey String?
+  recaptchaSecretEncrypted String?
+  smsProvider String @default("twilio")
+  smsAccountId String?
+  smsAuthSecretEncrypted String?
+  smsFrom String?
+  totpIssuer String @default("St. Paul's Site")
   smtpHost          String?
   smtpPort          Int      @default(587)
   smtpUser          String?
