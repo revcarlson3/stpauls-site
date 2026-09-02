@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import nodemailer from "nodemailer";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { getMailSettings, getRegistrationCode } from "@/lib/app-config";
 
 type RegistrationInput = { firstName: string; lastName: string; email: string; churchCode?: string };
 
@@ -13,7 +14,7 @@ export async function registerUser(input: RegistrationInput) {
 
   const token = randomBytes(32).toString("hex");
   const tokenHash = hashToken(token);
-  const churchMember = isChurchCodeValid(input.churchCode);
+  const churchMember = await isChurchCodeValid(input.churchCode);
   const member = churchMember
     ? await db.memberProfile.findFirst({ where: { email, userId: null, firstName, lastName } })
     : null;
@@ -60,8 +61,8 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function isChurchCodeValid(code?: string) {
-  const expected = process.env.CHURCH_REGISTRATION_CODE;
+async function isChurchCodeValid(code?: string) {
+  const expected = await getRegistrationCode();
   if (!code || !expected) return false;
   const provided = Buffer.from(code);
   const expectedBuffer = Buffer.from(expected);
@@ -69,18 +70,19 @@ function isChurchCodeValid(code?: string) {
 }
 
 async function sendVerificationEmail(email: string, name: string, token: string) {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, EMAIL_FROM, NEXTAUTH_URL } = process.env;
-  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASSWORD || !EMAIL_FROM || !NEXTAUTH_URL) {
+  const { smtpHost, smtpPort, smtpUser, smtpPassword, emailFrom } = await getMailSettings();
+  const NEXTAUTH_URL = process.env.NEXTAUTH_URL;
+  if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword || !emailFrom || !NEXTAUTH_URL) {
     throw new Error("Email delivery is not configured.");
   }
   const transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT),
-    secure: Number(SMTP_PORT) === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASSWORD }
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: { user: smtpUser, pass: smtpPassword }
   });
   await transporter.sendMail({
-    from: EMAIL_FROM,
+    from: emailFrom,
     to: email,
     subject: "Verify your St. Paul's account",
     text: `Hello ${name}, verify your account here: ${NEXTAUTH_URL}/api/register/verify?token=${token}`

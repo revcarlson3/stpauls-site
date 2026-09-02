@@ -2,6 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import nodemailer from "nodemailer";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { getMailSettings } from "@/lib/app-config";
 
 export async function requestPasswordReset(email: string) {
   const user = await db.user.findUnique({ where: { email: email.toLowerCase().trim() } });
@@ -29,8 +30,9 @@ function hashToken(token: string) {
 }
 
 async function sendResetEmail(email: string, name: string, token: string) {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, EMAIL_FROM, NEXTAUTH_URL } = process.env;
-  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASSWORD || !EMAIL_FROM || !NEXTAUTH_URL) throw new Error("Email delivery is not configured.");
-  const transporter = nodemailer.createTransport({ host: SMTP_HOST, port: Number(SMTP_PORT), secure: Number(SMTP_PORT) === 465, auth: { user: SMTP_USER, pass: SMTP_PASSWORD } });
-  await transporter.sendMail({ from: EMAIL_FROM, to: email, subject: "Reset your St. Paul's account password", text: `Hello ${name}, reset your password here: ${NEXTAUTH_URL}/reset-password?token=${token}` });
+  const { smtpHost, smtpPort, smtpUser, smtpPassword, emailFrom } = await getMailSettings();
+  const NEXTAUTH_URL = process.env.NEXTAUTH_URL;
+  if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword || !emailFrom || !NEXTAUTH_URL) throw new Error("Email delivery is not configured.");
+  const transporter = nodemailer.createTransport({ host: smtpHost, port: smtpPort, secure: smtpPort === 465, auth: { user: smtpUser, pass: smtpPassword } });
+  await transporter.sendMail({ from: emailFrom, to: email, subject: "Reset your St. Paul's account password", text: `Hello ${name}, reset your password here: ${NEXTAUTH_URL}/reset-password?token=${token}` });
 }
