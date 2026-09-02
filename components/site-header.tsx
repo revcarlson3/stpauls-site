@@ -11,8 +11,8 @@ export async function SiteHeader({ menuId = null, menuLocationId = null }: { men
 
   return (
     <header className="border-b border-ink/10 bg-sand/90">
-      <Container className="flex h-20 items-center justify-between">
-        <div className="flex items-center gap-3">
+      <Container className="flex h-20 items-center gap-6">
+        <div className="flex shrink-0 items-center gap-3">
           <Link href="/" className="focus-ring font-serif text-xl font-bold tracking-tight">
             St. Paul&apos;s
           </Link>
