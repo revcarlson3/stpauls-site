@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { requirePermission, type Role } from "@/lib/auth";
+import { getCurrentUser, requirePermission, type Role } from "@/lib/auth";
 import type { Permission } from "@prisma/client";
 
 export async function createUser(input: { email: string; name: string; password: string; role: Role; groupId?: string | null }) {
@@ -75,6 +75,33 @@ export async function deleteUser(id: string) {
   const actor = await requirePermission("MANAGE_USERS");
   if (actor.id === id) throw new Error("You cannot delete your own account.");
   await db.user.delete({ where: { id } });
+}
+
+export async function getOwnAccount() {
+  const actor = await requireOwnAccount();
+  return db.user.findUnique({ where: { id: actor.id }, select: { id: true, email: true, name: true, emailVerifiedAt: true } });
+}
+
+export async function updateOwnAccount(input: { name: string; currentPassword?: string; newPassword?: string }) {
+  const actor = await requireOwnAccount();
+  if (input.name.trim().length < 2) throw new Error("Name must be at least 2 characters.");
+  if (input.newPassword) {
+    if (!input.currentPassword) throw new Error("Current password is required to change your password.");
+    const current = await db.user.findUnique({ where: { id: actor.id }, select: { passwordHash: true } });
+    if (!current?.passwordHash || !(await bcrypt.compare(input.currentPassword, current.passwordHash))) throw new Error("Current password is incorrect.");
+    if (input.newPassword.length < 12) throw new Error("New password must be at least 12 characters.");
+  }
+  return db.user.update({
+    where: { id: actor.id },
+    data: { name: input.name.trim(), passwordHash: input.newPassword ? await bcrypt.hash(input.newPassword, 12) : undefined },
+    select: { id: true, email: true, name: true, emailVerifiedAt: true }
+  });
+}
+
+async function requireOwnAccount() {
+  const actor = await getCurrentUser();
+  if (!actor) throw new Error("Unauthorized: a server-side authenticated session is required.");
+  return actor;
 }
 
 export async function updateSecurityGroup(id: string, input: { name: string; permissions: Permission[] }) {
