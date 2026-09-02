@@ -76,6 +76,7 @@ npm run build
 - `app/api/pages` exposes protected GET/POST/PATCH endpoints for validated page drafts; unauthenticated requests return `401` until the real session provider is connected.
 - Page blocks accept optional menu or menu-location assignments, validated server-side; menus render only in blocks with an explicit assignment.
 - `app/api/menus` exposes protected menu listing/creation endpoints; the Prisma menu model supports global menus and per-page assignment through `Page.menuId`, with nested ordered items.
+- `app/admin/users` provides protected user administration: administrators can create accounts, search users, update profile credentials, assign security groups, reset passwords, and delete accounts while the server prevents self-deletion or self-group changes.
 - `app/admin/editor/editor-canvas.tsx` is a client-side prototype using a responsive 12-column grid. Blocks can be reordered and moved between columns with native drag-and-drop.
 
 The public and admin interfaces share typography, color tokens, buttons, cards, and spacing, while keeping distinct navigation and information architecture.
