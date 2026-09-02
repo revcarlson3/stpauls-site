@@ -9,12 +9,14 @@ if (process.env.USER_PASSWORD.length < 12) throw new Error("USER_PASSWORD must b
 
 const db = new PrismaClient();
 try {
+  const group = await db.securityGroup.findUnique({ where: { slug: process.env.USER_ROLE === "admin" ? "administrator" : process.env.USER_ROLE } });
   const user = await db.user.create({
     data: {
       email: process.env.USER_EMAIL.toLowerCase().trim(),
       name: process.env.USER_NAME.trim(),
       passwordHash: await bcrypt.hash(process.env.USER_PASSWORD, 12),
-      role: process.env.USER_ROLE
+      role: process.env.USER_ROLE,
+      groupId: group?.id ?? null
     },
     select: { id: true, email: true, name: true, role: true }
   });
@@ -22,4 +24,3 @@ try {
 } finally {
   await db.$disconnect();
 }
-
