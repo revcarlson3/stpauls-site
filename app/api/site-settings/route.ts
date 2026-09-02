@@ -7,7 +7,7 @@ export async function GET() {
   try {
     await requirePermission("MANAGE_SETTINGS");
     const [mail, code] = await Promise.all([getMailSettings(), getRegistrationCode()]);
-    return NextResponse.json({ ...mail, registrationCodeConfigured: Boolean(code), smtpPasswordConfigured: Boolean(mail.smtpPassword) });
+    return NextResponse.json({ smtpHost: mail.smtpHost, smtpPort: mail.smtpPort, smtpUser: mail.smtpUser, emailFrom: mail.emailFrom, registrationCodeConfigured: Boolean(code), smtpPasswordConfigured: Boolean(mail.smtpPassword) });
   } catch {
     return NextResponse.json({ error: "Unable to load site settings." }, { status: 403 });
   }
