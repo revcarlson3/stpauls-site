@@ -73,6 +73,12 @@ model SecuritySettings {
   totpIssuer String @default("St. Paul's Site")
   mfaChallengePolicy String @default("every-login")
   trustedDeviceDays Int @default(30)
+  minPasswordLength Int @default(12)
+  passwordRequireUppercase Boolean @default(true)
+  passwordRequireLowercase Boolean @default(true)
+  passwordRequireNumber Boolean @default(true)
+  passwordRequireSymbol Boolean @default(true)
+  passwordExcludeAmbiguous Boolean @default(true)
   smtpHost          String?
   smtpPort          Int      @default(587)
   smtpUser          String?

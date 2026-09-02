@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { getMailSettings } from "@/lib/app-config";
+import { validatePassword } from "@/lib/password-policy";
 
 export async function requestPasswordReset(email: string) {
   const user = await db.user.findUnique({ where: { email: email.toLowerCase().trim() } });
@@ -14,7 +15,8 @@ export async function requestPasswordReset(email: string) {
 }
 
 export async function resetPassword(token: string, password: string) {
-  if (password.length < 12) throw new Error("Password must be at least 12 characters.");
+  const passwordError = await validatePassword(password);
+  if (passwordError) throw new Error(passwordError);
   const tokenHash = hashToken(token);
   const record = await db.passwordResetToken.findUnique({ where: { tokenHash } });
   if (!record || record.expiresAt < new Date()) throw new Error("Reset link is invalid or expired.");

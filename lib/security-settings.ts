@@ -21,6 +21,7 @@ export const defaultSecuritySettings = {
   totpIssuer: "St. Paul's Site",
   mfaChallengePolicy: "every-login" as "every-login" | "trusted-device",
   trustedDeviceDays: 30
+  ,minPasswordLength: 12, passwordRequireUppercase: true, passwordRequireLowercase: true, passwordRequireNumber: true, passwordRequireSymbol: true, passwordExcludeAmbiguous: true
 };
 
 export async function getSecuritySettings() {
@@ -39,7 +40,8 @@ export async function updateSecuritySettings(input: Omit<typeof defaultSecurityS
     recaptchaSiteKey: input.recaptchaSiteKey.trim(), recaptchaSecretEncrypted: input.recaptchaSecret ? encryptConfig(input.recaptchaSecret) : current?.recaptchaSecretEncrypted ?? null,
     smsProvider: input.smsProvider, smsAccountId: input.smsAccountId.trim(), smsAuthSecretEncrypted: input.smsAuthSecret ? encryptConfig(input.smsAuthSecret) : current?.smsAuthSecretEncrypted ?? null,
     smsFrom: input.smsFrom.trim(), totpIssuer: input.totpIssuer.trim() || "St. Paul's Site",
-    mfaChallengePolicy: input.mfaChallengePolicy, trustedDeviceDays: input.trustedDeviceDays
+    mfaChallengePolicy: input.mfaChallengePolicy, trustedDeviceDays: input.trustedDeviceDays,
+    minPasswordLength: input.minPasswordLength, passwordRequireUppercase: input.passwordRequireUppercase, passwordRequireLowercase: input.passwordRequireLowercase, passwordRequireNumber: input.passwordRequireNumber, passwordRequireSymbol: input.passwordRequireSymbol, passwordExcludeAmbiguous: input.passwordExcludeAmbiguous
   };
   return db.securitySettings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } }).then((settings) => {
     const { recaptchaSecretEncrypted, smsAuthSecretEncrypted, ...safeSettings } = settings;

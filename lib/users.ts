@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { getCurrentUser, requirePermission, type Role } from "@/lib/auth";
 import type { Permission } from "@prisma/client";
+import { validatePassword } from "@/lib/password-policy";
 
 export async function createUser(input: { email: string; name: string; password: string; role: Role; groupId?: string | null }) {
   await requirePermission("MANAGE_USERS");
@@ -89,7 +90,8 @@ export async function updateOwnAccount(input: { name: string; currentPassword?: 
     if (!input.currentPassword) throw new Error("Current password is required to change your password.");
     const current = await db.user.findUnique({ where: { id: actor.id }, select: { passwordHash: true } });
     if (!current?.passwordHash || !(await bcrypt.compare(input.currentPassword, current.passwordHash))) throw new Error("Current password is incorrect.");
-    if (input.newPassword.length < 12) throw new Error("New password must be at least 12 characters.");
+    const passwordError = await validatePassword(input.newPassword);
+    if (passwordError) throw new Error(`New ${passwordError.toLowerCase()}`);
   }
   return db.user.update({
     where: { id: actor.id },
@@ -130,6 +132,8 @@ export async function deleteSecurityGroup(id: string) {
 }
 
 export async function saveUser(input: { email: string; name: string; password: string; role: Role; groupId?: string | null }) {
+  const passwordError = await validatePassword(input.password);
+  if (passwordError) throw new Error(passwordError);
   const passwordHash = await bcrypt.hash(input.password, 12);
   return db.user.create({
     data: {

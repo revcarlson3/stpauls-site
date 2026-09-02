@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const result = await registerUser(input);
     return NextResponse.json({ message: "If the address can be registered, a verification email has been sent.", ...result }, { status: 201 });
   } catch (error) {
-    if (error instanceof Error && (error.message === "Email delivery is not configured." || error.message === "Invalid registration details.")) {
+    if (error instanceof Error && (error.message === "Email delivery is not configured." || error.message === "Invalid registration details." || error.message.startsWith("Password"))) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error instanceof Error && error.message.includes("Unique constraint")) {
@@ -16,4 +16,3 @@ export async function POST(request: Request) {
     throw error;
   }
 }
-

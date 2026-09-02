@@ -22,9 +22,9 @@ export async function POST(request: Request) {
     (input.groupId !== undefined && input.groupId !== null && typeof input.groupId !== "string") ||
     !input.email.includes("@") ||
     input.name.trim().length < 2 ||
-    input.password.length < 12
+    input.password.length < 1
   ) {
-    return NextResponse.json({ error: "Provide a valid email, name, role, and password of at least 12 characters." }, { status: 400 });
+    return NextResponse.json({ error: "Provide a valid email, name, role, and password." }, { status: 400 });
   }
 
   try {
@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Administrator access required." }, { status: 403 });
     }
     if (error instanceof Error && error.message === "Invalid security group.") return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error instanceof Error && error.message.startsWith("Password")) return NextResponse.json({ error: error.message }, { status: 400 });
     throw error;
   }
 }

@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { getMailSettings, getRegistrationCode } from "@/lib/app-config";
+import { validatePassword } from "@/lib/password-policy";
 
 type RegistrationInput = { firstName: string; lastName: string; email: string; churchCode?: string };
 
@@ -48,7 +49,8 @@ export async function verifyEmail(token: string) {
 }
 
 export async function setPassword(token: string, password: string) {
-  if (password.length < 12) throw new Error("Password must be at least 12 characters.");
+  const passwordError = await validatePassword(password);
+  if (passwordError) throw new Error(passwordError);
   const record = await db.emailVerificationToken.findUnique({ where: { tokenHash: hashToken(token) } });
   if (!record || record.expiresAt < new Date()) throw new Error("Verification link is invalid or expired.");
   await db.$transaction([
