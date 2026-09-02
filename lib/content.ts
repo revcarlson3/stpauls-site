@@ -197,6 +197,6 @@ export async function resolvePublicMenu(menuId?: string | null, menuLocationId?:
     ? await db.menu.findUnique({ where: { id: menuId }, include: { items: { orderBy: { position: "asc" } } } })
     : menuLocationId
       ? (await db.menuLocation.findUnique({ where: { id: menuLocationId }, include: { menu: { include: { items: { orderBy: { position: "asc" } } } } } }))?.menu
-      : (await db.menuLocation.findUnique({ where: { slug: "primary" }, include: { menu: { include: { items: { orderBy: { position: "asc" } } } } } }))?.menu ?? null;
+      : null;
   return menu;
 }
