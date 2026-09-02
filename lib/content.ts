@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { MenuItemInput } from "@/lib/menu-input";
 import { requirePermission, type User } from "@/lib/auth";
 
 type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
@@ -111,4 +112,26 @@ export async function getMenu(id: string) {
 export async function updateMenu(id: string, input: { name: string; slug: string }) {
   await requirePermission("MANAGE_MENUS");
   return db.menu.update({ where: { id }, data: input, include: { items: { orderBy: { position: "asc" } } } });
+}
+
+export async function updateMenuItems(id: string, input: MenuItemInput[]) {
+  await requirePermission("MANAGE_MENUS");
+  return db.$transaction(async (tx) => {
+    const existing = await tx.menuItem.findMany({ where: { menuId: id }, select: { id: true } });
+    const existingIds = new Set(existing.map((item) => item.id));
+    const submittedIds = input.flatMap((item) => item.id ? [item.id] : []);
+    if (submittedIds.some((itemId) => !existingIds.has(itemId))) throw new Error("Invalid menu item.");
+    await tx.menuItem.deleteMany({ where: { menuId: id, id: { notIn: submittedIds } } });
+    for (const item of input) {
+      const data = { label: item.label, href: item.href, itemType: item.itemType, openInNewTab: item.openInNewTab, position: item.position, parentId: null };
+      if (item.id) await tx.menuItem.update({ where: { id: item.id }, data });
+      else await tx.menuItem.create({ data: { ...data, menuId: id } });
+    }
+    return tx.menu.findUnique({ where: { id }, include: { items: { orderBy: { position: "asc" } } } });
+  });
+}
+
+export async function listMenuPageOptions() {
+  await requirePermission("MANAGE_MENUS");
+  return db.page.findMany({ where: { status: "PUBLISHED" }, select: { id: true, title: true, slug: true }, orderBy: { title: "asc" } });
 }

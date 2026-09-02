@@ -161,6 +161,8 @@ model MenuItem {
   menu      Menu      @relation(fields: [menuId], references: [id], onDelete: Cascade)
   label     String
   href      String
+  itemType  String    @default("INTERNAL")
+  openInNewTab Boolean @default(false)
   position  Int       @default(0)
   parentId  String?
   parent    MenuItem? @relation("MenuTree", fields: [parentId], references: [id], onDelete: Cascade)

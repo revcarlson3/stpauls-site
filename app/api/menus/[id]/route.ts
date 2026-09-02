@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getMenu, updateMenu } from "@/lib/content";
-import { parseMenuDetails } from "@/lib/menu-input";
+import { getMenu, updateMenuItems } from "@/lib/content";
+import { parseMenuInput } from "@/lib/menu-input";
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   try {
@@ -12,10 +12,10 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const input = parseMenuDetails(await request.json());
+  const input = parseMenuInput(await request.json());
   if (!input) return NextResponse.json({ error: "Invalid menu input." }, { status: 400 });
   try {
-    return NextResponse.json(await updateMenu(params.id, input));
+    return NextResponse.json(await updateMenuItems(params.id, input.items));
   } catch (error) {
     return authResponse(error);
   }
