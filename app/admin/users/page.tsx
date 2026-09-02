@@ -11,6 +11,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -22,6 +23,8 @@ export default function UsersPage() {
   }, []);
 
   async function saveUser(user: User, form: HTMLFormElement) {
+    setError("");
+    setSuccess("");
     const data = new FormData(form);
     const password = String(data.get("password") ?? "");
     const response = await fetch(`/api/users/${user.id}`, {
@@ -39,7 +42,7 @@ export default function UsersPage() {
     setUsers((current) => current.map((item) => item.id === updated.id ? updated : item));
     const passwordInput = form.elements.namedItem("password");
     if (passwordInput instanceof HTMLInputElement) passwordInput.value = "";
-    setError("");
+    setSuccess("User saved successfully.");
   }
 
   async function removeUser(user: User) {
@@ -57,7 +60,8 @@ export default function UsersPage() {
     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Administration</p>
     <div className="flex flex-wrap items-center justify-between gap-4"><h1 className="mt-2 font-serif text-4xl">Users</h1><Link href="/admin/users/invite" className="focus-ring rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Invite user</Link></div>
     <p className="mt-2 max-w-2xl text-ink/60">Update account details, reset passwords, and assign security groups. Profile images will connect to membership and media storage in a later module.</p>
-    {error && <p className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p>}
+    {error && <p role="alert" className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p>}
+    {success && <p role="status" className="mt-6 rounded-lg bg-mist p-4 text-sm text-ink">{success}</p>}
     <label className="mt-8 block max-w-xl text-sm font-semibold">Search users<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, email, or group" className="focus-ring mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
     <div className="mt-6 grid gap-6 lg:grid-cols-2">{users.filter((user) => `${user.name} ${user.email} ${user.group?.name ?? ""}`.toLowerCase().includes(query.toLowerCase())).map((user) => <Card key={user.id}>
       <div className="flex items-start justify-between gap-4"><div><h2 className="font-serif text-2xl">{user.name}</h2><p className="mt-1 text-xs text-ink/50">{user.email} · legacy role: {user.role}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${user.isActive ? "bg-mist" : "bg-red-100 text-red-700"}`}>{user.isActive ? "Active" : "Inactive"}</span></div>
