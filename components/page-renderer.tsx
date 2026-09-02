@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Card, Container } from "@/components/ui";
 import { blockDefinitions } from "@/lib/blocks";
 import { SiteHeader } from "@/components/site-header";
@@ -17,6 +18,13 @@ function isRenderBlock(value: unknown): value is RenderBlock {
   return typeof block.id === "string" && typeof block.type === "string";
 }
 
+function BlockSurface({ as, labelledBy, children }: { as: "section" | "aside" | "footer"; labelledBy: string; children: ReactNode }) {
+  const className = "rounded-2xl border border-ink/10 bg-white p-6 shadow-sm";
+  if (as === "aside") return <aside aria-labelledby={labelledBy} className={className}>{children}</aside>;
+  if (as === "footer") return <footer aria-labelledby={labelledBy} className={className}>{children}</footer>;
+  return <section aria-labelledby={labelledBy} className={className}>{children}</section>;
+}
+
 export async function PageRenderer({ blocks }: { blocks: unknown }) {
   const validBlocks = Array.isArray(blocks) ? blocks.filter(isRenderBlock) : [];
   const renderedBlocks = await Promise.all(validBlocks.map(async (block) => {
@@ -31,13 +39,15 @@ export async function PageRenderer({ blocks }: { blocks: unknown }) {
 
     if (block.type === "header") return <SiteHeader key={block.id} menuId={menuId} menuLocationId={menuLocationId} />;
 
+    const surfaceType = block.type === "sidebar" ? "aside" : block.type === "footer" ? "footer" : "section";
+    const headingId = `block-heading-${block.id}`;
     return (
-      <section key={block.id} className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+      <BlockSurface key={block.id} as={surfaceType} labelledBy={headingId}>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-coral">{label}</p>
-        <h2 className="mt-2 font-serif text-3xl">{title}</h2>
+        <h2 id={headingId} className="mt-2 font-serif text-3xl">{title}</h2>
         <p className="mt-3 text-ink/60">This {label.toLowerCase()} block is ready for its content fields.</p>
-        {menu && <nav aria-label={`${label} navigation`} className="mt-5 border-t border-ink/10 pt-4 text-sm font-semibold"><MenuLinks items={menu.items} /></nav>}
-      </section>
+        {menu && <nav aria-label={`${label} navigation`} className={`mt-5 border-t border-ink/10 pt-4 text-sm font-semibold ${block.type === "hero" ? "rounded-lg bg-sand/60 p-4" : ""}`}><MenuLinks items={menu.items} /></nav>}
+      </BlockSurface>
     );
   }));
 
