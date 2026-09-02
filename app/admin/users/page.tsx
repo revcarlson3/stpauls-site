@@ -10,6 +10,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     Promise.all([fetch("/api/users"), fetch("/api/security-groups")]).then(async ([usersResponse, groupsResponse]) => {
@@ -56,7 +57,8 @@ export default function UsersPage() {
     <h1 className="mt-2 font-serif text-4xl">Users</h1>
     <p className="mt-2 max-w-2xl text-ink/60">Update account details, reset passwords, and assign security groups. Profile images will connect to membership and media storage in a later module.</p>
     {error && <p className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p>}
-    <div className="mt-8 grid gap-6 lg:grid-cols-2">{users.map((user) => <Card key={user.id}>
+    <label className="mt-8 block max-w-xl text-sm font-semibold">Search users<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, email, or group" className="focus-ring mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
+    <div className="mt-6 grid gap-6 lg:grid-cols-2">{users.filter((user) => `${user.name} ${user.email} ${user.group?.name ?? ""}`.toLowerCase().includes(query.toLowerCase())).map((user) => <Card key={user.id}>
       <div className="flex items-start justify-between gap-4"><div><h2 className="font-serif text-2xl">{user.name}</h2><p className="mt-1 text-xs text-ink/50">{user.email} · legacy role: {user.role}</p></div><span className="rounded-full bg-mist px-3 py-1 text-xs font-semibold">{user.group?.name ?? "Unassigned"}</span></div>
       <form className="mt-6 grid gap-4" onSubmit={(event) => { event.preventDefault(); void saveUser(user, event.currentTarget); }}>
         <label className="grid gap-1 text-sm font-semibold">Name<input name="name" required minLength={2} defaultValue={user.name} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>

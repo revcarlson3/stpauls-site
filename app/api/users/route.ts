@@ -19,6 +19,7 @@ export async function POST(request: Request) {
     typeof input.name !== "string" ||
     typeof input.password !== "string" ||
     !isRole(input.role) ||
+    (input.groupId !== undefined && input.groupId !== null && typeof input.groupId !== "string") ||
     !input.email.includes("@") ||
     input.name.trim().length < 2 ||
     input.password.length < 12
@@ -27,11 +28,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    return NextResponse.json(await createUser(input), { status: 201 });
+    return NextResponse.json(await createUser({ ...input, groupId: input.groupId ?? null }), { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) {
       return NextResponse.json({ error: "Administrator access required." }, { status: 403 });
     }
+    if (error instanceof Error && error.message === "Invalid security group.") return NextResponse.json({ error: error.message }, { status: 400 });
     throw error;
   }
 }

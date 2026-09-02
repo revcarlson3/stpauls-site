@@ -3,8 +3,11 @@ import { db } from "@/lib/db";
 import { requirePermission, type Role } from "@/lib/auth";
 import type { Permission } from "@prisma/client";
 
-export async function createUser(input: { email: string; name: string; password: string; role: Role }) {
+export async function createUser(input: { email: string; name: string; password: string; role: Role; groupId?: string | null }) {
   await requirePermission("MANAGE_USERS");
+  if (input.groupId && !(await db.securityGroup.findUnique({ where: { id: input.groupId }, select: { id: true } }))) {
+    throw new Error("Invalid security group.");
+  }
   return saveUser(input);
 }
 
@@ -97,14 +100,15 @@ export async function deleteSecurityGroup(id: string) {
   await db.securityGroup.delete({ where: { id } });
 }
 
-export async function saveUser(input: { email: string; name: string; password: string; role: Role }) {
+export async function saveUser(input: { email: string; name: string; password: string; role: Role; groupId?: string | null }) {
   const passwordHash = await bcrypt.hash(input.password, 12);
   return db.user.create({
     data: {
       email: input.email.toLowerCase().trim(),
       name: input.name.trim(),
       passwordHash,
-      role: input.role
+      role: input.role,
+      groupId: input.groupId ?? null
     },
     select: { id: true, email: true, name: true, role: true, createdAt: true }
   });
