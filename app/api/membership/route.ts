@@ -42,6 +42,20 @@ export async function POST(request: Request) {
       if (!input || typeof input.lastName !== "string" || !input.lastName.trim() || typeof input.firstName !== "string" || !input.firstName.trim() || typeof input.phone !== "string" || !input.phone.trim() || typeof input.email !== "string" || !input.email.trim() || !["ACTIVE", "INACTIVE"].includes(input.status)) {
         return NextResponse.json({ error: "Last name, first name, phone, email, and status are required." }, { status: 400 });
       }
+      const possibleDuplicates = await db.membershipFamily.findMany({
+        where: {
+          OR: [
+            { email: { equals: input.email.trim(), mode: "insensitive" } },
+            { AND: [{ lastName: { equals: input.lastName.trim(), mode: "insensitive" } }, { individuals: { some: { firstName: { equals: input.firstName.trim(), mode: "insensitive" }, familyRole: { slug: "head-of-household" } } } }] }
+          ],
+          status: { not: "REMOVED" }
+        },
+        select: { id: true, lastName: true, email: true, individuals: { where: { familyRole: { slug: "head-of-household" } }, select: { firstName: true }, take: 1 } },
+        take: 5
+      });
+      if (possibleDuplicates.length && input.confirmDuplicate !== true) {
+        return NextResponse.json({ error: "A possible matching family was found. Review it before continuing.", duplicate: true, candidates: possibleDuplicates.map((family) => ({ id: family.id, name: `${family.lastName}, ${family.individuals[0]?.firstName ?? "Unknown"}`, email: family.email })) }, { status: 409 });
+      }
       const [role, type, highest] = await Promise.all([
         db.membershipFamilyRole.findUnique({ where: { slug: "head-of-household" } }),
         db.membershipMemberType.findFirst({ orderBy: { name: "asc" } }),
