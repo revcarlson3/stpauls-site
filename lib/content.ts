@@ -126,6 +126,7 @@ export async function updateMenuItems(id: string, input: { name: string; slug: s
     for (const item of input.items) {
       if (item.parentId && (!submittedIdSet.has(item.parentId) || item.parentId === item.id)) throw new Error("Invalid menu item parent.");
     }
+
     const parents = new Map(input.items.flatMap((item) => item.id ? [[item.id, item.parentId ?? null] as const] : []));
     for (const item of input.items) {
       const seen = new Set<string>();
@@ -144,6 +145,14 @@ export async function updateMenuItems(id: string, input: { name: string; slug: s
     }
     return tx.menu.findUnique({ where: { id }, include: { items: { orderBy: { position: "asc" } } } });
   });
+}
+
+export async function deleteMenu(id: string) {
+  await requirePermission("MANAGE_MENUS");
+  const menu = await db.menu.findUnique({ where: { id }, select: { _count: { select: { pages: true, locations: true } } } });
+  if (!menu) throw new Error("Menu not found.");
+  if (menu._count.pages > 0 || menu._count.locations > 0) throw new Error("Menus assigned to pages or locations cannot be deleted.");
+  return db.menu.delete({ where: { id } });
 }
 
 export async function listMenuPageOptions() {

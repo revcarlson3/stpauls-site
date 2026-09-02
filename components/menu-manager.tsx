@@ -41,9 +41,22 @@ export function MenuManager() {
       setMessage(result?.error ?? "Unable to create menu.");
       return;
     }
+
     setName("");
     setSlug("");
     await loadMenus();
+  }
+
+  async function deleteMenu(menu: Menu) {
+    if (!window.confirm(`Delete ${menu.name}?`)) return;
+    const response = await fetch(`/api/menus/${menu.id}`, { method: "DELETE" });
+    if (!response.ok) {
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      setMessage(result?.error ?? "Unable to delete menu.");
+      return;
+    }
+    setMenus((current) => current.filter((item) => item.id !== menu.id));
+    setMessage("Menu deleted.");
   }
 
   return (
@@ -56,7 +69,7 @@ export function MenuManager() {
               <h2 className="font-serif text-2xl">{menu.name}</h2>
               <p className="mt-1 text-sm text-ink/55">/{menu.slug} · {menu.items.length} {menu.items.length === 1 ? "item" : "items"}</p>
             </div>
-            <Link href={`/admin/navigation/${menu.id}`} className="focus-ring rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white hover:bg-ink/90">Edit menu</Link>
+            <div className="flex gap-2"><Link href={`/admin/navigation/${menu.id}`} className="focus-ring rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white hover:bg-ink/90">Edit menu</Link><button type="button" className="focus-ring rounded-full px-3 py-2 text-sm font-semibold text-coral hover:bg-sand" onClick={() => void deleteMenu(menu)}>Delete</button></div>
           </Card>
         ))}
         {message && <p role="status" className="text-sm text-ink/60">{message}</p>}
