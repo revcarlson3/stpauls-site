@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { Button, Card } from "@/components/ui";
 import { blockDefinitions, type BlockType } from "@/lib/blocks";
 
-type Block = { id: string; type: BlockType; title: string; content: string; mediaType?: "image" | "video"; mediaUrl?: string; span: number };
+type Block = { id: string; type: BlockType; title: string; content: string; mediaType?: "image" | "video"; mediaUrl?: string; span: number; menuId?: string | null; menuLocationId?: string | null };
+type MenuOption = { id: string; name: string };
+type LocationOption = { id: string; name: string };
+const menuBlocks: BlockType[] = ["pre-header", "header", "hero", "sidebar", "footer"];
 
 const initialBlocks: Block[] = [
   { id: "hero-1", type: "hero", title: "A place to belong.", content: "There is room for you here.", mediaType: "image", mediaUrl: "", span: 12 },
@@ -20,20 +23,27 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   const [pageTitle, setPageTitle] = useState(empty ? "" : "Welcome page");
   const [slug, setSlug] = useState(empty ? "" : "welcome");
   const [message, setMessage] = useState("");
+  const [menus, setMenus] = useState<MenuOption[]>([]);
+  const [locations, setLocations] = useState<LocationOption[]>([]);
 
   useEffect(() => {
+    void Promise.all([fetch("/api/menus"), fetch("/api/menu-locations")]).then(async ([menusResponse, locationsResponse]) => {
+      if (!menusResponse.ok || !locationsResponse.ok) throw new Error("Unable to load menu options.");
+      setMenus((await menusResponse.json() as { id: string; name: string }[]).map(({ id, name }) => ({ id, name })));
+      setLocations((await locationsResponse.json() as { id: string; name: string }[]).map(({ id, name }) => ({ id, name })));
+    }).catch((error: Error) => setMessage(error.message));
     if (!pageId) return;
-    fetch(`/api/pages/${pageId}`).then(async (response) => {
+    void fetch(`/api/pages/${pageId}`).then(async (response) => {
       if (!response.ok) throw new Error("Unable to load this page.");
       const page = await response.json();
       setPageTitle(page.title);
       setSlug(page.slug);
-      setBlocks((page.blocks as Array<{ id: string; type: BlockType; props: Partial<Block> }>).filter((block) => block.type in blockDefinitions).map((block) => ({ id: block.id, type: block.type, title: block.props.title ?? "", content: block.props.content ?? "", mediaType: block.props.mediaType, mediaUrl: block.props.mediaUrl, span: block.props.span ?? 12 })));
+      setBlocks((page.blocks as Array<{ id: string; type: BlockType; props: Partial<Block> }>).filter((block) => block.type in blockDefinitions).map((block) => ({ id: block.id, type: block.type, title: block.props.title ?? "", content: block.props.content ?? "", mediaType: block.props.mediaType, mediaUrl: block.props.mediaUrl, span: block.props.span ?? 12, menuId: block.props.menuId ?? null, menuLocationId: block.props.menuLocationId ?? null })));
     }).catch((error: Error) => setMessage(error.message));
   }, [pageId]);
 
   async function saveDraft() {
-    const input = { title: pageTitle, slug, blocks: blocks.map(({ id, type, title, content, mediaType, mediaUrl, span }) => ({ id, type, props: { title, content, mediaType: mediaType ?? null, mediaUrl: mediaUrl ?? null, span } })) };
+    const input = { title: pageTitle, slug, blocks: blocks.map(({ id, type, title, content, mediaType, mediaUrl, span, menuId, menuLocationId }) => ({ id, type, props: { title, content, mediaType: mediaType ?? null, mediaUrl: mediaUrl ?? null, span, menuId: menuId ?? null, menuLocationId: menuLocationId ?? null } })) };
     const response = await fetch(pageId ? `/api/pages/${pageId}` : "/api/pages", { method: pageId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) { setMessage(body.error ?? "Unable to save draft."); return; }
@@ -56,7 +66,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
 
   function addBlock(type: BlockType) {
     const definition = blockDefinitions[type];
-    setBlocks((current) => [...current, { id: `${type}-${Date.now()}`, type, title: `New ${definition.label.toLowerCase()} block`, content: "", mediaType: type === "hero" ? "image" : undefined, mediaUrl: type === "hero" ? "" : undefined, span: definition.defaultSpan }]);
+    setBlocks((current) => [...current, { id: `${type}-${Date.now()}`, type, title: `New ${definition.label.toLowerCase()} block`, content: "", mediaType: type === "hero" ? "image" : undefined, mediaUrl: type === "hero" ? "" : undefined, span: definition.defaultSpan, menuId: null, menuLocationId: null }]);
   }
 
   function updateBlock(id: string, changes: Partial<Block>) {
@@ -128,6 +138,22 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
                   <span className="mr-2 font-semibold">Media URL</span>
                   <input className="focus-ring mt-1 w-full rounded border border-ink/15 px-2 py-1 text-sm text-ink" placeholder="https://..." value={block.mediaUrl} onChange={(event) => updateBlock(block.id, { mediaUrl: event.target.value })} />
                 </label>
+              )}
+              {menuBlocks.includes(block.type) && (
+                <div className="mt-3 grid gap-2 border-t border-ink/10 pt-3 text-xs text-ink/50 sm:grid-cols-2">
+                  <label className="grid gap-1">
+                    <span className="font-semibold">Menu source</span>
+                    <select className="focus-ring rounded border border-ink/15 bg-white px-2 py-1 text-ink" value={block.menuId ? `menu:${block.menuId}` : block.menuLocationId ? `location:${block.menuLocationId}` : "none"} onChange={(event) => {
+                      const [kind, value] = event.target.value.split(":");
+                      updateBlock(block.id, { menuId: kind === "menu" ? value : null, menuLocationId: kind === "location" ? value : null });
+                    }}>
+                      <option value="none">No menu</option>
+                      <optgroup label="Specific menu">{menus.map((menu) => <option key={menu.id} value={`menu:${menu.id}`}>{menu.name}</option>)}</optgroup>
+                      <optgroup label="Site location">{locations.map((location) => <option key={location.id} value={`location:${location.id}`}>{location.name}</option>)}</optgroup>
+                    </select>
+                  </label>
+                  <p className="self-end leading-5">A specific menu overrides a location assignment.</p>
+                </div>
               )}
             </article>
           ))}

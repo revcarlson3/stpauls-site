@@ -155,3 +155,8 @@ export async function updateMenuLocation(id: string, menuId: string | null) {
   if (menuId && !(await db.menu.findUnique({ where: { id: menuId }, select: { id: true } }))) throw new Error("Invalid menu assignment.");
   return db.menuLocation.update({ where: { id }, data: { menuId }, include: { menu: { select: { id: true, name: true, slug: true } } } });
 }
+
+export async function createMenuLocation(input: { name: string; slug: string }) {
+  await requirePermission("MANAGE_MENUS");
+  return db.menuLocation.create({ data: input });
+}
