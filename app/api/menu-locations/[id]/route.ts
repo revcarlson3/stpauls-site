@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateMenuLocation } from "@/lib/content";
+import { deleteMenuLocation, updateMenuLocation } from "@/lib/content";
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const input = await request.json().catch(() => null) as { menuId?: unknown } | null;
@@ -8,6 +8,17 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return NextResponse.json(await updateMenuLocation(params.id, input.menuId as string | null));
   } catch (error) {
     if (error instanceof Error && error.message === "Invalid menu assignment.") return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    throw error;
+  }
+}
+
+export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+  try {
+    await deleteMenuLocation(params.id);
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Default menu")) return NextResponse.json({ error: error.message }, { status: 400 });
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     throw error;
   }

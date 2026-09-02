@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { Card, Container } from "@/components/ui";
 import { blockDefinitions } from "@/lib/blocks";
 import { SiteHeader } from "@/components/site-header";
+import { resolvePublicMenu } from "@/lib/content";
 
 type RenderBlock = {
   id: string;
@@ -17,26 +19,31 @@ function isRenderBlock(value: unknown): value is RenderBlock {
 
 export async function PageRenderer({ blocks }: { blocks: unknown }) {
   const validBlocks = Array.isArray(blocks) ? blocks.filter(isRenderBlock) : [];
+  const renderedBlocks = await Promise.all(validBlocks.map(async (block) => {
+    const definition = blockDefinitions[block.type as keyof typeof blockDefinitions];
+    const label = definition?.label ?? block.type;
+    const title = block.title ?? definition?.label ?? "Content block";
+    const menuId = typeof block.props?.menuId === "string" ? block.props.menuId : null;
+    const menuLocationId = typeof block.props?.menuLocationId === "string" ? block.props.menuLocationId : null;
+    const menu = ["pre-header", "header", "hero", "sidebar", "footer"].includes(block.type)
+      ? await resolvePublicMenu(menuId, menuLocationId)
+      : null;
+
+    if (block.type === "header") return <SiteHeader key={block.id} menuId={menuId} menuLocationId={menuLocationId} />;
+
+    return (
+      <section key={block.id} className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-coral">{label}</p>
+        <h2 className="mt-2 font-serif text-3xl">{title}</h2>
+        <p className="mt-3 text-ink/60">This {label.toLowerCase()} block is ready for its content fields.</p>
+        {menu && <nav aria-label={`${label} navigation`} className="mt-5 flex flex-wrap gap-4 border-t border-ink/10 pt-4 text-sm font-semibold">{menu.items.map((item) => <Link key={item.id} href={item.href} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noreferrer" : undefined} className="focus-ring hover:text-coral">{item.label}</Link>)}</nav>}
+      </section>
+    );
+  }));
 
   return (
     <div className="grid gap-5">
-      {validBlocks.map((block) => {
-        const definition = blockDefinitions[block.type as keyof typeof blockDefinitions];
-        const label = definition?.label ?? block.type;
-        const title = block.title ?? definition?.label ?? "Content block";
-
-        if (block.type === "header") return <SiteHeader key={block.id} />;
-
-        return (
-          <section key={block.id} className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-coral">{label}</p>
-            <h2 className="mt-2 font-serif text-3xl">{title}</h2>
-            <p className="mt-3 text-ink/60">
-              This {label.toLowerCase()} block is ready for its content fields.
-            </p>
-          </section>
-        );
-      })}
+      {renderedBlocks}
     </div>
   );
 }

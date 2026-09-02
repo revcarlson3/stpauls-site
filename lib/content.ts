@@ -160,3 +160,20 @@ export async function createMenuLocation(input: { name: string; slug: string }) 
   await requirePermission("MANAGE_MENUS");
   return db.menuLocation.create({ data: input });
 }
+
+export async function deleteMenuLocation(id: string) {
+  await requirePermission("MANAGE_MENUS");
+  const location = await db.menuLocation.findUnique({ where: { id }, select: { slug: true } });
+  if (!location) throw new Error("Menu location not found.");
+  if (defaultMenuLocations.some((item) => item.slug === location.slug)) throw new Error("Default menu locations cannot be deleted.");
+  return db.menuLocation.delete({ where: { id } });
+}
+
+export async function resolvePublicMenu(menuId?: string | null, menuLocationId?: string | null) {
+  const menu = menuId
+    ? await db.menu.findUnique({ where: { id: menuId }, include: { items: { orderBy: { position: "asc" } } } })
+    : menuLocationId
+      ? (await db.menuLocation.findUnique({ where: { id: menuLocationId }, include: { menu: { include: { items: { orderBy: { position: "asc" } } } } } }))?.menu
+      : (await db.menuLocation.findUnique({ where: { slug: "primary" }, include: { menu: { include: { items: { orderBy: { position: "asc" } } } } } }))?.menu ?? null;
+  return menu;
+}
