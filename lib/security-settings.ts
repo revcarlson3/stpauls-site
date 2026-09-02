@@ -1,7 +1,15 @@
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 
-export const defaultSecuritySettings = { loginProtectionEnabled: true, maxFailedAttempts: 5, lockoutMinutes: 15 };
+export const defaultSecuritySettings = {
+  loginProtectionEnabled: true,
+  maxFailedAttempts: 5,
+  lockoutMinutes: 15,
+  captchaMode: "off" as "off" | "challenge" | "recaptcha-v3",
+  emailMfaEnabled: false,
+  smsMfaEnabled: false,
+  authenticatorMfaEnabled: false
+};
 
 export async function getSecuritySettings() {
   return (await db.securitySettings.findUnique({ where: { id: 1 } })) ?? defaultSecuritySettings;

@@ -60,6 +60,10 @@ model SecuritySettings {
   loginProtectionEnabled Boolean @default(true)
   maxFailedAttempts   Int      @default(5)
   lockoutMinutes      Int      @default(15)
+  captchaMode      String   @default("off")
+  emailMfaEnabled  Boolean  @default(false)
+  smsMfaEnabled    Boolean  @default(false)
+  authenticatorMfaEnabled Boolean @default(false)
   updatedAt           DateTime @updatedAt
 }
 
