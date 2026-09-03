@@ -11,7 +11,12 @@ export async function requestPasswordReset(email: string) {
   const token = randomBytes(32).toString("hex");
   await db.passwordResetToken.deleteMany({ where: { userId: user.id } });
   await db.passwordResetToken.create({ data: { userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });
-  await sendResetEmail(user.email, user.name, token);
+  try {
+    await sendResetEmail(user.email, user.name, token);
+  } catch (error) {
+    await db.passwordResetToken.deleteMany({ where: { userId: user.id, tokenHash: hashToken(token) } });
+    throw error;
+  }
 }
 
 export async function resetPassword(token: string, password: string) {
@@ -22,7 +27,7 @@ export async function resetPassword(token: string, password: string) {
   if (!record || record.expiresAt < new Date()) throw new Error("Reset link is invalid or expired.");
   if (!timingSafeEqual(Buffer.from(record.tokenHash), Buffer.from(tokenHash))) throw new Error("Reset link is invalid.");
   await db.$transaction([
-    db.user.update({ where: { id: record.userId }, data: { passwordHash: await bcrypt.hash(password, 12) } }),
+    db.user.update({ where: { id: record.userId }, data: { passwordHash: await bcrypt.hash(password, 12), sessionVersion: { increment: 1 } } }),
     db.passwordResetToken.delete({ where: { id: record.id } })
   ]);
 }
