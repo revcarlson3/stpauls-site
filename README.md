@@ -59,6 +59,14 @@ USER_EMAIL=admin@example.org USER_NAME="Site Admin" USER_ROLE=admin USER_PASSWOR
 
 On Windows PowerShell, set the variables for the command with `$env:USER_EMAIL=...` syntax. Remove the password from the environment after the command completes. Once signed in, only an administrator can create additional users through `POST /api/users`; public registration is intentionally disabled.
 
+If an administrator cannot sign in, reset the password and clear any temporary lockout from the runtime terminal without using the admin UI:
+
+```bash
+USER_EMAIL=admin@example.org USER_PASSWORD="use-a-new-temporary-password" npm run user:reset-password
+```
+
+This command uses the configured `DATABASE_URL`, increments the session version, and reports whether the account is active. If it reports no user, the deployed process is connected to a different database than expected.
+
 Available checks:
 
 ```bash
