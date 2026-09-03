@@ -31,10 +31,14 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials.password) return null;
         const user = await db.user.findUnique({ where: { email: credentials.email.toLowerCase().trim() } });
         const settings = await db.securitySettings.findUnique({ where: { id: 1 } }) ?? { loginProtectionEnabled: true, maxFailedAttempts: 5, lockoutMinutes: 15, captchaMode: "off", authenticatorMfaEnabled: false, emailMfaEnabled: false, smsMfaEnabled: false, mfaChallengePolicy: "every-login" };
-        if (settings.captchaMode === "challenge" && !verifyCaptcha(credentials.captchaToken, credentials.captchaAnswer)) return null;
+        if (settings.captchaMode === "challenge" && !verifyCaptcha(credentials.captchaToken, credentials.captchaAnswer)) {
+          throw new Error("Human verification was not accepted. Please solve it again.");
+        }
         if (!user?.passwordHash || !user.isActive) return null;
         const now = new Date();
-        if (settings.loginProtectionEnabled && user.lockedUntil && user.lockedUntil > now) return null;
+        if (settings.loginProtectionEnabled && user.lockedUntil && user.lockedUntil > now) {
+          throw new Error("This account is temporarily locked. Please try again later.");
+        }
         const windowMs = settings.lockoutMinutes * 60 * 1000;
         const windowExpired = !user.loginWindowStartedAt || now.getTime() - user.loginWindowStartedAt.getTime() >= windowMs;
         const failedAttempts = windowExpired ? 0 : user.failedLoginAttempts;
@@ -80,7 +84,7 @@ export const authOptions: NextAuthOptions = {
               if (authenticatorAvailable) {
                 return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: "authenticator", mfaAvailableChannels: ["authenticator"] };
               }
-              return null;
+              throw new Error("The email verification code could not be sent. Check the email delivery settings or use another verification method.");
             }
             return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: channel, mfaAvailableChannels: [...(authenticatorAvailable ? ["authenticator" as const] : []), ...availableChannels] };
           }
@@ -107,7 +111,7 @@ export const authOptions: NextAuthOptions = {
                 }
               });
             }
-            return null;
+            throw new Error("That verification code was not accepted.");
           }
         }
         await db.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginWindowStartedAt: null, lockedUntil: null } });

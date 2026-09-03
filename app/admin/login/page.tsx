@@ -35,7 +35,15 @@ export default function AdminLoginPage() {
       callbackUrl: "/",
       redirect: false
     });
-    if (result?.error) setError(mfaChallenge ? "That verification code was not accepted." : "Email or password was not accepted.");
+    if (result?.error) {
+      const knownErrors = [
+        "Human verification was not accepted. Please solve it again.",
+        "This account is temporarily locked. Please try again later.",
+        "The email verification code could not be sent. Check the email delivery settings or use another verification method.",
+        "That verification code was not accepted."
+      ];
+      setError(mfaChallenge ? "That verification code was not accepted." : knownErrors.includes(result.error) ? result.error : "Email or password was not accepted.");
+    }
     else if (mfaChallenge && trustDevice) {
       await fetch("/api/account/mfa/trusted-device", { method: "POST" });
       if (result?.url) window.location.href = result.url;
