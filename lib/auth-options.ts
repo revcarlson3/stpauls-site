@@ -62,7 +62,13 @@ export const authOptions: NextAuthOptions = {
         if (mfaRequired) {
           const mfaCode = typeof credentials.mfaCode === "string" ? credentials.mfaCode : "";
           const requestedChannel = ["authenticator", "sms", "email"].includes(credentials.mfaChannel) ? credentials.mfaChannel as "authenticator" | "email" | "sms" : undefined;
-          const channel = requestedChannel === "authenticator" && authenticatorAvailable ? requestedChannel : requestedChannel && requestedChannel !== "authenticator" && availableChannels.includes(requestedChannel) ? requestedChannel : availableChannels[0];
+          const channel = requestedChannel === "authenticator" && authenticatorAvailable
+            ? requestedChannel
+            : requestedChannel && requestedChannel !== "authenticator" && availableChannels.includes(requestedChannel)
+              ? requestedChannel
+              : authenticatorAvailable
+                ? "authenticator"
+                : availableChannels[0];
           if (channel && channel !== "authenticator" && !mfaCode) {
             const recipient = channel === "email" ? user.email : user.phoneNumber as string;
             const challenge = await createOtpChallenge({ userId: user.id, channel, purpose: "login", recipient });
@@ -71,6 +77,9 @@ export const authOptions: NextAuthOptions = {
               else await sendSmsMfaCode(recipient, challenge.code);
             } catch {
               await db.mfaChallenge.delete({ where: { id: challenge.id } });
+              if (authenticatorAvailable) {
+                return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: "authenticator", mfaAvailableChannels: ["authenticator"] };
+              }
               return null;
             }
             return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: channel, mfaAvailableChannels: [...(authenticatorAvailable ? ["authenticator" as const] : []), ...availableChannels] };
