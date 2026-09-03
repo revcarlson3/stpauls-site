@@ -66,6 +66,8 @@ npm run lint
 npm run build
 ```
 
+For a Node deployment such as 1Panel, run `npm install`, set `DATABASE_URL`, `NEXTAUTH_URL`, and `NEXTAUTH_SECRET`, run `npm run db:push` when the database schema changes, then run `npm run build` followed by `npm start`. The start script binds Next.js to `0.0.0.0` and honors the `PORT` environment variable (use the same port in the reverse proxy). Node 22 LTS is recommended; Node 25 is not the supported deployment baseline.
+
 ## Architecture
 
 - `app/(public)` contains the public route boundary and public layout.
