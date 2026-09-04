@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { Button, Card, Container } from "@/components/ui";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -17,6 +18,7 @@ export default function AdminLoginPage() {
   const [mfaChallenge, setMfaChallenge] = useState(false);
   const [mfaChannel, setMfaChannel] = useState<"authenticator" | "email" | "sms">("authenticator");
   const [mfaChannels, setMfaChannels] = useState<Array<"authenticator" | "email" | "sms">>([]);
+  const router = useRouter();
   useEffect(() => { void fetch("/api/auth/captcha").then((response) => response.json()).then(setCaptcha).catch(() => undefined); }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -33,7 +35,15 @@ export default function AdminLoginPage() {
       callbackUrl: "/",
       redirect: false
     });
-    if (result?.error) setError(mfaChallenge ? "That verification code was not accepted." : "Email or password was not accepted.");
+    if (result?.error) {
+      const knownErrors = [
+        "Human verification was not accepted. Please solve it again.",
+        "This account is temporarily locked. Please try again later.",
+        "The email verification code could not be sent. Check the email delivery settings or use another verification method.",
+        "That verification code was not accepted."
+      ];
+      setError(mfaChallenge ? "That verification code was not accepted." : knownErrors.includes(result.error) ? result.error : "Email or password was not accepted.");
+    }
     else if (mfaChallenge && trustDevice) {
       await fetch("/api/account/mfa/trusted-device", { method: "POST" });
       if (result?.url) window.location.href = result.url;
@@ -64,7 +74,7 @@ export default function AdminLoginPage() {
             {mfaChallenge && <><label className="grid gap-1 text-sm font-semibold">Verification code<input required inputMode="numeric" autoComplete="one-time-code" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} /></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={trustDevice} onChange={(event) => setTrustDevice(event.target.checked)} /> Trust this device when allowed by site policy</label></>}
             {captcha && <label className="grid gap-1 text-sm font-semibold">Human check: {captcha.question}<input required inputMode="numeric" value={captchaAnswer} onChange={(event) => setCaptchaAnswer(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>}
             {error && <p role="alert" className="text-sm font-semibold text-coral">{error}</p>}
-            <Button type="submit">Sign in</Button>
+            <div className="flex items-center justify-between gap-4"><Button type="submit">Sign in</Button><button type="button" onClick={() => router.back()} className="focus-ring rounded-full border border-ink/20 px-5 py-3 text-sm font-semibold text-ink/70">Cancel</button></div>
             <Link href="/forgot-password" className="text-center text-sm font-semibold text-coral hover:underline">Forgot your password?</Link>
           </form>
         </Card>

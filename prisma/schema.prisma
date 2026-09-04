@@ -67,6 +67,7 @@ model User {
   invitations  UserInvitation[] @relation("InvitationCreator")
   auditLogs    AuditLog[] @relation("AuditActor")
   mfaChallenges MfaChallenge[]
+  membershipNotes MembershipNote[] @relation("MembershipNoteAuthor")
 }
 
 model MfaChallenge {
@@ -155,6 +156,7 @@ model SecuritySettings {
   smtpPasswordEncrypted String?
   emailFrom         String?
   registrationCodeEncrypted String?
+  enabledModules Json @default("[]")
   updatedAt           DateTime @updatedAt
 }
 
@@ -205,6 +207,168 @@ model MemberProfile {
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+  DECEASED
+  REMOVED
+}
+
+enum MembershipGender {
+  MALE
+  FEMALE
+}
+
+enum MembershipCustomFieldType {
+  TEXT
+  TEXTAREA
+  SELECT
+  RADIO
+  CHECKBOX
+  DATE
+  PHONE
+  EMAIL
+}
+
+model MembershipFamily {
+  id                 String           @id @default(cuid())
+  lastName           String
+  familyNameOverride String?
+  formalGreeting     String?
+  informalGreeting   String?
+  addressStreet      String?
+  addressCity        String?
+  addressState       String?
+  addressZip         String?
+  secondaryStreet    String?
+  secondaryCity      String?
+  secondaryState     String?
+  secondaryZip       String?
+  secondaryIsMailing Boolean          @default(false)
+  phone              String?
+  phoneIsMobile      Boolean          @default(false)
+  email              String?
+  photographUrl      String?
+  status             MembershipStatus  @default(ACTIVE)
+  removedAt          DateTime?
+  individuals        MembershipIndividual[]
+  customValues       MembershipCustomFieldValue[]
+  documents          MembershipDocument[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([lastName, status])
+}
+
+model MembershipIndividual {
+  id                  String           @id @default(cuid())
+  familyId            String
+  family              MembershipFamily @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  memberTypeId        String
+  memberType          MembershipMemberType @relation(fields: [memberTypeId], references: [id], onDelete: Restrict)
+  familyRoleId        String
+  familyRole          MembershipFamilyRole @relation(fields: [familyRoleId], references: [id], onDelete: Restrict)
+  firstName           String
+  middleName          String?
+  lastName            String?
+  birthday            DateTime
+  ageCategoryOverride String?
+  cellphone           String?
+  otherPhone          String?
+  otherPhoneType      String?
+  email               String?
+  memberNumber        Int              @unique
+  gradeLevel          String?
+  maritalStatus       String
+  weddingDate         DateTime?
+  deceasedDate        DateTime?
+  gender              MembershipGender
+  status              MembershipStatus @default(ACTIVE)
+  removedAt           DateTime?
+  customValues        MembershipCustomFieldValue[]
+  notes               MembershipNote[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([familyId, status])
+  @@index([lastName, firstName])
+}
+
+model MembershipFamilyRole {
+  id           String                @id @default(cuid())
+  name         String
+  slug         String                @unique
+  individuals  MembershipIndividual[]
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+}
+
+model MembershipMemberType {
+  id           String                @id @default(cuid())
+  name         String
+  slug         String                @unique
+  individuals  MembershipIndividual[]
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+}
+
+model MembershipCustomFieldDefinition {
+  id          String                    @id @default(cuid())
+  name        String
+  slug        String                    @unique
+  type        MembershipCustomFieldType
+  appliesTo   String
+  options     Json?
+  isRequired  Boolean                   @default(false)
+  isActive    Boolean                   @default(true)
+  position    Int                       @default(0)
+  values      MembershipCustomFieldValue[]
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  @@index([appliesTo, isActive, position])
+}
+
+model MembershipCustomFieldValue {
+  id           String                           @id @default(cuid())
+  definitionId String
+  definition   MembershipCustomFieldDefinition  @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  familyId     String?
+  family       MembershipFamily?               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  individualId String?
+  individual   MembershipIndividual?           @relation(fields: [individualId], references: [id], onDelete: Cascade)
+  value        String
+  updatedAt    DateTime                         @updatedAt
+
+  @@unique([definitionId, familyId])
+  @@unique([definitionId, individualId])
+}
+
+model MembershipNote {
+  id           String                @id @default(cuid())
+  individualId String
+  individual   MembershipIndividual @relation(fields: [individualId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User                  @relation("MembershipNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  reason       String
+  body         String
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([individualId, createdAt])
+}
+
+model MembershipDocument {
+  id         String           @id @default(cuid())
+  familyId   String
+  family     MembershipFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  originalName String
+  storageKey String           @unique
+  mimeType   String
+  sizeBytes  Int
+  createdAt  DateTime         @default(now())
 }
 
 model EmailVerificationToken {

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
+import { ModuleNavigation } from "@/components/module-navigation";
 
 export function AdminDrawer() {
   const [open, setOpen] = useState(false);
@@ -53,6 +54,7 @@ export function AdminDrawer() {
           {expanded === "navigation" && <div className="ml-4 grid gap-1"><Link href="/admin/navigation" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Menus</Link><Link href="/admin/navigation/locations" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Locations</Link></div>}
           <Link href="/admin/theme" className="focus-ring rounded-lg px-4 py-3 font-semibold hover:bg-mist" onClick={() => setOpen(false)}>Theme</Link>
           <Link href="/admin/site-settings" className="focus-ring rounded-lg px-4 py-3 font-semibold hover:bg-mist" onClick={() => setOpen(false)}>Site Settings</Link>
+          <ModuleNavigation />
           <button type="button" className="focus-ring rounded-lg px-4 py-3 text-left font-semibold text-coral hover:bg-sand" onClick={() => signOut({ callbackUrl: "/" })}>Logout</button>
         </nav>
         <p className="absolute bottom-6 left-6 right-6 border-t border-ink/10 pt-4 text-xs leading-5 text-ink/50">This menu is visible only to authenticated users. Access is still enforced by the server.</p>

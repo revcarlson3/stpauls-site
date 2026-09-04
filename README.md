@@ -39,7 +39,11 @@ npm run groups:seed
 
 Users can be assigned to groups from the Users administration screen. Server-side writes use group permission checks rather than trusting client-side switches. The existing `role` field remains for compatibility and session display, but is not used for authorization.
 
-Planned site settings include a Modules page where church-management modules (membership, events and scheduling, giving and pledges, accounting and budget, and services and sermons) can be enabled or disabled. Enabled modules will add their own admin navigation entries for authenticated users whose security groups grant the corresponding permission.
+Site Settings includes a Modules block for users with `MANAGE_MODULES`. It stores enabled modules in `SecuritySettings`; enabled modules add admin navigation entries only for authenticated users whose security groups grant the corresponding permission. Membership currently has a protected placeholder route at `/admin/membership`; the other catalog entries are skeletons for future work.
+
+The membership foundation uses separate family and individual records, configurable family roles and member types, soft lifecycle states (`ACTIVE`, `INACTIVE`, `DECEASED`, and `REMOVED`), custom-field definitions, private document metadata, and authored notes. After applying the schema, seed the initial reference data with `npm run membership:seed`.
+
+The Membership landing page includes a responsive directory preview with partial first/last-name search, member-type filtering, and selected individual/family details. For local visual data, apply the schema and reference seed, then run `npm run membership:seed-demo`; this creates five clearly fake example families and ten example members and can be run repeatedly without duplicating them.
 
 Login protection limits an account to five failed password attempts within a 15-minute window, followed by a 15-minute temporary lockout. A successful login clears the failed-attempt counter. Password recovery remains available for locked accounts.
 
@@ -55,12 +59,22 @@ USER_EMAIL=admin@example.org USER_NAME="Site Admin" USER_ROLE=admin USER_PASSWOR
 
 On Windows PowerShell, set the variables for the command with `$env:USER_EMAIL=...` syntax. Remove the password from the environment after the command completes. Once signed in, only an administrator can create additional users through `POST /api/users`; public registration is intentionally disabled.
 
+If an administrator cannot sign in, reset the password and clear any temporary lockout from the runtime terminal without using the admin UI:
+
+```bash
+USER_EMAIL=admin@example.org USER_PASSWORD="use-a-new-temporary-password" npm run user:reset-password
+```
+
+This command uses the configured `DATABASE_URL`, increments the session version, and reports whether the account is active. If it reports no user, the deployed process is connected to a different database than expected.
+
 Available checks:
 
 ```bash
 npm run lint
 npm run build
 ```
+
+For a Node deployment such as 1Panel, run `npm install`, set `DATABASE_URL`, `NEXTAUTH_URL`, and `NEXTAUTH_SECRET`, run `npm run db:push` when the database schema changes, then run `npm run build` followed by `npm start`. The start script binds Next.js to `0.0.0.0` and honors the `PORT` environment variable (use the same port in the reverse proxy). Node 22 LTS is recommended; Node 25 is not the supported deployment baseline.
 
 ## Architecture
 

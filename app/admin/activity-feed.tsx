@@ -8,7 +8,8 @@ const labels: Record<string, string> = {
   "user-created": "User created", "user-updated": "User updated", "user-deleted": "User deleted",
   "invitation-created": "Invitation created", "invitation-accepted": "Invitation accepted", "invitation-resent": "Invitation resent", "invitation-revoked": "Invitation revoked",
   "email-change-requested": "Email change requested", "email-changed": "Email changed", "sessions-revoked": "Sessions revoked",
-  "group-created": "Group created", "group-updated": "Group updated", "group-deleted": "Group deleted"
+  "group-created": "Group created", "group-updated": "Group updated", "group-deleted": "Group deleted",
+  "membership-note-created": "Membership note created", "membership-note-updated": "Membership note updated", "membership-note-deleted": "Membership note deleted"
 };
 
 export default function ActivityFeed() {
