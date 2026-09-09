@@ -4,6 +4,7 @@ import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { CustomFieldValidationError, saveCustomFieldValues, validateCustomFieldValues } from "@/lib/membership-custom-fields";
+import { dynamicMemberIds } from "@/lib/membership-audiences";
 
 export async function GET(request: Request) {
   try {
@@ -12,19 +13,23 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const search = url.searchParams.get("search")?.trim() ?? "";
     const memberType = url.searchParams.get("memberType")?.trim() ?? "";
+    const status = url.searchParams.get("status")?.trim() ?? "active";
+    const dynamicListId = url.searchParams.get("dynamicListId")?.trim() ?? "";
     const id = url.searchParams.get("id");
+    const dynamicIds = dynamicListId ? await db.membershipDynamicList.findUnique({ where: { id: dynamicListId }, select: { criteria: true } }).then((list) => list ? dynamicMemberIds(list.criteria) : []) : null;
     const members = await db.membershipIndividual.findMany({
       where: {
-        status: { not: "REMOVED" },
+        ...(dynamicIds ? { id: { in: dynamicIds } } : {}),
+        ...(status === "archived" ? { status: "REMOVED" } : status === "all" ? {} : { status: { not: "REMOVED" } }),
         ...(memberType ? { memberType: { slug: memberType } } : {}),
         ...(search ? { OR: [{ firstName: { contains: search, mode: "insensitive" } }, { lastName: { contains: search, mode: "insensitive" } }, { family: { lastName: { contains: search, mode: "insensitive" } } }] } : {})
       },
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      orderBy: [{ family: { lastName: "asc" } }, { lastName: "asc" }, { firstName: "asc" }],
       include: { family: true, memberType: true, familyRole: true, customValues: { where: { definition: { isActive: true } }, select: { definitionId: true, value: true } } },
       take: 200
     });
     const selected = id ? members.find((member) => member.id === id) ?? null : members[0] ?? null;
-    const types = await db.membershipMemberType.findMany({ orderBy: { name: "asc" }, select: { slug: true, name: true } });
+    const types = await db.membershipMemberType.findMany({ orderBy: [{ position: "asc" }, { name: "asc" }], select: { id: true, slug: true, name: true } });
     return NextResponse.json({
       types,
       members: members.map((member) => ({ id: member.id, firstName: member.firstName, middleName: member.middleName, lastName: member.lastName, familyLastName: member.family.lastName, memberNumber: member.memberNumber, memberType: member.memberType.name, status: member.status })),

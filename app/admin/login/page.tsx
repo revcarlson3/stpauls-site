@@ -32,7 +32,7 @@ export default function AdminLoginPage() {
       mfaChannel: mfaChallenge ? mfaChannel : undefined,
       captchaToken: captcha?.token,
       captchaAnswer,
-      callbackUrl: "/",
+      callbackUrl: "/admin",
       redirect: false
     });
     if (result?.error) {
@@ -61,8 +61,8 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="min-h-screen py-16">
-      <Container className="max-w-lg">
+    <main className="grid min-h-screen place-items-center py-8 sm:py-12">
+      <Container className="max-w-md" style={{ maxWidth: "28rem" }}>
         <Card>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Site studio</p>
           <h1 className="mt-3 font-serif text-4xl">Sign in</h1>

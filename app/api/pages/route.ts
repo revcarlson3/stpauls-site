@@ -15,7 +15,9 @@ export async function POST(request: Request) {
   if (!input) return NextResponse.json({ error: "Invalid page input." }, { status: 400 });
 
   try {
-    return NextResponse.json(await createPage(input), { status: 201 });
+    const page = await createPage(input);
+    const { passwordHash, ...safePage } = page;
+    return NextResponse.json({ ...safePage, passwordProtected: Boolean(passwordHash) }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === "Invalid menu assignment.") {
       return NextResponse.json({ error: error.message }, { status: 400 });

@@ -1,0 +1,71 @@
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { requirePermission } from "@/lib/auth";
+import { mkdir, unlink, writeFile } from "fs/promises";
+import path from "path";
+import { randomUUID } from "crypto";
+import { siteIdentityAssetUrl } from "@/lib/site-identity";
+
+export async function GET() {
+  try {
+    await requirePermission("MANAGE_SETTINGS");
+    const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { siteName: true, siteUrl: true, siteTagline: true, siteLogoUrl: true, siteLogoLightUrl: true, siteLogoDarkUrl: true, siteFaviconUrl: true, siteShowTitle: true, siteShowTagline: true, siteShowLogo: true } });
+    return NextResponse.json({ siteName: settings?.siteName ?? "St. Paul's", siteUrl: settings?.siteUrl ?? "", siteTagline: settings?.siteTagline ?? "A place to belong.", siteLogoUrl: siteIdentityAssetUrl(settings?.siteLogoUrl), siteLogoLightUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl), siteLogoDarkUrl: siteIdentityAssetUrl(settings?.siteLogoDarkUrl), siteFaviconUrl: siteIdentityAssetUrl(settings?.siteFaviconUrl), siteShowTitle: settings?.siteShowTitle ?? true, siteShowTagline: settings?.siteShowTagline ?? true, siteShowLogo: settings?.siteShowLogo ?? false });
+  } catch {
+    return NextResponse.json({ error: "Unable to load site identity." }, { status: 403 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  const input = await request.json();
+  if (!input || typeof input.siteName !== "string" || !input.siteName.trim() || typeof input.siteUrl !== "string" || typeof input.siteTagline !== "string" || typeof input.siteLogoUrl !== "string" || typeof input.siteLogoLightUrl !== "string" || typeof input.siteLogoDarkUrl !== "string" || typeof input.siteFaviconUrl !== "string" || typeof input.siteShowTitle !== "boolean" || typeof input.siteShowTagline !== "boolean" || typeof input.siteShowLogo !== "boolean") {
+    return NextResponse.json({ error: "Invalid site identity." }, { status: 400 });
+  }
+  try {
+    await requirePermission("MANAGE_SETTINGS");
+    await db.securitySettings.upsert({
+      where: { id: 1 },
+      update: { siteName: input.siteName.trim(), siteUrl: input.siteUrl.trim(), siteTagline: input.siteTagline.trim(), siteLogoUrl: input.siteLogoUrl.trim(), siteLogoLightUrl: input.siteLogoLightUrl.trim(), siteLogoDarkUrl: input.siteLogoDarkUrl.trim(), siteFaviconUrl: input.siteFaviconUrl.trim(), siteShowTitle: input.siteShowTitle, siteShowTagline: input.siteShowTagline, siteShowLogo: input.siteShowLogo },
+      create: { id: 1, siteName: input.siteName.trim(), siteUrl: input.siteUrl.trim(), siteTagline: input.siteTagline.trim(), siteLogoUrl: input.siteLogoUrl.trim(), siteLogoLightUrl: input.siteLogoLightUrl.trim(), siteLogoDarkUrl: input.siteLogoDarkUrl.trim(), siteFaviconUrl: input.siteFaviconUrl.trim(), siteShowTitle: input.siteShowTitle, siteShowTagline: input.siteShowTagline, siteShowLogo: input.siteShowLogo }
+    });
+    return NextResponse.json({ saved: true });
+  } catch {
+    return NextResponse.json({ error: "Unable to save site identity." }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    await requirePermission("MANAGE_SETTINGS");
+    const formData = await request.formData();
+    const asset = formData.get("asset");
+    const kind = formData.get("kind");
+    if (!(asset instanceof File) || !asset.size || !["logo-light", "logo-dark", "favicon"].includes(String(kind)) || !["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon"].includes(asset.type) || asset.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: "Choose an image up to 5 MB." }, { status: 400 });
+    }
+
+    const extension = asset.name.includes(".") ? `.${asset.name.split(".").pop()?.toLowerCase()}` : ".bin";
+    const relativePath = `/uploads/site-identity/${kind}-${randomUUID()}${extension}`;
+    await mkdir(path.join(process.cwd(), "public", "uploads", "site-identity"), { recursive: true });
+    await writeFile(path.join(process.cwd(), "public", relativePath), Buffer.from(await asset.arrayBuffer()));
+    return NextResponse.json({ url: siteIdentityAssetUrl(relativePath) });
+  } catch {
+    return NextResponse.json({ error: "Unable to upload site identity asset." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    await requirePermission("MANAGE_SETTINGS");
+    const input = await request.json();
+    if (!input || !["logo", "logo-light", "logo-dark", "favicon"].includes(input.kind)) return NextResponse.json({ error: "Invalid identity asset." }, { status: 400 });
+    const current = await db.securitySettings.findUnique({ where: { id: 1 }, select: { siteLogoUrl: true, siteLogoLightUrl: true, siteLogoDarkUrl: true, siteFaviconUrl: true } });
+    const field = input.kind === "logo" ? "siteLogoUrl" : input.kind === "logo-light" ? "siteLogoLightUrl" : input.kind === "logo-dark" ? "siteLogoDarkUrl" : "siteFaviconUrl";
+    const currentPath = input.kind === "logo" ? current?.siteLogoUrl : input.kind === "logo-light" ? current?.siteLogoLightUrl : input.kind === "logo-dark" ? current?.siteLogoDarkUrl : current?.siteFaviconUrl;
+    if (currentPath?.startsWith("/uploads/site-identity/")) await unlink(path.join(process.cwd(), "public", currentPath)).catch(() => undefined);
+    await db.securitySettings.update({ where: { id: 1 }, data: { [field]: "", ...(input.kind === "logo-light" ? { siteLogoUrl: "" } : {}) } });
+    return NextResponse.json({ removed: true });
+  } catch {
+    return NextResponse.json({ error: "Unable to remove site identity asset." }, { status: 500 });
+  }
+}

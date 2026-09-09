@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -17,6 +18,11 @@ enum PageStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+}
+
+enum PageRevisionKind {
+  MANUAL
+  AUTOSAVE
 }
 
 enum Permission {
@@ -68,6 +74,10 @@ model User {
   auditLogs    AuditLog[] @relation("AuditActor")
   mfaChallenges MfaChallenge[]
   membershipNotes MembershipNote[] @relation("MembershipNoteAuthor")
+  membershipMessageTemplates MembershipMessageTemplate[] @relation("MembershipMessageTemplateAuthor")
+  membershipMessages MembershipMessage[] @relation("MembershipMessageAuthor")
+  volunteerAssignmentChanges MembershipVolunteerAssignment[] @relation("VolunteerAssignmentActor")
+  uploadedMedia MediaAsset[] @relation("UploadedMedia")
 }
 
 model MfaChallenge {
@@ -154,10 +164,62 @@ model SecuritySettings {
   smtpPort          Int      @default(587)
   smtpUser          String?
   smtpPasswordEncrypted String?
+  emailProvider     String   @default("smtp")
+  emailApiKeyEncrypted String?
+  emailApiSecretEncrypted String?
+  emailApiDomain    String?
+  emailApiRegion    String?
   emailFrom         String?
   registrationCodeEncrypted String?
+  pollinationsApiKeyEncrypted String?
   enabledModules Json @default("[]")
-  updatedAt           DateTime @updatedAt
+  membershipAgeCategories Json @default("[\"Infant\",\"Toddler\",\"Preschool\",\"Elementary\",\"Youth\",\"Young Adult\",\"Adult\",\"Senior\"]")
+  publicSiteEnabled Boolean @default(true)
+  siteName           String  @default("St. Paul's")
+  siteUrl            String  @default("")
+  siteTagline        String  @default("A place to belong.")
+  siteLogoUrl        String  @default("")
+  siteLogoLightUrl   String  @default("")
+  siteLogoDarkUrl    String  @default("")
+  siteFaviconUrl     String  @default("")
+  siteShowTitle      Boolean @default(true)
+  siteShowTagline    Boolean @default(true)
+  siteShowLogo       Boolean @default(false)
+  themeFamily       String   @default("bootstrap")
+  themeWidth        String   @default("full")
+  themeBackground   String   @default("#f8f4ee")
+  themeForeground   String   @default("#17324d")
+  themeAccent       String   @default("#e66f51")
+  themeSurface      String   @default("#ffffff")
+  themeButtonPrimary String  @default("#e66f51")
+  themeButtonSecondary String @default("#17324d")
+  themeButtonDefault String @default("#ffffff")
+  themeNotificationPrimary String @default("#e66f51")
+  themeNotificationSecondary String @default("#17324d")
+  themeNotificationDefault String @default("#ffffff")
+  themeNotificationSuccess String @default("#2f855a")
+  themeNotificationWarning String @default("#b7791f")
+  themeNotificationDanger String @default("#c53030")
+  themeNotificationInfo String @default("#287c8c")
+  themeHeadingFont  String   @default("Lora")
+  themeBodyFont     String   @default("Inter")
+  themeRadius       String   @default("balanced")
+  themeElevation    String   @default("soft")
+  themeButton       String   @default("pill")
+  themeNav          String   @default("minimal")
+  themeSpacing      String   @default("comfortable")
+  themeContentBorder Boolean  @default(true)
+  membershipMessageRecipientLimit Int @default(200)
+  headerConfig      Json     @default("{}")
+  footerConfig      Json     @default("{}")
+  updatedAt         DateTime @updatedAt
+}
+
+model MembershipGradeAdvancementRun {
+  id           String   @id @default(cuid())
+  schoolYear   Int      @unique
+  updatedCount Int      @default(0)
+  createdAt    DateTime @default(now())
 }
 
 model SecurityGroup {
@@ -183,6 +245,9 @@ model Page {
   id                String        @id @default(cuid())
   slug              String        @unique
   title             String
+  seoTitle          String?
+  seoDescription    String?
+  seoKeywords       String?
   status            PageStatus    @default(DRAFT)
   isHome            Boolean       @default(false)
   blocks            Json
@@ -190,12 +255,91 @@ model Page {
   menu              Menu?         @relation(fields: [menuId], references: [id], onDelete: SetNull)
   revisions         PageRevision[]
   publishedAt       DateTime?
+  publishAt         DateTime?
+  pageThemeFamily   String?
+  pageThemeWidth    String?
+  showHeader        Boolean       @default(true)
+  showFooter        Boolean       @default(true)
+  fullScreen        Boolean       @default(false)
+  passwordHash      String?
   publishedById     String?
   publishedBy       User?         @relation("PublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
   @@index([status])
+}
+
+model Widget {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  area      String   @default("sidebar")
+  config    Json
+  position  Int      @default(0)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([area, position])
+  @@index([enabled])
+}
+
+model Form {
+  id                   String           @id @default(cuid())
+  name                 String
+  slug                 String           @unique
+  status               String           @default("DRAFT")
+  enabled              Boolean          @default(true)
+  definition           Json
+  notificationSettings Json             @default("{}")
+  exportSettings       Json             @default("{}")
+  submissions          FormSubmission[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([status, enabled])
+  @@index([updatedAt])
+}
+
+model FormSubmission {
+  id          String   @id @default(cuid())
+  formId      String
+  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  values      Json
+  metadata    Json     @default("{}")
+  ipHash      String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([formId, createdAt])
+  @@index([createdAt])
+}
+
+model MediaAsset {
+  id             String   @id @default(cuid())
+  originalName   String
+  storedFilename String   @unique
+  url            String   @unique
+  mimeType       String
+  sizeBytes      Int
+  folder         String   @default("unfiled")
+  caption        String?
+  description    String?
+  width          Int?
+  height         Int?
+  altText        String?
+  title          String?
+  tags           String[] @default([])
+  uploaderId     String?
+  uploader       User?    @relation("UploadedMedia", fields: [uploaderId], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([mimeType])
+  @@index([uploaderId])
+  @@index([folder])
 }
 
 model MemberProfile {
@@ -279,7 +423,9 @@ model MembershipIndividual {
   otherPhone          String?
   otherPhoneType      String?
   email               String?
-  memberNumber        Int              @unique
+  emailMessagesAllowed Boolean         @default(false)
+  smsMessagesAllowed   Boolean         @default(false)
+  memberNumber         Int              @unique
   gradeLevel          String?
   maritalStatus       String
   weddingDate         DateTime?
@@ -289,6 +435,10 @@ model MembershipIndividual {
   removedAt           DateTime?
   customValues        MembershipCustomFieldValue[]
   notes               MembershipNote[]
+  messageRecipients   MembershipMessageRecipient[]
+  volunteerGroups     MembershipVolunteerGroupMember[]
+  volunteerAssignmentHistory MembershipVolunteerAssignment[]
+  manualLists         MembershipManualListMember[]
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
@@ -309,9 +459,88 @@ model MembershipMemberType {
   id           String                @id @default(cuid())
   name         String
   slug         String                @unique
+  position     Int                   @default(0)
   individuals  MembershipIndividual[]
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
+}
+
+model MembershipVolunteerGroup {
+  id          String                           @id @default(cuid())
+  name        String
+  description String?
+  slug        String                           @unique
+  position    Int                              @default(0)
+  members     MembershipVolunteerGroupMember[]
+  assignmentHistory MembershipVolunteerAssignment[]
+  createdAt   DateTime                         @default(now())
+  updatedAt   DateTime                         @updatedAt
+}
+
+model MembershipVolunteerGroupMember {
+  groupId      String
+  individualId String
+  role         String?
+  isLeader     Boolean  @default(false)
+  availability Json?
+  skills       String?
+  group        MembershipVolunteerGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  individual   MembershipIndividual     @relation(fields: [individualId], references: [id], onDelete: Cascade)
+  assignedAt   DateTime                  @default(now())
+
+  @@id([groupId, individualId])
+  @@index([individualId])
+  @@index([groupId, isLeader])
+}
+
+model MembershipManualList {
+  id          String                         @id @default(cuid())
+  name        String
+  description String?
+  slug        String                         @unique
+  members     MembershipManualListMember[]
+  createdAt   DateTime                       @default(now())
+  updatedAt   DateTime                       @updatedAt
+}
+
+model MembershipManualListMember {
+  listId       String
+  individualId String
+  list         MembershipManualList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  individual   MembershipIndividual @relation(fields: [individualId], references: [id], onDelete: Cascade)
+  assignedAt   DateTime             @default(now())
+
+  @@id([listId, individualId])
+  @@index([individualId])
+}
+
+model MembershipDynamicList {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  slug        String   @unique
+  criteria    Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MembershipVolunteerAssignment {
+  id           String                    @id @default(cuid())
+  groupId      String
+  individualId String
+  action       String
+  role         String?
+  isLeader     Boolean?
+  availability Json?
+  skills       String?
+  changedById  String?
+  group        MembershipVolunteerGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  individual   MembershipIndividual     @relation(fields: [individualId], references: [id], onDelete: Cascade)
+  changedBy    User?                     @relation("VolunteerAssignmentActor", fields: [changedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime                  @default(now())
+
+  @@index([groupId, createdAt])
+  @@index([individualId, createdAt])
 }
 
 model MembershipCustomFieldDefinition {
@@ -371,6 +600,96 @@ model MembershipDocument {
   createdAt  DateTime         @default(now())
 }
 
+enum MembershipMessageChannel {
+  EMAIL
+  SMS
+}
+
+enum MembershipMessageStatus {
+  STUBBED
+  QUEUED
+  SENT
+  FAILED
+}
+
+model MembershipMessageTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  subject     String
+  bodyHtml    String
+  bodyText    String?
+  createdById  String?
+  createdBy   User?    @relation("MembershipMessageTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdById, updatedAt])
+}
+
+model MembershipMessage {
+  id             String                   @id @default(cuid())
+  channel        MembershipMessageChannel
+  subject        String?
+  bodyHtml       String
+  bodyText       String
+  status         MembershipMessageStatus  @default(STUBBED)
+  deliveryNote   String?
+  createdById    String
+  createdBy      User                     @relation("MembershipMessageAuthor", fields: [createdById], references: [id], onDelete: Restrict)
+  recipients     MembershipMessageRecipient[]
+  attachments    MembershipMessageAttachment[]
+  createdAt      DateTime                 @default(now())
+
+  @@index([createdById, createdAt])
+  @@index([status, createdAt])
+}
+
+model MembershipMessageRecipient {
+  id             String              @id @default(cuid())
+  messageId      String
+  message        MembershipMessage   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  individualId   String
+  individual     MembershipIndividual @relation(fields: [individualId], references: [id], onDelete: Restrict)
+  address        String
+  displayName    String
+  eligibilityReason String?
+  status         String              @default("PENDING")
+  deliveredAt    DateTime?
+  attemptCount   Int                 @default(0)
+  lastAttemptAt  DateTime?
+  failureReason  String?
+  providerMessageId String?
+  deliveryAttempts MembershipMessageDeliveryAttempt[]
+
+  @@unique([messageId, individualId])
+  @@index([individualId, status])
+}
+
+model MembershipMessageDeliveryAttempt {
+  id          String                      @id @default(cuid())
+  recipientId String
+  recipient   MembershipMessageRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  status      String
+  error       String?
+  providerMessageId String?
+  attemptedAt DateTime                    @default(now())
+
+  @@index([recipientId, attemptedAt])
+}
+
+model MembershipMessageAttachment {
+  id             String            @id @default(cuid())
+  messageId      String
+  message        MembershipMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  contentBase64  String?
+  createdAt      DateTime          @default(now())
+
+  @@index([messageId])
+}
+
 model EmailVerificationToken {
   id        String   @id @default(cuid())
   tokenHash String   @unique
@@ -398,7 +717,9 @@ model PageRevision {
   pageId    String
   page      Page    @relation(fields: [pageId], references: [id], onDelete: Cascade)
   blocks    Json
+  snapshot  Json?
   title     String
+  kind      PageRevisionKind @default(MANUAL)
   authorId  String
   author    User     @relation("RevisionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
   createdAt DateTime @default(now())

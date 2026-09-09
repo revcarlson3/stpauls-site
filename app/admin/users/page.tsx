@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card, Container } from "@/components/ui";
+import { Button, Card, Container } from "@/components/ui";
 
 type Group = { id: string; name: string };
 type User = { id: string; email: string; name: string; role: string; isActive: boolean; groupId: string | null; group?: { name: string } | null; isCurrent: boolean };
@@ -92,7 +92,7 @@ export default function UsersPage() {
         return <Card key={invitation.id} className="p-5">
           <div className="flex items-start justify-between gap-4"><div><h3 className="font-semibold">{invitation.name}</h3><p className="mt-1 text-sm text-ink/60">{invitation.email}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${expired ? "bg-red-100 text-red-700" : "bg-mist"}`}>{expired ? "Expired" : "Pending"}</span></div>
           <p className="mt-3 text-xs text-ink/50">Role: {invitation.role}{invitation.group?.name ? ` · Group: ${invitation.group.name}` : ""} · Expires {new Date(invitation.expiresAt).toLocaleDateString()}</p>
-          <div className="mt-4 flex flex-wrap gap-3"><button type="button" onClick={() => void updateInvitation(invitation, "resend")} className="focus-ring rounded-full bg-coral px-4 py-2 text-sm font-semibold text-white hover:bg-[#d95f43]">Resend</button><button type="button" onClick={() => void updateInvitation(invitation, "revoke")} className="focus-ring rounded-full border border-coral px-4 py-2 text-sm font-semibold text-coral hover:bg-coral hover:text-white">Revoke</button></div>
+          <div className="mt-4 flex flex-wrap gap-3"><Button type="button" onClick={() => void updateInvitation(invitation, "resend")} className="px-4 py-2">Resend</Button><Button type="button" variant="default" onClick={() => void updateInvitation(invitation, "revoke")} className="px-4 py-2">Revoke</Button></div>
         </Card>;
       })}</div> : <p className="mt-4 rounded-lg border border-dashed border-ink/15 p-4 text-sm text-ink/60">No pending invitations.</p>}
     </section>
@@ -105,7 +105,7 @@ export default function UsersPage() {
         <label className="grid gap-1 text-sm font-semibold">Security group<select name="groupId" disabled={user.isCurrent} defaultValue={user.groupId ?? ""} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">No group assigned</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select>{user.isCurrent && <span className="text-xs font-normal text-ink/50">You cannot change your own security group.</span>}</label>
         <label className="flex items-center gap-2 text-sm font-semibold"><input name="isActive" type="checkbox" defaultChecked={user.isActive} disabled={user.isCurrent} className="focus-ring h-4 w-4" /> Active account{user.isCurrent && <span className="text-xs font-normal text-ink/50">(your account cannot be deactivated)</span>}</label>
         <label className="grid gap-1 text-sm font-semibold">Reset password <span className="font-normal text-ink/50">(leave blank to keep current password)</span><input name="password" type="password" minLength={12} autoComplete="new-password" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
-        <div className="flex flex-wrap gap-3"><button type="submit" className="focus-ring w-fit rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white hover:bg-[#d95f43]">Save user</button>{!user.isCurrent && <button type="button" onClick={() => void removeUser(user)} className="focus-ring w-fit rounded-full border border-coral px-5 py-3 text-sm font-semibold text-coral hover:bg-coral hover:text-white">Delete user</button>}</div>
+        <div className="flex flex-wrap gap-3"><Button type="submit" className="w-fit">Save user</Button>{!user.isCurrent && <Button type="button" variant="default" onClick={() => void removeUser(user)} className="w-fit">Delete user</Button>}</div>
       </form>
     </Card>)}</div>
   </Container></main>;

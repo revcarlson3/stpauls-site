@@ -8,6 +8,22 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { CustomFieldValidationError, saveCustomFieldValues, validateCustomFieldValues } from "@/lib/membership-custom-fields";
 
+async function removeMembershipPhoto(value: string | null) {
+  if (!value) return;
+  if (value.startsWith("/uploads/membership/")) {
+    await unlink(path.join(process.cwd(), "public", value)).catch(() => undefined);
+    return;
+  }
+  try {
+    const filename = new URL(value, "http://localhost").searchParams.get("file");
+    if (filename && /^[a-zA-Z0-9-]+\.(jpg|jpeg|png|webp)$/.test(filename)) {
+      await unlink(path.join(process.cwd(), "storage", "membership", filename)).catch(() => undefined);
+    }
+  } catch {
+    // Ignore malformed legacy paths while removing the database reference.
+  }
+}
+
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await requirePermission("MANAGE_MEMBERSHIP");
@@ -27,7 +43,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     const family = await db.membershipFamily.findUnique({ where: { id: params.id }, select: { id: true, lastName: true, photographUrl: true } });
     if (!family) return NextResponse.json({ error: "Family not found." }, { status: 404 });
     if (new URL(_request.url).searchParams.get("photo") === "1") {
-      if (family.photographUrl?.startsWith("/uploads/membership/")) await unlink(path.join(process.cwd(), "public", family.photographUrl)).catch(() => undefined);
+      await removeMembershipPhoto(family.photographUrl);
       await db.membershipFamily.update({ where: { id: params.id }, data: { photographUrl: null } });
       return NextResponse.json({ removed: true });
     }
@@ -54,16 +70,18 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const extensions: Record<string, string> = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp" };
     const extension = extensions[file.type];
     if (!extension || file.size > 5 * 1024 * 1024) return NextResponse.json({ error: "Photographs must be JPG, PNG, or WebP files no larger than 5 MB." }, { status: 400 });
-    const relativePath = `/uploads/membership/${randomUUID()}${extension}`;
-    const absoluteDirectory = path.join(process.cwd(), "public", "uploads", "membership");
+    const filename = `${randomUUID()}${extension}`;
+    const absoluteDirectory = path.join(process.cwd(), "storage", "membership");
     await mkdir(absoluteDirectory, { recursive: true });
-    await writeFile(path.join(process.cwd(), "public", relativePath), Buffer.from(await file.arrayBuffer()));
-    if (family.photographUrl?.startsWith("/uploads/membership/")) await unlink(path.join(process.cwd(), "public", family.photographUrl)).catch(() => undefined);
+    await writeFile(path.join(absoluteDirectory, filename), Buffer.from(await file.arrayBuffer()));
+    await removeMembershipPhoto(family.photographUrl);
+    const relativePath = `/api/membership/families/${params.id}/photo?file=${encodeURIComponent(filename)}`;
     const updated = await db.membershipFamily.update({ where: { id: params.id }, data: { photographUrl: relativePath } });
     return NextResponse.json({ family: updated });
   } catch {
     return NextResponse.json({ error: "Unable to upload family photograph." }, { status: 500 });
   }
+
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {

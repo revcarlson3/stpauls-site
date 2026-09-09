@@ -17,6 +17,11 @@ export async function getEnabledModuleSlugs() {
   return Array.isArray(enabled) ? enabled.filter((slug): slug is string => typeof slug === "string") : [];
 }
 
+export async function isPublicSiteEnabled() {
+  const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { publicSiteEnabled: true } });
+  return settings?.publicSiteEnabled !== false;
+}
+
 export async function getAvailableModules(userId: string) {
   const [enabledSlugs, user] = await Promise.all([
     getEnabledModuleSlugs(),

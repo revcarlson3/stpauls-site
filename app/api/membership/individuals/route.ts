@@ -5,6 +5,7 @@ import { MARITAL_STATUSES } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { CustomFieldValidationError, saveCustomFieldValues, validateCustomFieldValues } from "@/lib/membership-custom-fields";
+import { estimateGradeLevel } from "@/lib/membership-grade-levels";
 
 export async function GET() {
   try {
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
       const created = await transaction.membershipIndividual.create({ data: {
         familyId: family.id, firstName: input.firstName.trim(), middleName: typeof input.middleName === "string" ? input.middleName.trim() || null : null, lastName: typeof input.lastName === "string" ? input.lastName.trim() || null : null,
         birthday, memberNumber: (highest._max.memberNumber ?? 0) + 1, gender: input.gender, maritalStatus: input.maritalStatus.trim(), status: input.status, memberTypeId: type.id, familyRoleId: role.id,
-        ageCategoryOverride: typeof input.ageCategoryOverride === "string" ? input.ageCategoryOverride.trim() || null : null, cellphone: typeof input.cellphone === "string" ? input.cellphone.trim() || null : null, otherPhone: typeof input.otherPhone === "string" ? input.otherPhone.trim() || null : null, otherPhoneType: typeof input.otherPhoneType === "string" ? input.otherPhoneType.trim() || null : null, email: typeof input.email === "string" ? input.email.trim().toLowerCase() || null : null, gradeLevel: typeof input.gradeLevel === "string" ? input.gradeLevel.trim() || null : null, weddingDate: typeof input.weddingDate === "string" && input.weddingDate ? new Date(input.weddingDate) : null
+        ageCategoryOverride: typeof input.ageCategoryOverride === "string" ? input.ageCategoryOverride.trim() || null : null, cellphone: typeof input.cellphone === "string" ? input.cellphone.trim() || null : null, otherPhone: typeof input.otherPhone === "string" ? input.otherPhone.trim() || null : null, otherPhoneType: typeof input.otherPhoneType === "string" ? input.otherPhoneType.trim() || null : null, email: typeof input.email === "string" ? input.email.trim().toLowerCase() || null : null, emailMessagesAllowed: input.emailMessagesAllowed === true || input.emailMessagesAllowed === "on", smsMessagesAllowed: input.smsMessagesAllowed === true || input.smsMessagesAllowed === "on", gradeLevel: typeof input.gradeLevel === "string" && input.gradeLevel.trim() ? input.gradeLevel.trim() : estimateGradeLevel(birthday), weddingDate: typeof input.weddingDate === "string" && input.weddingDate ? new Date(input.weddingDate) : null
       } });
       await saveCustomFieldValues(transaction, "INDIVIDUAL", created.id, customFields);
       return created;

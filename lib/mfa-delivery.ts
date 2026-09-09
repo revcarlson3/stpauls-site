@@ -18,11 +18,14 @@ export async function sendEmailMfaCode(recipient: string, code: string) {
 }
 
 export async function sendSmsMfaCode(recipient: string, code: string) {
+  await sendSmsText(recipient, `Your St. Paul's verification code is ${code}. It expires in 10 minutes.`);
+}
+
+export async function sendSmsText(recipient: string, text: string) {
   const sms = await getSmsSettings();
   if (!sms.accountId || !sms.authSecret || !sms.from) {
     throw new Error("Text-message delivery is not configured. Ask an administrator to configure an SMS provider.");
   }
-  const text = `Your St. Paul's verification code is ${code}. It expires in 10 minutes.`;
   if (sms.provider === "twilio") {
     const auth = Buffer.from(`${sms.accountId}:${sms.authSecret}`).toString("base64");
     await request("https://api.twilio.com/2010-04-01/Accounts/" + encodeURIComponent(sms.accountId) + "/Messages.json", {

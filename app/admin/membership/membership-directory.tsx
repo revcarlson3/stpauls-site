@@ -13,12 +13,20 @@ type Member = {
 type Row = { id: string; firstName: string; middleName: string | null; lastName: string | null; familyLastName: string; memberNumber: number; memberType: string; status: string };
 type Note = { id: string; individualId: string; reason: string; body: string; createdAt: string; updatedAt: string; author: { id: string; name: string } };
 
+function formatMemberName(member: Pick<Row, "firstName" | "middleName" | "lastName" | "familyLastName">) {
+  const lastName = member.lastName ?? member.familyLastName;
+  const middleInitial = member.middleName?.trim().charAt(0);
+  return `${lastName}, ${member.firstName}${middleInitial ? ` ${middleInitial}.` : ""}`;
+}
+
 export function MembershipDirectory() {
   const [members, setMembers] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Member | null>(null);
-  const [types, setTypes] = useState<{ slug: string; name: string }[]>([]);
+  const [types, setTypes] = useState<{ id: string; slug: string; name: string }[]>([]);
   const [search, setSearch] = useState("");
   const [memberType, setMemberType] = useState("");
+  const [statusFilter, setStatusFilter] = useState("active");
+  const [dynamicListId, setDynamicListId] = useState(() => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("dynamicListId") ?? "");
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
@@ -26,15 +34,106 @@ export function MembershipDirectory() {
   const [noteReason, setNoteReason] = useState("");
   const [noteBody, setNoteBody] = useState("");
   const [noteSubmitting, setNoteSubmitting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState("");
+  const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
+  const [bulkType, setBulkType] = useState("");
+  const [bulkRole, setBulkRole] = useState("");
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const photoUrl = selected && typeof selected.family.photographUrl === "string" && selected.family.photographUrl ? selected.family.photographUrl : "/no-family-photo.jpg";
   const selectedId = selected?.id;
 
   useEffect(() => {
-    const params = new URLSearchParams({ ...(search ? { search } : {}), ...(memberType ? { memberType } : {}) });
-    void fetch(`/api/membership?${params}`).then((response) => response.ok ? response.json() : null).then((value) => {
-      if (value) { setMembers(value.members); setTypes(value.types); setSelected(value.selected); }
+    const params = new URLSearchParams({ status: dynamicListId ? "all" : statusFilter, ...(dynamicListId ? { dynamicListId } : {}), ...(search ? { search } : {}), ...(memberType ? { memberType } : {}) });
+    void fetch(`/api/membership?${params}`).then(async (response) => {
+      if (!response.ok) throw new Error("Unable to load the selected dynamic list.");
+      return response.json();
+    }).then((value) => {
+      if (value) {
+        setMembers(value.members);
+        setTypes(value.types);
+        setSelected(value.selected);
+        setSelectedIds((current) => new Set(Array.from(current).filter((id) => value.members.some((member: Row) => member.id === id))));
+      }
+    }).catch(() => setBulkMessage("Unable to load the selected dynamic list."));
+  }, [search, memberType, statusFilter, dynamicListId]);
+  useEffect(() => {
+    void fetch("/api/membership/reference").then((response) => response.ok ? response.json() : null).then((value) => {
+      if (value) setRoles(value.roles);
     }).catch(() => undefined);
-  }, [search, memberType]);
+  }, []);
+
+  const allVisibleSelected = members.length > 0 && members.every((member) => selectedIds.has(member.id));
+  function toggleMember(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleAllVisible() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) members.forEach((member) => next.delete(member.id));
+      else members.forEach((member) => next.add(member.id));
+      return next;
+    });
+  }
+  async function updateSelected(action: "archive" | "restore") {
+    const verb = action === "archive" ? "Archive" : "Restore";
+    if (!selectedIds.size || !window.confirm(`${verb} ${selectedIds.size} selected member${selectedIds.size === 1 ? "" : "s"}?`)) return;
+    setBulkSubmitting(true);
+    setBulkMessage("");
+    try {
+      const response = await fetch("/api/membership/individuals/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, memberIds: Array.from(selectedIds) })
+      });
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error ?? "Unable to archive selected members.");
+      setSelectedIds(new Set());
+      setSelected(null);
+      setBulkMessage(`${value.updatedCount} member${value.updatedCount === 1 ? "" : "s"} ${action === "archive" ? "archived" : "restored"}.`);
+      const params = new URLSearchParams({ status: dynamicListId ? "all" : statusFilter, ...(dynamicListId ? { dynamicListId } : {}), ...(search ? { search } : {}), ...(memberType ? { memberType } : {}) });
+      const refreshed = await fetch(`/api/membership?${params}`).then((result) => result.json());
+      if (refreshed) setMembers(refreshed.members);
+    } catch (reason) {
+      setBulkMessage(reason instanceof Error ? reason.message : "Unable to archive selected members.");
+    } finally {
+      setBulkSubmitting(false);
+    }
+  }
+  async function bulkEditSelected() {
+      const updates = { ...(bulkType ? { memberTypeId: bulkType } : {}), ...(bulkRole ? { familyRoleId: bulkRole } : {}), ...(bulkStatus ? { status: bulkStatus } : {}) };
+      if (!selectedIds.size || !Object.keys(updates).length) {
+        setBulkMessage("Choose at least one field to update.");
+        return;
+      }
+      if (!window.confirm(`Update ${selectedIds.size} selected member${selectedIds.size === 1 ? "" : "s"}?`)) return;
+      setBulkSubmitting(true);
+      setBulkMessage("");
+      try {
+        const response = await fetch("/api/membership/individuals/bulk", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update", memberIds: Array.from(selectedIds), ...updates }) });
+        const value = await response.json();
+        if (!response.ok) throw new Error(value.error ?? "Unable to update selected members.");
+        setBulkMessage(`${value.updatedCount} member${value.updatedCount === 1 ? "" : "s"} updated.`);
+        setBulkType("");
+        setBulkRole("");
+        setBulkStatus("");
+        setSelectedIds(new Set());
+        const params = new URLSearchParams({ status: dynamicListId ? "all" : statusFilter, ...(dynamicListId ? { dynamicListId } : {}), ...(search ? { search } : {}), ...(memberType ? { memberType } : {}) });
+        const refreshed = await fetch(`/api/membership?${params}`).then((result) => result.json());
+        if (refreshed) setMembers(refreshed.members);
+      } catch (reason) {
+        setBulkMessage(reason instanceof Error ? reason.message : "Unable to update selected members.");
+      } finally {
+        setBulkSubmitting(false);
+    }
+  }
 
   useEffect(() => {
     if (!selectedId) {
@@ -90,12 +189,19 @@ export function MembershipDirectory() {
 
   return <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.5fr)]">
     <section className="rounded-2xl border border-ink/10 bg-white p-4 shadow-sm">
-      <h2 className="font-serif text-2xl">Members</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-serif text-2xl">Members</h2>{dynamicListId && <a href="/admin/membership" className="text-sm font-semibold text-coral">Clear dynamic list</a>}</div>
       <div className="mt-4 grid gap-3">
         <label className="grid gap-1 text-sm font-semibold">Search by name<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="First or last name" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
         <label className="grid gap-1 text-sm font-semibold">Member type<select value={memberType} onChange={(event) => setMemberType(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">All types</option>{types.map((type) => <option key={type.slug} value={type.slug}>{type.name}</option>)}</select></label>
+        <label className="grid gap-1 text-sm font-semibold">Record status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="active">Active members</option><option value="archived">Archived members</option><option value="all">All members</option></select></label>
       </div>
-      <div className="mt-5 grid gap-1" aria-live="polite">{members.map((member) => <button type="button" key={member.id} onClick={() => void fetch(`/api/membership?id=${member.id}`).then((response) => response.json()).then((value) => setSelected(value.selected))} className={`focus-ring rounded-lg p-3 text-left hover:bg-mist ${selected?.id === member.id ? "bg-mist" : ""}`}><span className="block font-semibold">{member.firstName} {member.middleName ?? ""} {member.lastName ?? member.familyLastName}</span><span className="text-xs text-ink/55">#{member.memberNumber} · {member.memberType} · {member.status.toLowerCase()}</span></button>)}</div>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-y border-ink/10 py-3">
+        <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} /> Select all visible</label>
+        {selectedIds.size > 0 && <details className="relative"><summary className="focus-ring list-none cursor-pointer rounded-full bg-coral px-4 py-2 text-xs font-semibold text-white">Bulk actions <span aria-hidden="true">⌄</span></summary><div className="absolute right-0 z-10 mt-2 grid min-w-48 gap-1 rounded-xl border border-ink/10 bg-white p-2 shadow-lg"><button type="button" className="focus-ring rounded-lg px-3 py-2 text-left text-sm hover:bg-mist" onClick={() => { const params = new URLSearchParams(); Array.from(selectedIds).forEach((id) => params.append("memberIds", id)); window.location.href = `/admin/membership/messaging?${params.toString()}`; }}>Message selected</button><button type="button" className="focus-ring rounded-lg px-3 py-2 text-left text-sm hover:bg-mist" onClick={() => setBulkEditOpen(true)}>Bulk modify</button>{members.some((member) => selectedIds.has(member.id) && member.status !== "REMOVED") && <button type="button" disabled={bulkSubmitting} onClick={() => void updateSelected("archive")} className="focus-ring rounded-lg px-3 py-2 text-left text-sm text-coral hover:bg-mist disabled:opacity-60">Archive selected</button>}{members.some((member) => selectedIds.has(member.id) && member.status === "REMOVED") && <button type="button" disabled={bulkSubmitting} onClick={() => void updateSelected("restore")} className="focus-ring rounded-lg px-3 py-2 text-left text-sm hover:bg-mist disabled:opacity-60">Restore selected</button>}</div></details>}
+        {bulkEditOpen && <div role="dialog" aria-modal="true" aria-labelledby="bulk-edit-heading" className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-5"><div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-wider text-coral">Bulk modify</p><h3 id="bulk-edit-heading" className="mt-1 font-serif text-2xl">{selectedIds.size} selected member{selectedIds.size === 1 ? "" : "s"}</h3></div><button type="button" className="focus-ring rounded-full px-2 py-1 text-xl text-ink/60 hover:text-coral" onClick={() => setBulkEditOpen(false)} aria-label="Close bulk modify dialog">×</button></div><p className="mt-3 text-sm text-ink/60">Only fields with a new value will be changed.</p><div className="mt-5 grid gap-3"><label className="grid gap-1 text-sm font-semibold">Member type<select value={bulkType} onChange={(event) => setBulkType(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">Keep current</option>{types.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label><label className="grid gap-1 text-sm font-semibold">Family role<select value={bulkRole} onChange={(event) => setBulkRole(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">Keep current</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label><label className="grid gap-1 text-sm font-semibold">Status<select value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">Keep current</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="DECEASED">Deceased</option></select></label></div><div className="mt-6 flex justify-end gap-3"><button type="button" className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold" onClick={() => setBulkEditOpen(false)}>Cancel</button><button type="button" disabled={bulkSubmitting} className="focus-ring rounded-full bg-coral px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" onClick={() => { setBulkEditOpen(false); void bulkEditSelected(); }}>Apply changes</button></div></div></div>}
+      </div>
+      {bulkMessage && <p role="status" className="mt-3 text-sm text-coral">{bulkMessage}</p>}
+      <div className="mt-3 grid gap-1" aria-live="polite">{members.map((member) => <div key={member.id} className={`flex items-center gap-2 rounded-lg p-2 hover:bg-mist ${selected?.id === member.id ? "bg-mist" : ""}`}><input type="checkbox" checked={selectedIds.has(member.id)} onChange={() => toggleMember(member.id)} aria-label={`Select ${formatMemberName(member)}`} /><button type="button" onClick={() => void fetch(`/api/membership?id=${member.id}`).then((response) => response.json()).then((value) => setSelected(value.selected))} className="focus-ring min-w-0 flex-1 p-1 text-left"><span className="block font-semibold">{formatMemberName(member)}</span><span className="text-xs text-ink/55">#{member.memberNumber} · {member.memberType} · {member.status.toLowerCase()}</span></button></div>)}</div>
       {!members.length && <p className="mt-5 text-sm text-ink/60">No members match these filters.</p>}
     </section>
     <section className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
