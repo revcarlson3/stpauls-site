@@ -5,6 +5,9 @@ import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { CustomFieldValidationError, saveCustomFieldValues, validateCustomFieldValues } from "@/lib/membership-custom-fields";
 import { dynamicMemberIds } from "@/lib/membership-audiences";
+import { normalizePhoneNumber } from "@/lib/phone-numbers";
+import { isListedInMemberDirectory } from "@/lib/membership-privacy";
+import { membershipAuditDetails } from "@/lib/membership-timeline";
 
 export async function GET(request: Request) {
   try {
@@ -20,19 +23,29 @@ export async function GET(request: Request) {
     const members = await db.membershipIndividual.findMany({
       where: {
         ...(dynamicIds ? { id: { in: dynamicIds } } : {}),
-        ...(status === "archived" ? { status: "REMOVED" } : status === "all" ? {} : { status: { not: "REMOVED" } }),
+        ...(status === "archived" ? { status: "REMOVED" } : ["active", "inactive", "deceased"].includes(status) ? { status: status.toUpperCase() as "ACTIVE" | "INACTIVE" | "DECEASED" } : status === "all" ? {} : { status: { not: "REMOVED" } }),
         ...(memberType ? { memberType: { slug: memberType } } : {}),
         ...(search ? { OR: [{ firstName: { contains: search, mode: "insensitive" } }, { lastName: { contains: search, mode: "insensitive" } }, { family: { lastName: { contains: search, mode: "insensitive" } } }] } : {})
       },
       orderBy: [{ family: { lastName: "asc" } }, { lastName: "asc" }, { firstName: "asc" }],
-      include: { family: true, memberType: true, familyRole: true, customValues: { where: { definition: { isActive: true } }, select: { definitionId: true, value: true } } },
+      include: { family: { include: { individuals: { where: { status: { not: "REMOVED" } }, select: { id: true, firstName: true, lastName: true, birthday: true, familyRole: { select: { name: true, slug: true } } } } } }, memberType: true, familyRole: true, customValues: { where: { definition: { isActive: true } }, select: { definitionId: true, value: true } } },
       take: 200
     });
     const selected = id ? members.find((member) => member.id === id) ?? null : members[0] ?? null;
+    if (selected) {
+      const roleOrder: Record<string, number> = { "head-of-household": 0, spouse: 1, child: 2, other: 3 };
+      selected.family.individuals.sort((left, right) => {
+        const leftOrder = roleOrder[left.familyRole.slug] ?? 3;
+        const rightOrder = roleOrder[right.familyRole.slug] ?? 3;
+        if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+        if (left.familyRole.slug === "child" && right.familyRole.slug === "child") return left.birthday.getTime() - right.birthday.getTime();
+        return left.firstName.localeCompare(right.firstName);
+      });
+    }
     const types = await db.membershipMemberType.findMany({ orderBy: [{ position: "asc" }, { name: "asc" }], select: { id: true, slug: true, name: true } });
     return NextResponse.json({
       types,
-      members: members.map((member) => ({ id: member.id, firstName: member.firstName, middleName: member.middleName, lastName: member.lastName, familyLastName: member.family.lastName, memberNumber: member.memberNumber, memberType: member.memberType.name, status: member.status })),
+      members: members.map((member) => ({ id: member.id, firstName: member.firstName, middleName: member.middleName, lastName: member.lastName, familyLastName: member.family.lastName, memberNumber: member.memberNumber, memberType: member.memberType.name, familyRole: member.familyRole.name, status: member.status, directoryListed: isListedInMemberDirectory(member) })),
       selected
     });
   } catch {
@@ -72,7 +85,7 @@ export async function POST(request: Request) {
       const family = await db.$transaction(async (transaction) => {
         const created = await transaction.membershipFamily.create({
           data: {
-            lastName: input.lastName.trim(), phone: input.phone.trim(), email: input.email.trim().toLowerCase(), status: input.status,
+            lastName: input.lastName.trim(), phone: normalizePhoneNumber(input.phone), email: input.email.trim().toLowerCase(), status: input.status,
             addressStreet: typeof input.addressStreet === "string" ? input.addressStreet.trim() : null,
             addressCity: typeof input.addressCity === "string" ? input.addressCity.trim() : null,
             addressState: typeof input.addressState === "string" ? input.addressState.trim() : null,
@@ -84,7 +97,12 @@ export async function POST(request: Request) {
         await saveCustomFieldValues(transaction, "FAMILY", created.id, customFields);
         return created;
       });
-      await logAudit({ activityType: "membership-family-created", summary: `Created membership family ${family.lastName}.`, actorId: user.id });
+      await logAudit({
+        activityType: "membership-family-created",
+        summary: `Created membership family ${family.lastName}.`,
+        details: membershipAuditDetails({ familyId: family.id, individualId: family.individuals[0]?.id }),
+        actorId: user.id
+      });
       return NextResponse.json({ family }, { status: 201 });
     } catch (error) {
       if (error instanceof CustomFieldValidationError) return NextResponse.json({ error: error.message }, { status: 400 });

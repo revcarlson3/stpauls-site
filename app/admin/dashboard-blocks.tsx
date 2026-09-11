@@ -5,6 +5,7 @@ import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card } from "@/components/ui";
+import { DEFAULT_MEMBERSHIP_DASHBOARD_LAYOUT, MEMBERSHIP_DASHBOARD_BLOCK_IDS, normalizeDashboardLayout, type MembershipDashboardLayout } from "@/lib/membership-dashboard";
 
 type BlockId = "activity" | "sms" | "email";
 type AuditLog = { id: string; activityType: string; summary: string; details: string | null; createdAt: string; actor: { name: string; email: string } | null };
@@ -19,6 +20,7 @@ const activityLabels: Record<string, string> = {
   "email-change-requested": "Email change requested", "email-changed": "Email changed", "sessions-revoked": "Sessions revoked",
   "group-created": "Group created", "group-updated": "Group updated", "group-deleted": "Group deleted",
   "membership-note-created": "Membership note created", "membership-note-updated": "Membership note updated", "membership-note-deleted": "Membership note deleted",
+  "membership-document-uploaded": "Membership document uploaded", "membership-document-downloaded": "Membership document downloaded", "membership-document-deleted": "Membership document deleted",
   "membership-message-created": "Membership message sent", "membership-message-template-created": "Message template created", "membership-message-template-updated": "Message template updated", "membership-message-template-deleted": "Message template deleted"
 };
 
@@ -37,7 +39,7 @@ function HistoryBlock({ title, messages, page, onPageChange }: { title: string; 
   return <section><h2 className="font-serif text-2xl">{title}</h2><p className="mt-1 text-sm text-ink/60">Five messages per page.</p><div className="mt-4 grid gap-3">{visibleMessages.length ? visibleMessages.map((message) => <Card key={message.id} className="p-4"><div className="flex flex-wrap justify-between gap-2"><p className="font-semibold">{message.subject ?? "Text message"}</p><time className="text-xs text-ink/50" dateTime={message.createdAt}>{dateLabel(message.createdAt)}</time></div><p className="mt-1 text-xs text-ink/60">{message.status} · {message.recipients.length} recipient{message.recipients.length === 1 ? "" : "s"} · {message.createdBy.name}</p>{message.deliveryNote && <p className="mt-2 text-sm text-ink/70">{message.deliveryNote}</p>}</Card>) : <p className="rounded-lg border border-dashed border-ink/15 p-4 text-sm text-ink/60">No messages sent yet.</p>}</div><Pagination page={page} total={messages.length} onChange={onPageChange} /></section>;
 }
 
-export default function DashboardBlocks() {
+export default function DashboardBlocks({ sharedConfigureOpen, hideConfigureButton = false, disableDnd = false, orderOverride }: { sharedConfigureOpen?: boolean; hideConfigureButton?: boolean; disableDnd?: boolean; orderOverride?: string[] } = {}) {
   const [order, setOrder] = useState<BlockId[]>(defaultOrder);
   const [visible, setVisible] = useState<Record<BlockId, boolean>>({ activity: true, sms: true, email: true });
   const [widths, setWidths] = useState<Record<BlockId, "half" | "full">>(defaultWidths);
@@ -46,6 +48,9 @@ export default function DashboardBlocks() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState("");
   const [pages, setPages] = useState<Record<BlockId, number>>({ activity: 0, sms: 0, email: 0 });
+  const [internalConfigureOpen, setInternalConfigureOpen] = useState(false);
+  const [membershipLayout, setMembershipLayout] = useState<MembershipDashboardLayout | null>(null);
+  const isConfigureOpen = sharedConfigureOpen ?? internalConfigureOpen;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   useEffect(() => {
@@ -66,13 +71,24 @@ export default function DashboardBlocks() {
     }).catch((reason: Error) => setError(reason.message));
   }, []);
 
+  useEffect(() => {
+    if (!isConfigureOpen || membershipLayout) return;
+    void fetch("/api/membership/dashboard", { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) return null;
+      const value = await response.json();
+      return normalizeDashboardLayout(value.layout);
+    }).then((layout) => {
+      if (layout) setMembershipLayout(layout);
+    }).catch(() => undefined);
+  }, [isConfigureOpen, membershipLayout]);
+
   const saveLayout = (nextOrder: BlockId[], nextVisible: Record<BlockId, boolean>, nextWidths = widths) => {
     setOrder(nextOrder);
     setVisible(nextVisible);
     setWidths(nextWidths);
     localStorage.setItem("admin-dashboard-layout", JSON.stringify({ order: nextOrder, visible: nextVisible, widths: nextWidths }));
   };
-  const visibleOrder = useMemo(() => order.filter((id) => visible[id]), [order, visible]);
+  const visibleOrder = useMemo(() => (orderOverride ?? order).filter((id) => visible[id as BlockId]), [order, orderOverride, visible]);
   const moveBlock = (activeId: string, overId: string) => {
     const dragged = activeId as BlockId;
     const target = overId as BlockId;
@@ -86,14 +102,19 @@ export default function DashboardBlocks() {
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (over) moveBlock(String(active.id), String(over.id));
   };
+  const saveMembershipLayout = (layout: MembershipDashboardLayout) => {
+    setMembershipLayout(layout);
+    void fetch("/api/membership/dashboard", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(layout) });
+    window.dispatchEvent(new Event("membership-dashboard-layout-changed"));
+  };
 
-  return <div className="mt-8">
-    <div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="font-serif text-2xl">Dashboard blocks</h2><p className="mt-1 text-sm text-ink/60">Drag blocks to reorder them. Your layout is saved in this browser.</p></div><div className="relative"><button type="button" className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold" onClick={() => setConfigureOpen((open) => !open)}>Configure dashboard</button>{configureOpen && <div className="absolute right-0 z-10 mt-2 grid w-64 gap-3 rounded-xl border border-ink/10 bg-white p-3 shadow-lg"><p className="text-xs font-semibold uppercase tracking-wide text-ink/50">Dashboard blocks</p>{defaultOrder.map((id) => <div key={id} className="grid gap-1"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visible[id]} onChange={(event) => saveLayout(order, { ...visible, [id]: event.target.checked })} />{blockLabels[id]}</label><select aria-label={`${blockLabels[id]} width`} value={widths[id]} onChange={(event) => saveLayout(order, visible, { ...widths, [id]: event.target.value as "half" | "full" })} className="ml-6 rounded-md border border-ink/10 px-2 py-1 text-xs"><option value="half">One column</option><option value="full">Two columns</option></select></div>)}</div>}</div></div>
-    {error ? <p role="alert" className="mt-4 text-sm text-coral">{error}</p> : !visibleOrder.length ? <p className="mt-6 rounded-lg border border-dashed border-ink/15 p-5 text-sm text-ink/60">All dashboard blocks are hidden. Use Configure dashboard to show one.</p> : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={visibleOrder} strategy={verticalListSortingStrategy}><div className="mt-6 grid gap-8 sm:grid-cols-2">{visibleOrder.map((id) => { const blockMessages = messages.filter((message) => message.channel === (id === "email" ? "EMAIL" : "SMS")); const blockPage = pages[id]; const sortable = <DashboardBlock id={id} width={widths[id]} blockPage={blockPage} logs={logs} messages={blockMessages} onPageChange={(page) => setPages((current) => ({ ...current, [id]: page }))} />; return sortable; })}</div></SortableContext></DndContext>}
+  return <div className={disableDnd ? "contents" : "mt-8"}>
+    <div className={disableDnd ? "absolute right-0 top-12 z-20" : "flex flex-wrap items-end justify-between gap-4"}><div className={disableDnd ? "hidden" : ""}><h2 className="font-serif text-2xl">Dashboard blocks</h2><p className="mt-1 text-sm text-ink/60">Drag blocks to reorder them. Your layout is saved in this browser.</p></div><div className="relative">{!hideConfigureButton && <button type="button" className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold" onClick={() => setInternalConfigureOpen((open) => !open)}>Configure dashboard</button>}{isConfigureOpen && <div className="absolute right-0 z-10 grid max-h-[min(80vh,42rem)] w-72 gap-3 overflow-y-auto rounded-xl border border-ink/10 bg-white p-3 shadow-lg"><p className="text-xs font-semibold uppercase tracking-wide text-ink/50">Dashboard blocks</p>{defaultOrder.map((id) => <div key={id} className="grid gap-1"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visible[id]} onChange={(event) => saveLayout(order, { ...visible, [id]: event.target.checked })} />{blockLabels[id]}</label><select aria-label={`${blockLabels[id]} width`} value={widths[id]} onChange={(event) => saveLayout(order, visible, { ...widths, [id]: event.target.value as "half" | "full" })} className="ml-6 rounded-md border border-ink/10 px-2 py-1 text-xs"><option value="half">One column</option><option value="full">Two columns</option></select></div>)}<p className="border-t border-ink/10 pt-3 text-xs font-semibold uppercase tracking-wide text-ink/50">Membership insight blocks</p>{MEMBERSHIP_DASHBOARD_BLOCK_IDS.map((id) => { const layout = membershipLayout ?? DEFAULT_MEMBERSHIP_DASHBOARD_LAYOUT; return <div key={id} className="grid gap-1"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={layout.visible[id]} onChange={(event) => saveMembershipLayout(normalizeDashboardLayout({ ...layout, visible: { ...layout.visible, [id]: event.target.checked } }))} />{id === "birthdays" ? "Upcoming birthdays" : id === "anniversaries" ? "Upcoming anniversaries" : id === "profiles" ? "Incomplete profiles" : id === "engagement" ? "Engagement & attendance" : "Volunteer coverage"}</label>    <select aria-label={`${id} width`} value={layout.widths[id]} onChange={(event) => saveMembershipLayout(normalizeDashboardLayout({ ...layout, widths: { ...layout.widths, [id]: event.target.value as "half" | "full" } }))} className="ml-6 rounded-md border border-ink/10 px-2 py-1 text-xs"><option value="half">One column</option><option value="full">Two columns</option></select></div>; })}</div>}</div></div>
+    {error ? <p role="alert" className="mt-4 text-sm text-coral">{error}</p> : !visibleOrder.length ? null : disableDnd ? <div className="contents">{visibleOrder.map((id) => { const blockMessages = messages.filter((message) => message.channel === (id === "email" ? "EMAIL" : "SMS")); return <DashboardBlock key={id} id={id as BlockId} sortOrder={(orderOverride ?? order).indexOf(id)} width={widths[id as BlockId]} blockPage={pages[id as BlockId]} logs={logs} messages={blockMessages} onPageChange={(page) => setPages((current) => ({ ...current, [id as BlockId]: page }))} />; })}</div> : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={visibleOrder} strategy={verticalListSortingStrategy}><div className="mt-6 grid gap-8 sm:grid-cols-2">{visibleOrder.map((id) => { const blockMessages = messages.filter((message) => message.channel === (id === "email" ? "EMAIL" : "SMS")); const blockPage = pages[id as BlockId]; return <DashboardBlock key={id} id={id as BlockId} sortOrder={(orderOverride ?? order).indexOf(id)} width={widths[id as BlockId]} blockPage={blockPage} logs={logs} messages={blockMessages} onPageChange={(page) => setPages((current) => ({ ...current, [id as BlockId]: page }))} />; })}</div></SortableContext></DndContext>}
   </div>;
 }
 
-function DashboardBlock({ id, width, blockPage, logs, messages, onPageChange }: { id: BlockId; width: "half" | "full"; blockPage: number; logs: AuditLog[]; messages: Message[]; onPageChange: (page: number) => void }) {
+function DashboardBlock({ id, width, sortOrder, blockPage, logs, messages, onPageChange }: { id: BlockId; width: "half" | "full"; sortOrder: number; blockPage: number; logs: AuditLog[]; messages: Message[]; onPageChange: (page: number) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  return <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined }} {...attributes} className={`${width === "full" ? "sm:col-span-2" : ""} rounded-2xl border bg-white p-5 shadow-sm transition ${isDragging ? "scale-[1.02] rotate-1 border-coral/50 shadow-xl opacity-70" : "border-ink/10"}`}><div className="mb-4 flex items-center justify-between"><span {...listeners} className="touch-none cursor-grab rounded-md bg-mist px-2 py-1 text-xs font-semibold uppercase tracking-wide text-ink/50">☷ Drag block</span><span className="text-xs text-ink/35">{blockLabels[id]}</span></div>{id === "activity" ? <section><h2 className="font-serif text-2xl">{blockLabels.activity}</h2><p className="mt-1 text-sm text-ink/60">Five activity items per page.</p><div className="mt-4 grid gap-3">{logs.length ? logs.slice(blockPage * 5, blockPage * 5 + 5).map((log) => <Card key={log.id} className="p-4"><div className="flex flex-wrap justify-between gap-2"><p className="font-semibold">{log.summary}</p><time className="text-xs text-ink/50" dateTime={log.createdAt}>{dateLabel(log.createdAt)}</time></div><p className="mt-1 text-xs text-ink/60">{activityLabels[log.activityType] ?? log.activityType} · {log.actor ? `${log.actor.name} (${log.actor.email})` : "System"}</p>{log.details && <p className="mt-2 text-sm text-ink/70">{log.details}</p>}</Card>) : <p className="rounded-lg border border-dashed border-ink/15 p-4 text-sm text-ink/60">No recorded activity.</p>}</div><Pagination page={blockPage} total={logs.length} onChange={onPageChange} /></section> : <HistoryBlock title={blockLabels[id]} messages={messages} page={blockPage} onPageChange={onPageChange} />}</div>;
+  return <div ref={setNodeRef} style={{ order: sortOrder, transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined }} {...attributes} className={`${width === "full" ? "sm:col-span-2" : ""} rounded-2xl border bg-white p-5 shadow-sm transition ${isDragging ? "scale-[1.02] rotate-1 border-coral/50 shadow-xl opacity-70" : "border-ink/10"}`}><div className="mb-4 flex items-center justify-between"><span {...listeners} className="touch-none cursor-grab rounded-md bg-mist px-2 py-1 text-xs font-semibold uppercase tracking-wide text-ink/50">☷ Drag block</span><span className="text-xs text-ink/35">{blockLabels[id]}</span></div>{id === "activity" ? <section><h2 className="font-serif text-2xl">{blockLabels.activity}</h2><p className="mt-1 text-sm text-ink/60">Five activity items per page.</p><div className="mt-4 grid gap-3">{logs.length ? logs.slice(blockPage * 5, blockPage * 5 + 5).map((log) => <Card key={log.id} className="p-4"><div className="flex flex-wrap justify-between gap-2"><p className="font-semibold">{log.summary}</p><time className="text-xs text-ink/50" dateTime={log.createdAt}>{dateLabel(log.createdAt)}</time></div><p className="mt-1 text-xs text-ink/60">{activityLabels[log.activityType] ?? log.activityType} · {log.actor ? `${log.actor.name} (${log.actor.email})` : "System"}</p>{log.details && <p className="mt-2 text-sm text-ink/70">{log.details}</p>}</Card>) : <p className="rounded-lg border border-dashed border-ink/15 p-4 text-sm text-ink/60">No recorded activity.</p>}</div><Pagination page={blockPage} total={logs.length} onChange={onPageChange} /></section> : <HistoryBlock title={blockLabels[id]} messages={messages} page={blockPage} onPageChange={onPageChange} />}</div>;
 }

@@ -2,12 +2,12 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import nodemailer from "nodemailer";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { getMailSettings, getRegistrationCode } from "@/lib/app-config";
+import { getMailSettings } from "@/lib/app-config";
 import { validatePassword } from "@/lib/password-policy";
-import { notifyUserCreated } from "@/lib/user-notifications";
+import { notifyMemberLinkRequested, notifyUserCreated } from "@/lib/user-notifications";
 import { logAudit } from "@/lib/audit";
 
-type RegistrationInput = { firstName: string; lastName: string; email: string; churchCode?: string };
+type RegistrationInput = { firstName: string; lastName: string; email: string; memberRequested?: boolean; churchCode?: string };
 
 export async function registerUser(input: RegistrationInput) {
   const firstName = input.firstName.trim();
@@ -17,18 +17,23 @@ export async function registerUser(input: RegistrationInput) {
 
   const token = randomBytes(32).toString("hex");
   const tokenHash = hashToken(token);
-  const churchMember = await isChurchCodeValid(input.churchCode);
-  const member = churchMember
-    ? await db.memberProfile.findFirst({ where: { email, userId: null, firstName, lastName } })
-    : null;
+  const memberRequested = input.memberRequested === true;
+  const visitorGroup = await db.securityGroup.findUnique({ where: { slug: "visitor" }, select: { id: true } });
   const user = await db.$transaction(async (tx) => {
     const created = await tx.user.create({
       data: {
         email,
         name: `${firstName} ${lastName}`,
         role: "viewer",
+        groupId: visitorGroup?.id ?? null,
         emailVerifiedAt: null,
-        memberProfile: member ? { connect: { id: member.id } } : undefined,
+        membershipLinkRequests: memberRequested ? {
+          create: {
+            requestedFirstName: firstName,
+            requestedLastName: lastName,
+            requestedEmail: email
+          }
+        } : undefined,
         verificationTokens: { create: { tokenHash, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } }
       }
     });
@@ -37,8 +42,11 @@ export async function registerUser(input: RegistrationInput) {
 
   await sendVerificationEmail(email, `${firstName} ${lastName}`, token);
   await notifyUserCreated({ name: user.name, createdAt: user.createdAt, source: "self-registration" });
+  if (memberRequested) {
+    await notifyMemberLinkRequested({ name: user.name, email: user.email, createdAt: user.createdAt });
+  }
   await logAudit({ activityType: "user-created", summary: `Created user ${user.name}`, details: `Email: ${user.email}. Source: self-registration.` });
-  return { id: user.id, memberLinked: Boolean(member) };
+  return { id: user.id, memberLinkRequested: memberRequested };
 }
 
 export async function verifyEmail(token: string) {
@@ -65,14 +73,6 @@ export async function setPassword(token: string, password: string) {
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
-}
-
-async function isChurchCodeValid(code?: string) {
-  const expected = await getRegistrationCode();
-  if (!code || !expected) return false;
-  const provided = Buffer.from(code);
-  const expectedBuffer = Buffer.from(expected);
-  return provided.length === expectedBuffer.length && timingSafeEqual(provided, expectedBuffer);
 }
 
 async function sendVerificationEmail(email: string, name: string, token: string) {

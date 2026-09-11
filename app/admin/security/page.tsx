@@ -5,6 +5,7 @@ import { Button, Container, Card, Notification } from "@/components/ui";
 
 const permissionOptions = [
   ["ACCESS_ADMIN", "Access admin area"],
+  ["MY_MEMBERSHIP", "My Membership"],
   ["EDIT_PAGES", "Edit pages"],
   ["PUBLISH_PAGES", "Publish pages"],
   ["MANAGE_MENUS", "Manage menus"],

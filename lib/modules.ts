@@ -22,12 +22,9 @@ export async function isPublicSiteEnabled() {
   return settings?.publicSiteEnabled !== false;
 }
 
-export async function getAvailableModules(userId: string) {
-  const [enabledSlugs, user] = await Promise.all([
-    getEnabledModuleSlugs(),
-    db.user.findUnique({ where: { id: userId }, select: { group: { select: { permissions: { select: { permission: true } } } } } })
-  ]);
-  const permissions = new Set(user?.group?.permissions.map(({ permission }) => permission));
+export async function getAvailableModules(userId: string, effectivePermissions?: Permission[]) {
+  const enabledSlugs = await getEnabledModuleSlugs();
+  const permissions = new Set(effectivePermissions ?? (await db.user.findUnique({ where: { id: userId }, select: { group: { select: { permissions: { select: { permission: true } } } } } }))?.group?.permissions.map(({ permission }) => permission));
   return MODULES.filter((module) => enabledSlugs.includes(module.slug) && permissions.has(module.permission));
 }
 

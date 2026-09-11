@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { preferredContactMethodLabel } from "@/lib/membership-contact-preferences";
 import {
   EMAIL_ATTACHMENT_TYPES,
   EMAIL_SAFE_FONTS,
@@ -15,6 +16,9 @@ type Recipient = {
   name: string;
   email: string | null;
   phone: string | null;
+  preferredContactMethod: string;
+  doNotContact: boolean;
+  communicationNotes: string | null;
   emailEligible: boolean;
   smsEligible: boolean;
   emailReason: string | null;
@@ -40,7 +44,7 @@ type Attachment = {
 type Props = { initialMemberIds: string[]; initialTarget?: string; initialAudienceId?: string };
 type HistoryRecipient = { id: string; displayName: string; address: string; status: string; attemptCount: number; failureReason: string | null; deliveryAttempts: { status: string; error: string | null; attemptedAt: string }[] };
 type HistoryMessage = { id: string; channel: "EMAIL" | "SMS"; subject: string | null; status: string; deliveryNote: string | null; createdAt: string; createdBy: { name: string }; recipients: HistoryRecipient[] };
-type MessageTarget = "selected-members" | "volunteer-group" | "member-type" | "manual-list" | "dynamic-list";
+type MessageTarget = "selected-members" | "active-members" | "inactive-members" | "deceased-members" | "volunteer-group" | "member-type" | "manual-list" | "dynamic-list";
 type Alignment = "left" | "center" | "right" | "full";
 
 const inputClass = "focus-ring rounded-lg border border-ink/15 bg-white px-3 py-2";
@@ -75,6 +79,8 @@ export function MembershipMessaging({ initialMemberIds, initialTarget, initialAu
   const [provider, setProvider] = useState({ emailConfigured: false, smsConfigured: false, churchName: "St. Paul's" });
   const [recipientLimit, setRecipientLimit] = useState(200);
   const [history, setHistory] = useState<HistoryMessage[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [retrying, setRetrying] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -126,8 +132,16 @@ export function MembershipMessaging({ initialMemberIds, initialTarget, initialAu
   }, [memberIds, target, audienceId]);
 
   useEffect(() => {
-    void fetch("/api/membership/messaging/history").then((response) => response.ok ? response.json() : []).then((value) => setHistory(Array.isArray(value) ? value : [])).catch(() => undefined);
-  }, [sentChannels]);
+    void fetch(`/api/membership/messaging/history?page=${historyPage}`)
+      .then(async (response) => {
+        if (!response.ok) return [];
+        const value = await response.json();
+        setHistoryTotalPages(Number.parseInt(response.headers.get("X-Message-History-Total-Pages") ?? "1", 10) || 1);
+        return value;
+      })
+      .then((value) => setHistory(Array.isArray(value) ? value : []))
+      .catch(() => undefined);
+  }, [sentChannels, historyPage]);
 
   useEffect(() => {
     if (channel === "EMAIL" && editorRef.current && editorRef.current.innerHTML !== bodyHtml) {
@@ -138,6 +152,7 @@ export function MembershipMessaging({ initialMemberIds, initialTarget, initialAu
   const emailEligible = recipients.filter((recipient) => recipient.emailEligible);
   const smsEligible = recipients.filter((recipient) => recipient.smsEligible);
   const eligible = channel === "EMAIL" ? emailEligible : smsEligible;
+  const statusTarget = target === "active-members" || target === "inactive-members" || target === "deceased-members";
   const selectedImageNumber = selectedImageId && editorRef.current
     ? Array.from(editorRef.current.querySelectorAll("img")).findIndex((image) => image.dataset.imageId === selectedImageId) + 1
     : 0;
@@ -494,7 +509,7 @@ export function MembershipMessaging({ initialMemberIds, initialTarget, initialAu
       const value = await response.json();
       if (!response.ok) throw new Error(value.error ?? "Unable to retry failed recipients.");
       setNotice(value.deliveryNote);
-      const refreshed = await fetch("/api/membership/messaging/history").then((result) => result.json());
+      const refreshed = await fetch(`/api/membership/messaging/history?page=${historyPage}`).then((result) => result.json());
       setHistory(Array.isArray(refreshed) ? refreshed : []);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to retry failed recipients.");
@@ -529,6 +544,9 @@ export function MembershipMessaging({ initialMemberIds, initialTarget, initialAu
         <select value={target} onChange={(event) => { setTarget(event.target.value as MessageTarget | ""); setAudienceId(""); setError(""); }} className={inputClass}>
           <option value="">Choose a target…</option>
           <option value="selected-members">Selected members{memberIds.length ? ` (${memberIds.length})` : " (none selected)"}</option>
+          <option value="active-members">All active members</option>
+          <option value="inactive-members">All inactive members</option>
+          <option value="deceased-members">All deceased members</option>
           <option value="volunteer-group">Volunteer group</option>
           <option value="member-type">Member type</option>
           <option value="manual-list">Manual list</option>
@@ -541,13 +559,13 @@ export function MembershipMessaging({ initialMemberIds, initialTarget, initialAu
       {target === "dynamic-list" && <select value={audienceId} onChange={(event) => setAudienceId(event.target.value)} className={`${inputClass} mt-3 w-full`}><option value="">Choose a dynamic list...</option>{audiences.dynamicLists.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}{entry.count === undefined ? "" : ` (${entry.count})`}</option>)}</select>}
       <div className="mt-6 border-t border-ink/10 pt-5">
         <h2 className="font-serif text-2xl">Recipients</h2>
-        {target && (target === "selected-members" ? memberIds.length > 0 : audienceId) ? <>
+        {target && (target === "selected-members" ? memberIds.length > 0 : (statusTarget || audienceId)) ? <>
           <p className="mt-1 text-sm text-ink/60">{recipients.length} selected · {eligible.length} eligible for {channel === "EMAIL" ? "email" : "SMS"} · limit {recipientLimit.toLocaleString()}</p>
           <div className="mt-5 grid gap-2">
             {recipients.map((recipient) => {
               const isEligible = channel === "EMAIL" ? recipient.emailEligible : recipient.smsEligible;
               const address = channel === "EMAIL" ? recipient.email : recipient.phone;
-              return <div key={recipient.id} className={`rounded-xl border p-3 ${isEligible ? "border-ink/10" : "border-ink/10 bg-mist/50 opacity-75"}`}><div className="flex items-start gap-2"><span aria-hidden="true" className={`mt-0.5 text-sm ${isEligible ? "text-emerald-700" : "text-ink/40"}`}>{isEligible ? "✓" : "—"}</span><div className="min-w-0"><p className="text-sm font-semibold">{recipient.name}</p><p className="truncate text-xs text-ink/55">{isEligible ? address : (channel === "EMAIL" ? recipient.emailReason : recipient.smsReason)}</p></div></div></div>;
+              return <div key={recipient.id} className={`rounded-xl border p-3 ${isEligible ? "border-ink/10" : "border-ink/10 bg-mist/50 opacity-75"}`}><div className="flex items-start gap-2"><span aria-hidden="true" className={`mt-0.5 text-sm ${isEligible ? "text-emerald-700" : "text-ink/40"}`}>{isEligible ? "✓" : "—"}</span><div className="min-w-0"><p className="text-sm font-semibold">{recipient.name}{recipient.doNotContact ? " · Do not contact" : ""}</p><p className="truncate text-xs text-ink/55">{isEligible ? address : (channel === "EMAIL" ? recipient.emailReason : recipient.smsReason)} · Preferred: {preferredContactMethodLabel(recipient.preferredContactMethod)}</p>{recipient.communicationNotes && <p className="mt-1 text-xs text-ink/70">{recipient.communicationNotes}</p>}</div></div></div>;
             })}
           </div>
           <div className="mt-5 border-t border-ink/10 pt-4 text-xs text-ink/60"><p><strong className="text-ink">Eligible</strong> members have opted in and have a usable {channel === "EMAIL" ? "email address" : "mobile number"}.</p><p className="mt-2">Ineligible members stay visible for an auditable recipient review and are never sent a message.</p></div>
@@ -604,6 +622,7 @@ export function MembershipMessaging({ initialMemberIds, initialTarget, initialAu
         const failed = message.recipients.filter((recipient) => recipient.status === "FAILED");
         return <div key={message.id} className="rounded-xl border border-ink/10 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{message.channel === "EMAIL" ? "Email" : "SMS"}{message.subject ? ` · ${message.subject}` : ""}</p><p className="mt-1 text-xs text-ink/55">{new Date(message.createdAt).toLocaleString()} · {message.createdBy.name} · {message.recipients.length} recipient{message.recipients.length === 1 ? "" : "s"}</p></div><span className="rounded-full bg-mist px-3 py-1 text-xs font-semibold">{message.status}</span></div><p className="mt-2 text-sm text-ink/65">{message.deliveryNote ?? "No delivery note."}</p>{failed.length > 0 && <><div className="mt-3 grid gap-2 text-xs text-coral">{failed.slice(0, 8).map((recipient) => <div key={recipient.id} className="flex flex-wrap justify-between gap-2"><span>{recipient.displayName} · {recipient.address}</span><span>{recipient.failureReason ?? "Delivery failed"} · {recipient.attemptCount} attempt{recipient.attemptCount === 1 ? "" : "s"}</span></div>)}</div><button type="button" disabled={retrying === message.id} onClick={() => void retryFailed(message.id)} className="focus-ring mt-3 rounded-full border border-coral px-4 py-2 text-xs font-semibold text-coral disabled:opacity-50">{retrying === message.id ? "Retrying…" : `Retry ${failed.length} failed recipient${failed.length === 1 ? "" : "s"}`}</button></>}</div>;
       })}{!history.length && <p className="text-sm text-ink/55">No messages have been sent yet.</p>}</div>
+      {historyTotalPages > 1 && <div className="mt-5 flex items-center justify-between border-t border-ink/10 pt-4"><button type="button" disabled={historyPage === 1} onClick={() => setHistoryPage((page) => Math.max(1, page - 1))} className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">Previous</button><span className="text-sm text-ink/60">Page {historyPage} of {historyTotalPages}</span><button type="button" disabled={historyPage >= historyTotalPages} onClick={() => setHistoryPage((page) => Math.min(historyTotalPages, page + 1))} className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">Next</button></div>}
     </section>
   </div>;
 }

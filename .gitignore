@@ -5,6 +5,7 @@
 node_modules/
 .next/
 out/
+storage/
 
 next-env.d.ts
 tsconfig.tsbuildinfo

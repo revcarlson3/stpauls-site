@@ -9,7 +9,7 @@ import { MODULES } from "@/lib/modules";
 export default function SiteSettingsPage() {
   const pathname = usePathname();
   const messagingPage = pathname.endsWith("/messaging");
-  const [settings, setSettings] = useState({ emailProvider: "smtp", emailApiKey: "", emailApiSecret: "", emailApiDomain: "", emailApiRegion: "", smtpHost: "", smtpPort: 587, smtpUser: "", smtpPassword: "", emailFrom: "", smsProvider: "twilio", smsAccountId: "", smsAuthSecret: "", smsFrom: "", registrationCode: "", pollinationsApiKey: "", pollinationsApiKeyConfigured: false, membershipMessageRecipientLimit: 200, publicSiteEnabled: true, enabledModules: [] as string[] });
+  const [settings, setSettings] = useState({ siteName: "St. Paul's", siteTagline: "A place to belong.", emailProvider: "smtp", emailApiKey: "", emailApiSecret: "", emailApiDomain: "", emailApiRegion: "", smtpHost: "", smtpPort: 587, smtpUser: "", smtpPassword: "", emailFrom: "", smsProvider: "twilio", smsAccountId: "", smsAuthSecret: "", smsFrom: "", registrationCode: "", pollinationsApiKey: "", pollinationsApiKeyConfigured: false, membershipMessageRecipientLimit: 200, publicSiteEnabled: true, enabledModules: [] as string[] });
   const [message, setMessage] = useState("");
   const [messageVariant, setMessageVariant] = useState<"success" | "danger">("success");
   const [testRecipient, setTestRecipient] = useState("");
@@ -38,7 +38,7 @@ export default function SiteSettingsPage() {
     setMessageVariant(response.ok ? "success" : "danger");
     setMessage(response.ok ? "Settings saved." : "Unable to save site settings.");
     if (response.ok) {
-      setSettings((current) => ({ ...current, smtpPassword: "", emailApiKey: "", emailApiSecret: "", smsAuthSecret: "", registrationCode: "", pollinationsApiKeyConfigured: current.pollinationsApiKeyConfigured || Boolean(current.pollinationsApiKey), pollinationsApiKey: "" }));
+      setSettings((current) => ({ ...current, smtpPassword: "", emailApiKey: "", emailApiSecret: "", smsAuthSecret: "", pollinationsApiKeyConfigured: current.pollinationsApiKeyConfigured || Boolean(current.pollinationsApiKey), pollinationsApiKey: "" }));
       window.dispatchEvent(new Event("site-settings-updated"));
     }
 
@@ -91,9 +91,10 @@ export default function SiteSettingsPage() {
             <label className="grid gap-1 text-sm font-semibold">{settings.smsProvider === "twilio" ? "Twilio phone number" : "Sender ID"}<input value={settings.smsFrom} onChange={(event) => setSettings({ ...settings, smsFrom: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
           </section>}
           {!messagingPage && <section className="grid gap-4 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
-            <h2 className="font-serif text-2xl">Church registration</h2>
-            <p className="text-sm text-ink/60">The registration code controls who may create a church account. It is encrypted and never returned to the browser.</p>
-            <label className="grid gap-1 text-sm font-semibold">Church registration code<input type="password" placeholder="Leave blank to keep current" value={settings.registrationCode} onChange={(event) => setSettings({ ...settings, registrationCode: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
+            <h2 className="font-serif text-2xl">Administration identity</h2>
+            <p className="text-sm text-ink/60">Set the title and subtitle shown in the administration header. These values are available even when the public website is disabled.</p>
+            <label className="grid gap-1 text-sm font-semibold">Administration title<input required value={settings.siteName} onChange={(event) => setSettings({ ...settings, siteName: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
+            <label className="grid gap-1 text-sm font-semibold">Administration subtitle<input value={settings.siteTagline} onChange={(event) => setSettings({ ...settings, siteTagline: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
           </section>}
           {!messagingPage && <section className="grid gap-4 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
             <h2 className="font-serif text-2xl">AI image generation</h2>

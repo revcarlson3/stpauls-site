@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import { requireEnabledModule } from "@/lib/modules";
+import { authorizeVolunteerScheduling } from "@/lib/volunteer-scheduling-auth";
 import { db } from "@/lib/db";
 import { audienceSlug } from "@/lib/membership-audiences";
 
 async function authorize() {
-  const user = await requirePermission("MANAGE_MEMBERSHIP");
-  await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
+  await authorizeVolunteerScheduling();
 }
 
 export async function GET() {
@@ -72,9 +70,10 @@ export async function DELETE(request: Request) {
     await authorize();
     const id = new URL(request.url).searchParams.get("id")?.trim();
     if (!id) return NextResponse.json({ error: "Volunteer group is required." }, { status: 400 });
-    const group = await db.membershipVolunteerGroup.findUnique({ where: { id }, select: { _count: { select: { members: true } } } });
+    const group = await db.membershipVolunteerGroup.findUnique({ where: { id }, select: { _count: { select: { members: true, serviceOpportunities: true } } } });
     if (!group) return NextResponse.json({ error: "Volunteer group not found." }, { status: 404 });
     if (group._count.members) return NextResponse.json({ error: "Remove all members before deleting this group." }, { status: 409 });
+    if (group._count.serviceOpportunities) return NextResponse.json({ error: "Volunteer groups with service opportunities cannot be deleted." }, { status: 409 });
     await db.membershipVolunteerGroup.delete({ where: { id } });
     return NextResponse.json({ deleted: true });
   } catch {

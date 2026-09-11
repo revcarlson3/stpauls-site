@@ -1,6 +1,27 @@
+@import "datatables.net-dt/css/dataTables.dataTables.css";
+@import "datatables.net-buttons-dt/css/buttons.dataTables.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.dt-resizable-header {
+  position: relative;
+}
+
+.dt-resize-handle {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: -4px;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.report-print-meta {
+  margin-bottom: 1rem;
+  color: #586575;
+  font-size: 0.75rem;
+}
 
 :root {
   color-scheme: light;

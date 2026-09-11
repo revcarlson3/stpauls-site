@@ -1,8 +1,7 @@
 import { readFile } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import { requireEnabledModule } from "@/lib/modules";
+import { getCurrentUser, requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 const mimeTypes = new Map([
@@ -14,8 +13,13 @@ const mimeTypes = new Map([
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const user = await requirePermission("MANAGE_MEMBERSHIP");
-    await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
+    const user = await getCurrentUser();
+    if (!user) throw new Error("Unauthorized: authentication required.");
+    const group = user.effectiveGroupId ? await db.groupPermission.findUnique({ where: { groupId_permission: { groupId: user.effectiveGroupId, permission: "MANAGE_MEMBERSHIP" } }, select: { permission: true } }) : null;
+    if (!group) {
+      const linkedFamily = await db.membershipUserMemberLink.findFirst({ where: { userId: user.id, individual: { familyId: params.id } }, select: { id: true } });
+      if (!linkedFamily) throw new Error("Unauthorized: family photograph access is restricted.");
+    }
     const family = await db.membershipFamily.findUnique({ where: { id: params.id }, select: { photographUrl: true } });
     const requested = new URL(request.url).searchParams.get("file");
     if (!family?.photographUrl || !requested || family.photographUrl !== `/api/membership/families/${params.id}/photo?file=${encodeURIComponent(requested)}` || !/^[a-zA-Z0-9-]+\.(jpg|jpeg|png|webp)$/.test(requested)) {

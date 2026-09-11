@@ -7,6 +7,19 @@ import { CSS } from "@dnd-kit/utilities";
 import { Button, Container, Notification } from "@/components/ui";
 
 type MemberType = { id: string; name: string; slug: string; position: number; _count: { individuals: number } };
+type DocumentCleanupPreview = {
+  asOf: string;
+  expiredCount: number;
+  expiredSizeBytes: number;
+  truncated: boolean;
+  documents: Array<{ id: string; originalName: string; expiresAt: string; family: { lastName: string } }>;
+};
+
+function fileSizeLabel(sizeBytes: number) {
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`;
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function SortableMemberType({ type, onRemove }: { type: MemberType; onRemove: (type: MemberType) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: type.id });
@@ -29,6 +42,9 @@ export default function MembershipSettingsPage() {
   const [ageCategories, setAgeCategories] = useState<string[]>([]);
   const [ageCategoryName, setAgeCategoryName] = useState("");
   const [advancingGrades, setAdvancingGrades] = useState(false);
+  const [cleanupPreview, setCleanupPreview] = useState<DocumentCleanupPreview | null>(null);
+  const [previewingCleanup, setPreviewingCleanup] = useState(false);
+  const [cleaningDocuments, setCleaningDocuments] = useState(false);
   const [cronCopied, setCronCopied] = useState(false);
   const cronCommand = "0 2 1 9 * cd /path/to/stpauls-site && npm run membership:advance-grades >> /path/to/stpauls-site/logs/membership-cron.log 2>&1";
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -145,6 +161,44 @@ export default function MembershipSettingsPage() {
     window.setTimeout(() => setCronCopied(false), 2500);
   }
 
+  async function previewDocumentCleanup() {
+    setPreviewingCleanup(true);
+    setCleanupPreview(null);
+    setError("");
+    try {
+      const response = await fetch("/api/membership/documents/cleanup");
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error ?? "Unable to preview expired documents.");
+      setCleanupPreview(value);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to preview expired documents.");
+    } finally {
+      setPreviewingCleanup(false);
+    }
+  }
+
+  async function cleanExpiredDocuments() {
+    if (!cleanupPreview?.expiredCount) return;
+    if (!window.confirm(`Permanently delete ${cleanupPreview.expiredCount} expired membership document${cleanupPreview.expiredCount === 1 ? "" : "s"}? Documents without an expiry or with a future expiry will not be deleted.`)) return;
+    setCleaningDocuments(true);
+    setError("");
+    try {
+      const response = await fetch("/api/membership/documents/cleanup", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "DELETE_EXPIRED_MEMBERSHIP_DOCUMENTS", asOf: cleanupPreview.asOf })
+      });
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error ?? "Unable to clean up expired documents.");
+      setMessage(`${value.deletedCount} expired document${value.deletedCount === 1 ? "" : "s"} deleted and audited.${value.storageCleanupFailures ? ` ${value.storageCleanupFailures} stored file${value.storageCleanupFailures === 1 ? "" : "s"} could not be removed and require administrator attention.` : ""}`);
+      await previewDocumentCleanup();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to clean up expired documents.");
+    } finally {
+      setCleaningDocuments(false);
+    }
+  }
+
   return <main><Container className="py-10 sm:py-14">
     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Membership</p>
     <div className="flex flex-wrap items-end justify-between gap-4">
@@ -180,6 +234,22 @@ export default function MembershipSettingsPage() {
       <h2 className="font-serif text-2xl">Grade levels</h2>
       <p className="mt-2 text-sm text-ink/60">New individuals receive an estimated grade from their birthday when no grade is selected. Run this once each school year to advance members from preschool through 12th grade.</p>
       <Button type="button" onClick={() => void advanceGrades()} disabled={advancingGrades} className="mt-5">{advancingGrades ? "Updating grades…" : "Advance grade levels"}</Button>
+    </section>
+    <section className="mt-8 max-w-3xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+      <h2 className="font-serif text-2xl">Document retention cleanup</h2>
+      <p className="mt-2 text-sm text-ink/60">Cleanup is manual and disabled by default. Only documents whose saved expiry has passed are eligible. Documents with no expiry or a future expiry are always excluded.</p>
+      <div className="mt-5 flex flex-wrap gap-3">
+        <Button type="button" onClick={() => void previewDocumentCleanup()} disabled={previewingCleanup || cleaningDocuments}>{previewingCleanup ? "Checking…" : "Preview expired documents"}</Button>
+        {cleanupPreview && cleanupPreview.expiredCount > 0 && <Button type="button" onClick={() => void cleanExpiredDocuments()} disabled={cleaningDocuments}>{cleaningDocuments ? "Deleting…" : "Delete previewed expired documents"}</Button>}
+      </div>
+      {cleanupPreview && <div className="mt-4 rounded-xl border border-ink/10 bg-mist/40 p-4" aria-live="polite">
+        <p className="text-sm font-semibold">{cleanupPreview.expiredCount} expired document{cleanupPreview.expiredCount === 1 ? "" : "s"} · {fileSizeLabel(cleanupPreview.expiredSizeBytes)}</p>
+        {!cleanupPreview.expiredCount && <p className="mt-1 text-xs text-ink/55">Nothing is eligible for cleanup.</p>}
+        {!!cleanupPreview.documents.length && <ul className="mt-3 grid gap-1 text-xs text-ink/70">
+          {cleanupPreview.documents.map((document) => <li key={document.id}>{document.originalName} · {document.family.lastName} family · expired {new Date(document.expiresAt).toLocaleDateString()}</li>)}
+        </ul>}
+        {cleanupPreview.truncated && <p className="mt-2 text-xs text-ink/55">Showing the first 100 expired documents. Cleanup applies to the full preview count.</p>}
+      </div>}
     </section>
     <section className="mt-8 max-w-3xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
       <h2 className="font-serif text-2xl">Scheduled tasks</h2>

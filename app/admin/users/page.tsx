@@ -80,7 +80,7 @@ export default function UsersPage() {
 
   return <main><Container className="py-10 sm:py-14">
     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Administration</p>
-    <div className="flex flex-wrap items-center justify-between gap-4"><h1 className="mt-2 font-serif text-4xl">Users</h1><Link href="/admin/users/invite" className="focus-ring rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Invite user</Link></div>
+    <div className="flex flex-wrap items-center justify-between gap-4"><h1 className="mt-2 font-serif text-4xl">Users</h1><div className="flex gap-2"><Link href="/admin/users/member-links" className="focus-ring rounded-full border border-coral px-5 py-3 text-sm font-semibold text-coral">Membership links</Link><Link href="/admin/users/invite" className="focus-ring rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Invite user</Link></div></div>
     <p className="mt-2 max-w-2xl text-ink/60">Update account details, reset passwords, and assign security groups. Profile images will connect to membership and media storage in a later module.</p>
     {error && <p role="alert" className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p>}
     {success && <p role="status" className="mt-6 rounded-lg bg-mist p-4 text-sm text-ink">{success}</p>}

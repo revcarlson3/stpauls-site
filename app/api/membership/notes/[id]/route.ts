@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { membershipAuditDetails } from "@/lib/membership-timeline";
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   try {
@@ -37,7 +38,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     await logAudit({
       activityType: "membership-note-updated",
       summary: `Updated a membership note for ${existing.individual.firstName}.`,
-      details: `Reason: ${reason}.`,
+      details: membershipAuditDetails({ individualId: note.individualId, noteId: note.id, reason }),
       actorId: user.id
     });
     return NextResponse.json({ note });
@@ -52,7 +53,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
     const existing = await db.membershipNote.findUnique({
       where: { id: params.id },
-      select: { id: true, reason: true, individual: { select: { firstName: true } } }
+      select: { id: true, individualId: true, reason: true, individual: { select: { firstName: true } } }
     });
     if (!existing) return NextResponse.json({ error: "Membership note not found." }, { status: 404 });
 
@@ -60,7 +61,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     await logAudit({
       activityType: "membership-note-deleted",
       summary: `Deleted a membership note for ${existing.individual.firstName}.`,
-      details: `Reason: ${existing.reason}.`,
+      details: membershipAuditDetails({ individualId: existing.individualId, noteId: existing.id, reason: existing.reason }),
       actorId: user.id
     });
     return NextResponse.json({ removed: true });

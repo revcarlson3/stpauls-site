@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { membershipAuditDetails } from "@/lib/membership-timeline";
 
 const noteSelect = {
   id: true,
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
     await logAudit({
       activityType: "membership-note-created",
       summary: `Added a membership note for ${individual.firstName}.`,
-      details: `Reason: ${reason}.`,
+      details: membershipAuditDetails({ individualId: individual.id, noteId: note.id, reason }),
       actorId: user.id
     });
     return NextResponse.json({ note }, { status: 201 });

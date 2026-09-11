@@ -3,32 +3,29 @@ import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
-import { mkdir, unlink, writeFile } from "fs/promises";
+import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import { CustomFieldValidationError, saveCustomFieldValues, validateCustomFieldValues } from "@/lib/membership-custom-fields";
-
-async function removeMembershipPhoto(value: string | null) {
-  if (!value) return;
-  if (value.startsWith("/uploads/membership/")) {
-    await unlink(path.join(process.cwd(), "public", value)).catch(() => undefined);
-    return;
-  }
-  try {
-    const filename = new URL(value, "http://localhost").searchParams.get("file");
-    if (filename && /^[a-zA-Z0-9-]+\.(jpg|jpeg|png|webp)$/.test(filename)) {
-      await unlink(path.join(process.cwd(), "storage", "membership", filename)).catch(() => undefined);
-    }
-  } catch {
-    // Ignore malformed legacy paths while removing the database reference.
-  }
-}
+import { normalizePhoneNumber } from "@/lib/phone-numbers";
+import { membershipAuditDetails } from "@/lib/membership-timeline";
+import { removeMembershipPhoto } from "@/lib/membership-photo";
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await requirePermission("MANAGE_MEMBERSHIP");
     await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
-    const family = await db.membershipFamily.findUnique({ where: { id: params.id }, include: { customValues: { where: { definition: { isActive: true } }, select: { definitionId: true, value: true } } } });
+    const family = await db.membershipFamily.findUnique({
+      where: { id: params.id },
+      include: {
+        customValues: { where: { definition: { isActive: true } }, select: { definitionId: true, value: true } },
+        individuals: {
+          where: { status: { not: "REMOVED" } },
+          orderBy: [{ familyRole: { name: "asc" } }, { firstName: "asc" }],
+          select: { id: true, firstName: true, middleName: true, lastName: true, status: true, relationshipNotes: true, familyRole: { select: { name: true, slug: true } } }
+        }
+      }
+    });
     if (!family) return NextResponse.json({ error: "Family not found." }, { status: 404 });
     return NextResponse.json({ family });
   } catch {
@@ -45,13 +42,25 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     if (new URL(_request.url).searchParams.get("photo") === "1") {
       await removeMembershipPhoto(family.photographUrl);
       await db.membershipFamily.update({ where: { id: params.id }, data: { photographUrl: null } });
+      await logAudit({
+        activityType: "membership-family-updated",
+        summary: `Removed the photograph for the ${family.lastName} family.`,
+        details: membershipAuditDetails({ familyId: family.id }),
+        actorId: user.id
+      });
       return NextResponse.json({ removed: true });
     }
     await db.$transaction([
       db.membershipIndividual.updateMany({ where: { familyId: params.id }, data: { status: "REMOVED", removedAt: new Date() } }),
       db.membershipFamily.update({ where: { id: params.id }, data: { status: "REMOVED", removedAt: new Date() } })
     ]);
-    await logAudit({ activityType: "membership-family-removed", summary: `Removed membership family ${family.lastName}.`, actorId: user.id });
+    await removeMembershipPhoto(family.photographUrl);
+    await logAudit({
+      activityType: "membership-family-removed",
+      summary: `Removed membership family ${family.lastName}.`,
+      details: membershipAuditDetails({ familyId: family.id }),
+      actorId: user.id
+    });
     return NextResponse.json({ removed: true });
   } catch {
     return NextResponse.json({ error: "Unable to remove membership family." }, { status: 500 });
@@ -62,7 +71,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   try {
     const user = await requirePermission("MANAGE_MEMBERSHIP");
     await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
-    const family = await db.membershipFamily.findUnique({ where: { id: params.id }, select: { id: true, photographUrl: true } });
+    const family = await db.membershipFamily.findUnique({ where: { id: params.id }, select: { id: true, lastName: true, photographUrl: true } });
     if (!family) return NextResponse.json({ error: "Family not found." }, { status: 404 });
     const formData = await request.formData();
     const file = formData.get("photo");
@@ -77,6 +86,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
     await removeMembershipPhoto(family.photographUrl);
     const relativePath = `/api/membership/families/${params.id}/photo?file=${encodeURIComponent(filename)}`;
     const updated = await db.membershipFamily.update({ where: { id: params.id }, data: { photographUrl: relativePath } });
+    await logAudit({
+      activityType: "membership-family-updated",
+      summary: `Updated the photograph for the ${family.lastName} family.`,
+      details: membershipAuditDetails({ familyId: family.id }),
+      actorId: user.id
+    });
     return NextResponse.json({ family: updated });
   } catch {
     return NextResponse.json({ error: "Unable to upload family photograph." }, { status: 500 });
@@ -95,11 +110,16 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         : null;
       if (input.status === "ACTIVE" && !(await db.membershipIndividual.findFirst({ where: { familyId: params.id, familyRole: { slug: "head-of-household" }, status: { not: "REMOVED" } }, select: { id: true } }))) return NextResponse.json({ error: "An active family must have a Head of Household." }, { status: 409 });
       const family = await db.$transaction(async (transaction) => {
-        const updated = await transaction.membershipFamily.update({ where: { id: params.id }, data: { lastName: input.lastName.trim(), phone: input.phone.trim() || null, email: input.email.trim().toLowerCase() || null, status: input.status, formalGreeting: input.formalGreeting?.trim() || null, informalGreeting: input.informalGreeting?.trim() || null, addressStreet: input.addressStreet?.trim() || null, addressCity: input.addressCity?.trim() || null, addressState: input.addressState?.trim() || null, addressZip: input.addressZip?.trim() || null } });
+        const updated = await transaction.membershipFamily.update({ where: { id: params.id }, data: { lastName: input.lastName.trim(), phone: normalizePhoneNumber(input.phone), email: input.email.trim().toLowerCase() || null, directoryListed: typeof input.directoryListed === "boolean" ? input.directoryListed : undefined, status: input.status, formalGreeting: input.formalGreeting?.trim() || null, informalGreeting: input.informalGreeting?.trim() || null, addressStreet: input.addressStreet?.trim() || null, addressCity: input.addressCity?.trim() || null, addressState: input.addressState?.trim() || null, addressZip: input.addressZip?.trim() || null } });
         if (customFields) await saveCustomFieldValues(transaction, "FAMILY", params.id, customFields);
         return updated;
       });
-      await logAudit({ activityType: "membership-family-updated", summary: `Updated membership family ${family.lastName}.`, actorId: user.id });
+      await logAudit({
+        activityType: "membership-family-updated",
+        summary: `Updated membership family ${family.lastName}.`,
+        details: membershipAuditDetails({ familyId: family.id }),
+        actorId: user.id
+      });
       return NextResponse.json({ family });
     } catch (error) {
       if (error instanceof CustomFieldValidationError) return NextResponse.json({ error: error.message }, { status: 400 });

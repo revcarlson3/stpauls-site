@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MembershipStatus } from "@prisma/client";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
@@ -14,6 +15,7 @@ import {
 } from "@/lib/membership-messaging";
 import { sendMembershipEmail, sendSmsText } from "@/lib/membership-delivery";
 import { dynamicMemberIds, resolveAudienceMemberIds, type AudienceType } from "@/lib/membership-audiences";
+import { membershipMessageEligibility } from "@/lib/membership-privacy";
 
 const recipientSelect = {
   id: true,
@@ -23,6 +25,9 @@ const recipientSelect = {
   cellphone: true,
   emailMessagesAllowed: true,
   smsMessagesAllowed: true,
+  preferredContactMethod: true,
+  doNotContact: true,
+  communicationNotes: true,
   status: true,
   family: { select: { lastName: true, addressCity: true } }
 } as const;
@@ -50,24 +55,35 @@ function escapeHtml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+function statusForTarget(targetType: string): MembershipStatus | null {
+  if (targetType === "active-members") return MembershipStatus.ACTIVE;
+  if (targetType === "inactive-members") return MembershipStatus.INACTIVE;
+  if (targetType === "deceased-members") return MembershipStatus.DECEASED;
+  return null;
+}
+
 export async function GET(request: Request) {
   try {
     const user = await requirePermission("MANAGE_MEMBERSHIP");
     await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
     const url = new URL(request.url);
-    const targetType = (url.searchParams.get("targetType") || "selected-members") as AudienceType;
+    const targetType = url.searchParams.get("targetType") || "selected-members";
     const audienceId = url.searchParams.get("audienceId")?.trim() || "";
+    const targetStatus = statusForTarget(targetType);
+    const statusFilter: MembershipStatus | { not: MembershipStatus } = targetStatus ?? { not: MembershipStatus.REMOVED };
     if (audienceId && targetType === "selected-members") return NextResponse.json({ error: "A selected-member audience cannot include an audience ID." }, { status: 400 });
     const selectedIds = url.searchParams.getAll("memberId").flatMap((value) => value.split(",")).map((value) => value.trim()).filter(Boolean);
     const limitSettings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { membershipMessageRecipientLimit: true } });
     const recipientLimit = limitSettings?.membershipMessageRecipientLimit ?? 200;
-    const memberIds = await resolveAudienceMemberIds(targetType, targetType === "selected-members" ? selectedIds : audienceId);
-    if (memberIds.length > recipientLimit) return NextResponse.json({ error: `Select ${recipientLimit.toLocaleString()} or fewer members.` }, { status: 400 });
+    const memberIds = targetStatus
+      ? (await db.membershipIndividual.findMany({ where: { status: targetStatus }, select: { id: true } })).map((member) => member.id)
+      : await resolveAudienceMemberIds(targetType as AudienceType, targetType === "selected-members" ? selectedIds : audienceId);
     const [members, customTemplates, messageSettings] = await Promise.all([
-      db.membershipIndividual.findMany({ where: { id: { in: memberIds }, status: { not: "REMOVED" } }, select: recipientSelect }),
+      db.membershipIndividual.findMany({ where: { id: { in: memberIds }, status: statusFilter }, select: recipientSelect }),
       db.membershipMessageTemplate.findMany({ orderBy: [{ updatedAt: "desc" }], take: 50, select: { id: true, name: true, subject: true, bodyHtml: true, bodyText: true } }),
       db.securitySettings.findUnique({ where: { id: 1 }, select: { siteName: true, membershipMessageRecipientLimit: true, emailProvider: true, emailApiKeyEncrypted: true, emailApiSecretEncrypted: true, smtpHost: true, smtpUser: true, smtpPasswordEncrypted: true, emailFrom: true, smsAccountId: true, smsAuthSecretEncrypted: true, smsFrom: true } })
     ]);
+    if (members.length > recipientLimit) return NextResponse.json({ error: `Select ${recipientLimit.toLocaleString()} or fewer members.` }, { status: 400 });
     const [groups, lists, dynamicListRecords, types] = await Promise.all([
       db.membershipVolunteerGroup.findMany({ orderBy: [{ position: "asc" }, { name: "asc" }], select: { id: true, name: true, description: true, _count: { select: { members: true } } } }),
       db.membershipManualList.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, description: true, _count: { select: { members: true } } } }),
@@ -81,10 +97,13 @@ export async function GET(request: Request) {
         name: memberName(member),
         email: member.email,
         phone: member.cellphone,
-        emailEligible: Boolean(member.email && member.emailMessagesAllowed),
-        smsEligible: Boolean(member.cellphone && member.smsMessagesAllowed),
-        emailReason: !member.email ? "No email address" : !member.emailMessagesAllowed ? "Email messages not allowed" : null,
-        smsReason: !member.cellphone ? "No mobile phone" : !member.smsMessagesAllowed ? "SMS messages not allowed" : null
+        preferredContactMethod: member.preferredContactMethod,
+        doNotContact: member.doNotContact,
+        communicationNotes: member.communicationNotes,
+        emailEligible: membershipMessageEligibility(member, "EMAIL").eligible,
+        smsEligible: membershipMessageEligibility(member, "SMS").eligible,
+        emailReason: membershipMessageEligibility(member, "EMAIL").reason,
+        smsReason: membershipMessageEligibility(member, "SMS").reason
       })),
       templates: [...BUILT_IN_MESSAGE_TEMPLATES.map((template) => ({ ...template, builtIn: true })), ...customTemplates.map((template) => ({ ...template, builtIn: false }))],
       provider: {
@@ -106,22 +125,27 @@ export async function POST(request: Request) {
     const user = await requirePermission("MANAGE_MEMBERSHIP");
     await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
     const input = await request.json();
-    const targetType = (typeof input?.targetType === "string" ? input.targetType : "selected-members") as AudienceType;
+    const targetType = typeof input?.targetType === "string" ? input.targetType : "selected-members";
     const audienceId = typeof input?.audienceId === "string" ? input.audienceId.trim() : "";
+    const targetStatus = statusForTarget(targetType);
+    const statusFilter: MembershipStatus | { not: MembershipStatus } = targetStatus ?? { not: MembershipStatus.REMOVED };
     if (audienceId && targetType === "selected-members") return NextResponse.json({ error: "Choose a named audience or omit the audience ID." }, { status: 400 });
     const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { siteName: true, membershipMessageRecipientLimit: true } });
     const recipientLimit = settings?.membershipMessageRecipientLimit ?? 200;
-    const memberIds: string[] = await resolveAudienceMemberIds(targetType, targetType === "selected-members" ? input?.memberIds : audienceId);
+    const memberIds: string[] = targetStatus
+      ? (await db.membershipIndividual.findMany({ where: { status: targetStatus }, select: { id: true } })).map((member) => member.id)
+      : await resolveAudienceMemberIds(targetType as AudienceType, targetType === "selected-members" ? input?.memberIds : audienceId);
     const channel = input?.channel;
     const subject = typeof input?.subject === "string" ? input.subject.trim() : "";
     const bodyHtml = typeof input?.bodyHtml === "string" ? sanitizeEmailHtml(input.bodyHtml) : "";
     const bodyText = typeof input?.bodyText === "string" ? input.bodyText.trim().slice(0, 500_000) : htmlToText(bodyHtml);
-    if (!memberIds.length || memberIds.length > recipientLimit || !["EMAIL", "SMS"].includes(channel) || !bodyText) return NextResponse.json({ error: `Choose recipients (up to ${recipientLimit.toLocaleString()}), a channel, and a message.` }, { status: 400 });
+    if (!memberIds.length || !["EMAIL", "SMS"].includes(channel) || !bodyText) return NextResponse.json({ error: `Choose recipients (up to ${recipientLimit.toLocaleString()}), a channel, and a message.` }, { status: 400 });
     if (channel === "EMAIL" && (!subject || subject.length > 200)) return NextResponse.json({ error: "Email subject is required and must be 200 characters or fewer." }, { status: 400 });
     if (channel === "SMS" && bodyText.length > 1600) return NextResponse.json({ error: "SMS messages must be 1,600 characters or fewer." }, { status: 400 });
 
-    const members = await db.membershipIndividual.findMany({ where: { id: { in: memberIds }, status: { not: "REMOVED" } }, select: recipientSelect });
-    const eligible = members.filter((member) => channel === "EMAIL" ? Boolean(member.email && member.emailMessagesAllowed) : Boolean(member.cellphone && member.smsMessagesAllowed));
+    const members = await db.membershipIndividual.findMany({ where: { id: { in: memberIds }, status: statusFilter }, select: recipientSelect });
+    if (members.length > recipientLimit) return NextResponse.json({ error: `Select ${recipientLimit.toLocaleString()} or fewer members.` }, { status: 400 });
+    const eligible = members.filter((member) => membershipMessageEligibility(member, channel).eligible);
     if (!eligible.length) return NextResponse.json({ error: `No selected members are eligible for ${channel === "EMAIL" ? "email" : "SMS"} messaging.` }, { status: 400 });
 
     const rawAttachments: unknown[] = Array.isArray(input?.attachments) ? input.attachments : [];

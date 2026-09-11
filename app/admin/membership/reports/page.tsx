@@ -1,11 +1,8 @@
+import dynamic from "next/dynamic";
 import { Container } from "@/components/ui";
+import { ReportManager } from "./report-manager";
 
-const plannedReports = [
-  ["Membership overview", "Active, inactive, deceased, and removed member counts."],
-  ["Age and grade distribution", "Breakdowns by age category and school grade."],
-  ["Audience membership", "Volunteer groups, manual lists, dynamic lists, and member types."],
-  ["Messaging delivery", "Message volume, delivery status, failures, and retries."]
-];
+const ReportResults = dynamic(() => import("./report-results").then((module) => module.ReportResults), { ssr: false });
 
 export default function MembershipReportsPage() {
   return <main>
@@ -18,13 +15,8 @@ export default function MembershipReportsPage() {
         </div>
         <a href="/admin/membership" className="focus-ring rounded-full border border-coral px-4 py-2 text-sm font-semibold text-coral">Back to directory</a>
       </div>
-      <section className="mt-8 max-w-4xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
-        <h2 className="font-serif text-2xl">Reporting workspace</h2>
-        <p className="mt-2 text-sm text-ink/60">Report builders will be added here. The first reports will use the same live membership, audience, volunteer, and messaging data already used throughout Membership.</p>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          {plannedReports.map(([title, description]) => <div key={title} className="rounded-xl border border-ink/10 bg-mist/30 p-4"><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm text-ink/60">{description}</p></div>)}
-        </div>
-      </section>
+      <ReportManager />
+      <div className="mt-8"><ReportResults /></div>
     </Container>
   </main>;
 }

@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { hasPermission, requirePermission } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { getAvailableModules, isPublicSiteEnabled } from "@/lib/modules";
 
 export async function GET() {
   try {
-    const user = await requirePermission("ACCESS_ADMIN");
-    const [modules, canManageModules, publicSiteEnabled] = await Promise.all([
-      getAvailableModules(user.id),
-      hasPermission(user.id, "MANAGE_MODULES"),
+    const user = await getCurrentUser();
+    if (!user?.canAccessAdmin) return NextResponse.json({ error: "Unable to load modules." }, { status: 403 });
+    const [modules, publicSiteEnabled] = await Promise.all([
+      getAvailableModules(user.id, user.permissions),
       isPublicSiteEnabled()
     ]);
-    return NextResponse.json({ modules, canManageModules, publicSiteEnabled });
+    return NextResponse.json({ modules, canManageModules: user.permissions.includes("MANAGE_MODULES"), publicSiteEnabled });
   } catch {
     return NextResponse.json({ error: "Unable to load modules." }, { status: 403 });
   }

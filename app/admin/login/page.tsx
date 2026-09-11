@@ -21,6 +21,12 @@ export default function AdminLoginPage() {
   const router = useRouter();
   useEffect(() => { void fetch("/api/auth/captcha").then((response) => response.json()).then(setCaptcha).catch(() => undefined); }, []);
 
+  async function redirectAfterLogin() {
+    const response = await fetch("/api/auth/landing");
+    const value = response.ok ? await response.json() : { destination: "/account" };
+    window.location.href = typeof value.destination === "string" ? value.destination : "/account";
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -46,7 +52,7 @@ export default function AdminLoginPage() {
     }
     else if (mfaChallenge && trustDevice) {
       await fetch("/api/account/mfa/trusted-device", { method: "POST" });
-      if (result?.url) window.location.href = result.url;
+      await redirectAfterLogin();
     } else if (result?.url) {
       const session = await getSession();
       if (session?.user.mfaPending) {
@@ -55,7 +61,7 @@ export default function AdminLoginPage() {
         setMfaChannel(session.user.mfaPendingChannel ?? "authenticator");
         setMfaChannels(session.user.mfaAvailableChannels ?? [session.user.mfaPendingChannel ?? "authenticator"]);
       } else {
-        window.location.href = result.url;
+        await redirectAfterLogin();
       }
     }
   }

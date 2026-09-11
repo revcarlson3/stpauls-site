@@ -3,8 +3,13 @@ import { AdminDrawer } from "@/components/admin-drawer";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { getSiteTheme } from "@/lib/theme";
+import { isPublicSiteEnabled } from "@/lib/modules";
+import AdminLayout from "@/app/admin/layout";
 
 export default async function PublicLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  if (!(await isPublicSiteEnabled())) {
+    return <AdminLayout>{children}</AdminLayout>;
+  }
   const user = await getCurrentUser();
   const theme = await getSiteTheme();
   const integrated = theme.family === "bootstrap";

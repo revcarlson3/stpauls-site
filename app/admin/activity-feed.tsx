@@ -9,7 +9,8 @@ const labels: Record<string, string> = {
   "invitation-created": "Invitation created", "invitation-accepted": "Invitation accepted", "invitation-resent": "Invitation resent", "invitation-revoked": "Invitation revoked",
   "email-change-requested": "Email change requested", "email-changed": "Email changed", "sessions-revoked": "Sessions revoked",
   "group-created": "Group created", "group-updated": "Group updated", "group-deleted": "Group deleted",
-  "membership-note-created": "Membership note created", "membership-note-updated": "Membership note updated", "membership-note-deleted": "Membership note deleted"
+  "membership-note-created": "Membership note created", "membership-note-updated": "Membership note updated", "membership-note-deleted": "Membership note deleted",
+  "membership-document-uploaded": "Membership document uploaded", "membership-document-downloaded": "Membership document downloaded", "membership-document-retention-updated": "Membership document retention updated", "membership-document-deleted": "Membership document deleted"
 };
 
 export default function ActivityFeed() {

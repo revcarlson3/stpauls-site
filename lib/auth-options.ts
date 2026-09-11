@@ -7,6 +7,7 @@ import { verifyCaptcha } from "@/lib/captcha";
 import { consumeRecoveryCode, createOtpChallenge, verifyOtpChallenge, verifyTotp } from "@/lib/mfa";
 import { decryptConfig } from "@/lib/app-config";
 import { sendEmailMfaCode, sendSmsMfaCode } from "@/lib/mfa-delivery";
+import { canAccessAdmin } from "@/lib/permissions";
 
 const REMEMBERED_SESSION_SECONDS = 60 * 24 * 60 * 60;
 const STANDARD_SESSION_SECONDS = 24 * 60 * 60;
@@ -55,7 +56,8 @@ export const authOptions: NextAuthOptions = {
           });
           return null;
         }
-        const access = await db.groupPermission.findUnique({ where: { groupId_permission: { groupId: user.groupId ?? "", permission: "ACCESS_ADMIN" } } });
+        const groupPermissions = await db.groupPermission.findMany({ where: { groupId: user.groupId ?? "" }, select: { permission: true } });
+        const access = canAccessAdmin(groupPermissions.map(({ permission }) => permission));
         const trusted = settings.mfaChallengePolicy === "trusted-device" && await isTrustedDevice(req.headers?.cookie, user.id);
         const availableChannels = [
           settings.emailMfaEnabled && user.emailMfaEnabled && user.emailVerifiedAt ? "email" : "",
@@ -82,13 +84,13 @@ export const authOptions: NextAuthOptions = {
             } catch {
               await db.mfaChallenge.delete({ where: { id: challenge.id } });
               if (authenticatorAvailable) {
-                return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: "authenticator", mfaAvailableChannels: ["authenticator"] };
+                return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: access, rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: "authenticator", mfaAvailableChannels: ["authenticator"] };
               }
               throw new Error("The email verification code could not be sent. Check the email delivery settings or use another verification method.");
             }
-            return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: channel, mfaAvailableChannels: [...(authenticatorAvailable ? ["authenticator" as const] : []), ...availableChannels] };
+            return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: access, rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: channel, mfaAvailableChannels: [...(authenticatorAvailable ? ["authenticator" as const] : []), ...availableChannels] };
           }
-          if (!mfaCode) return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: "authenticator", mfaAvailableChannels: ["authenticator"] };
+          if (!mfaCode) return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: access, rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: "authenticator", mfaAvailableChannels: ["authenticator"] };
           let valid = Boolean(user.mfaSecretEncrypted && verifyTotp(decryptConfig(user.mfaSecretEncrypted), mfaCode));
           if (!valid && channel && channel !== "authenticator" && mfaCode) valid = (await verifyOtpChallenge({ userId: user.id, channel, purpose: "login", code: mfaCode })).valid;
           if (!valid) {
@@ -115,7 +117,7 @@ export const authOptions: NextAuthOptions = {
           }
         }
         await db.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginWindowStartedAt: null, lockedUntil: null } });
-        return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true" };
+        return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: access, rememberMe: credentials.rememberMe === "true" };
       }
     })
   ],
