@@ -6,9 +6,11 @@ import { Container } from "@/components/ui";
 import { signOut } from "next-auth/react";
 import QRCode from "qrcode";
 import Image from "next/image";
+import Link from "next/link";
 
 type Account = { name: string; email: string; emailVerifiedAt: string | null };
 type MfaState = { available: boolean; issuer: string; enabled: boolean; recoveryCodesRemaining: number; emailAvailable: boolean; emailEnabled: boolean; emailVerified: boolean; smsAvailable: boolean; smsEnabled: boolean; phoneNumber: string | null; phoneVerified: boolean };
+type MembershipAccess = { linked: boolean; pendingRequest: { id: string; createdAt: string } | null };
 
 export default function AccountPage() {
   const [account, setAccount] = useState<Account | null>(null);
@@ -23,6 +25,7 @@ export default function AccountPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [phonePassword, setPhonePassword] = useState("");
   const [pendingChannel, setPendingChannel] = useState<"email" | "sms" | null>(null);
+  const [membershipAccess, setMembershipAccess] = useState<MembershipAccess | null>(null);
 
   useEffect(() => {
     void fetch("/api/account").then(async (response) => {
@@ -31,6 +34,9 @@ export default function AccountPage() {
     }).catch((error: Error) => setMessage(error.message));
     void fetch("/api/account/mfa").then(async (response) => {
       if (response.ok) setMfa(await response.json());
+    }).catch(() => undefined);
+    void fetch("/api/account/membership").then(async (response) => {
+      if (response.ok) setMembershipAccess(await response.json());
     }).catch(() => undefined);
   }, []);
 
@@ -74,6 +80,22 @@ export default function AccountPage() {
       await signOut({ callbackUrl: "/admin/login" });
     } else {
       setMessage(body.error ?? "Unable to sign out sessions.");
+    }
+
+  }
+
+  async function requestMembershipLink() {
+    const response = await fetch("/api/account/membership", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "request-link" })
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) {
+      setMembershipAccess({ linked: false, pendingRequest: { id: "", createdAt: new Date().toISOString() } });
+      setMessage("Your membership link request was sent to the church administrators.");
+    } else {
+      setMessage(body.error ?? "Unable to request membership access.");
     }
   }
 
@@ -154,9 +176,11 @@ export default function AccountPage() {
       <Container className="py-10 sm:py-14">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Account</p>
         <h1 className="mt-2 font-serif text-4xl">Account settings</h1>
+        {membershipAccess?.linked && <Link href="/account/membership/profile" className="mt-4 inline-block text-sm font-semibold text-coral underline underline-offset-4">View my membership profile</Link>}
+        {membershipAccess && !membershipAccess.linked && <div className="mt-5 max-w-xl rounded-2xl border border-ink/10 bg-white p-5 shadow-sm"><h2 className="font-serif text-2xl">Membership access</h2>{membershipAccess.pendingRequest ? <p className="mt-2 text-sm leading-6 text-ink/60">Your request is awaiting review by a church administrator.</p> : <><p className="mt-2 text-sm leading-6 text-ink/60">Request access to your existing membership record. An administrator will review your request and email you with the result.</p><button type="button" onClick={() => void requestMembershipLink()} className="focus-ring mt-4 rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Request membership access</button></>}</div>}
         {account ? <>
           <form onSubmit={(event) => void save(event)} className="mt-8 grid max-w-xl gap-4 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
-            <p className="text-sm text-ink/60">{account.email} · {account.emailVerifiedAt ? "Email verified" : "Email not verified"}</p>
+            <p className="text-sm text-ink/60">{account.email} &middot; {account.emailVerifiedAt ? "Email verified" : "Email not verified"}</p>
             <label className="grid gap-1 text-sm font-semibold">Name<input name="name" required minLength={2} defaultValue={account.name} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
             <label className="grid gap-1 text-sm font-semibold">Email<span className="font-normal text-ink/50">A confirmation link will be sent before this becomes your sign-in email.</span><input required type="email" name="email" defaultValue={account.email} autoComplete="email" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
             <label className="grid gap-1 text-sm font-semibold">Current password<span className="font-normal text-ink/50">(required only when changing password)</span><input name="currentPassword" type="password" autoComplete="current-password" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>

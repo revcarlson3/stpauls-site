@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Container, Card } from "@/components/ui";
+import { Button, Container, Card, Notification } from "@/components/ui";
 
 const permissionOptions = [
   ["ACCESS_ADMIN", "Access admin area"],
+  ["MY_MEMBERSHIP", "My Membership"],
   ["EDIT_PAGES", "Edit pages"],
   ["PUBLISH_PAGES", "Publish pages"],
   ["MANAGE_MENUS", "Manage menus"],
@@ -114,9 +115,9 @@ export default function SecurityPage() {
         <form onSubmit={addGroup} className="mt-8 flex flex-col gap-3 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm sm:flex-row sm:items-end">
           <label className="flex-1 text-sm font-semibold">Group name<input required value={newName} onChange={(event) => setNewName(event.target.value)} className="focus-ring mt-2 block w-full rounded-lg border border-ink/15 px-3 py-2 font-normal" placeholder="Communications" /></label>
           <label className="flex-1 text-sm font-semibold">Slug<input required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={newSlug} onChange={(event) => setNewSlug(event.target.value)} className="focus-ring mt-2 block w-full rounded-lg border border-ink/15 px-3 py-2 font-normal" placeholder="communications" /></label>
-          <button type="submit" className="focus-ring rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white hover:bg-[#d95f43]">Add group</button>
+          <Button type="submit">Add group</Button>
         </form>
-        {error ? <p className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p> : (
+        {error ? <Notification variant="danger" className="mt-6">{error}</Notification> : (
           <div>
           <div className="mt-8 grid gap-6 lg:grid-cols-2">
             {groups.map((group) => {

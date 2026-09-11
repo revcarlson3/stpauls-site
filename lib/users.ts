@@ -89,7 +89,7 @@ export async function deleteUser(id: string) {
 
 export async function getOwnAccount() {
   const actor = await requireOwnAccount();
-  return db.user.findUnique({ where: { id: actor.id }, select: { id: true, email: true, name: true, emailVerifiedAt: true } });
+  return db.user.findUnique({ where: { id: actor.id }, select: { id: true, email: true, name: true, emailVerifiedAt: true } }).then((account) => account ? { ...account, canAccessAdmin: actor.canAccessAdmin, isAdministrator: actor.role === "admin", permissions: actor.permissions } : account);
 }
 
 export async function signOutAllSessions() {
@@ -123,6 +123,11 @@ async function requireOwnAccount() {
 
 export async function updateSecurityGroup(id: string, input: { name: string; permissions: Permission[] }) {
   await requirePermission("MANAGE_USERS");
+  const existing = await db.securityGroup.findUnique({ where: { id }, select: { slug: true } });
+  if (!existing) throw new Error("Security group not found.");
+  if (["visitor", "church-member", "editor", "administrator"].includes(existing.slug)) {
+    throw new Error("The default security groups cannot be changed.");
+  }
   return db.securityGroup.update({
     where: { id },
     data: {
@@ -140,7 +145,7 @@ export async function deleteSecurityGroup(id: string) {
   await requirePermission("MANAGE_USERS");
   const group = await db.securityGroup.findUnique({ where: { id }, select: { slug: true } });
   if (!group) throw new Error("Security group not found.");
-  if (["visitor", "editor", "administrator"].includes(group.slug)) {
+  if (["visitor", "church-member", "editor", "administrator"].includes(group.slug)) {
     throw new Error("The default security groups cannot be deleted.");
   }
   await db.securityGroup.delete({ where: { id } });
