@@ -104,15 +104,16 @@ export default function EditIndividualPage() {
               {families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}
             </select>
           </label>
-          <div className="grid gap-4 sm:grid-cols-4">
-            {["firstName", "middleName", "lastName"].map((key) => (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {["firstName", "middleName"].map((key) => (
               <label key={key} className="grid gap-1 text-sm font-semibold">
                 {key === "firstName" ? "First name" : key === "middleName" ? "Middle name" : "Last name"}
                 <input required={key === "firstName"} value={data[key] ?? ""} onChange={(event) => change(key, event.target.value)} className={inputClass} />
               </label>
             ))}
-            <label className="grid gap-1 text-sm font-semibold">Called by name<input value={data.calledByName ?? ""} onChange={(event) => change("calledByName", event.target.value)} className={inputClass} /></label>
           </div>
+          <label className="grid gap-1 text-sm font-semibold">Last name<input required value={data.lastName ?? ""} onChange={(event) => change("lastName", event.target.value)} className={inputClass} /></label>
+          <label className="grid gap-1 text-sm font-semibold">Called by name<input value={data.calledByName ?? ""} onChange={(event) => change("calledByName", event.target.value)} className={inputClass} /></label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="grid gap-1 text-sm font-semibold">Birthday<input required type="date" value={data.birthday ?? ""} onChange={(event) => change("birthday", event.target.value)} className={inputClass} /></label>
             <label className="grid gap-1 text-sm font-semibold">Gender<select value={data.gender ?? ""} onChange={(event) => change("gender", event.target.value)} className={inputClass}><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>

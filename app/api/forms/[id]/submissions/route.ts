@@ -5,7 +5,9 @@ import { db } from "@/lib/db";
 import { getPublicForm, listSubmissions } from "@/lib/forms";
 import { normalizeFormDefinition, validateFormValues, type FormDefinition } from "@/lib/form-config";
 import { emailSubmissionPdf, replaceShortcodes } from "@/lib/form-delivery";
-import { requirePermission } from "@/lib/auth";
+import { getCurrentUser, requirePermission } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
+import { membershipAuditDetails } from "@/lib/membership-timeline";
 
 const attempts = new Map<string, { count: number; expiresAt: number }>();
 
@@ -14,6 +16,9 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const accessibleForm = await getPublicForm(params.id);
+  if (!accessibleForm) return NextResponse.json({ error: "Form not found." }, { status: 404 });
+  const currentUser = await getCurrentUser();
   const form = await db.form.findFirst({ where: { id: params.id, enabled: true, status: "PUBLISHED" }, select: { id: true, name: true, definition: true, notificationSettings: true, exportSettings: true } });
   if (!form) return NextResponse.json({ error: "Form not found." }, { status: 404 });
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
@@ -59,7 +64,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (duplicateFields.length) return NextResponse.json({ error: "Please correct the highlighted fields.", fields: Object.fromEntries(duplicateFields.map((field) => [field.name, "This value has already been submitted."])) }, { status: 422 });
   }
   const metadata = { submittedAt: new Date().toISOString(), referrer: typeof payload.referrer === "string" ? payload.referrer.slice(0, 500) : null };
-  const submission = await db.formSubmission.create({ data: { formId: form.id, values: result.values as Prisma.InputJsonValue, metadata: metadata as Prisma.InputJsonValue, ipHash, userAgent: request.headers.get("user-agent")?.slice(0, 500) ?? null } });
+  const memberLink = currentUser ? await db.membershipUserMemberLink.findUnique({ where: { userId: currentUser.id }, select: { individualId: true } }) : null;
+  const submission = await db.formSubmission.create({ data: { formId: form.id, values: result.values as Prisma.InputJsonValue, metadata: metadata as Prisma.InputJsonValue, ipHash, userAgent: request.headers.get("user-agent")?.slice(0, 500) ?? null, userId: currentUser?.id ?? null, memberIndividualId: memberLink?.individualId ?? null } });
+  if (currentUser) {
+    await logAudit({ activityType: "membership-form-submitted", summary: `Submitted the ${form.name} form.`, actorId: currentUser.id, details: membershipAuditDetails({ individualId: memberLink?.individualId }) });
+  }
   const notificationSettings = form.notificationSettings && typeof form.notificationSettings === "object" && !Array.isArray(form.notificationSettings) ? form.notificationSettings as Record<string, unknown> : {};
   const storedNotifications = Array.isArray(notificationSettings.notifications) ? notificationSettings.notifications : [notificationSettings];
   const fileFieldNames = new Set(collectFields(result.definition.steps.flatMap((step) => step.fields)).filter((field) => field.type === "file").map((field) => field.name));

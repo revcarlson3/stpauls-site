@@ -8,7 +8,7 @@ import { Button, Notification } from "@/components/ui";
 import { PREFERRED_CONTACT_METHOD_OPTIONS } from "@/lib/membership-contact-preferences";
 
 type Count = { members?: number; individuals?: number };
-type Group = { id: string; name: string; description: string | null; position: number; leaderCount?: number; _count: Count };
+type Group = { id: string; name: string; singularName: string | null; description: string | null; position: number; leaderCount?: number; _count: Count };
 type List = { id: string; name: string; description: string | null; _count: Count };
 type Dynamic = { id: string; name: string; description: string | null; criteria: Criteria; count: number };
 type Member = { id: string; firstName: string; lastName: string | null; familyLastName?: string };
@@ -47,6 +47,10 @@ export function AudienceManager() {
   const [types, setTypes] = useState<Type[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [groupName, setGroupName] = useState("");
+  const [groupSingularName, setGroupSingularName] = useState("");
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState("");
+  const [editingGroupSingularName, setEditingGroupSingularName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
   const [listName, setListName] = useState("");
   const [listDescription, setListDescription] = useState("");
@@ -88,14 +92,21 @@ export function AudienceManager() {
   async function createSimple(kind: "volunteer-groups" | "manual-lists") {
     const clean = (kind === "volunteer-groups" ? groupName : listName).trim();
     if (!clean) return;
-    const response = await fetch(`/api/membership/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: clean, description: kind === "manual-lists" ? listDescription : groupDescription }) });
+    const response = await fetch(`/api/membership/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: clean, singularName: kind === "volunteer-groups" ? groupSingularName : undefined, description: kind === "manual-lists" ? listDescription : groupDescription }) });
     const value = await response.json();
     if (!response.ok) { setError(value.error ?? "Unable to create audience."); return; }
-    if (kind === "volunteer-groups") { setGroupName(""); setGroupDescription(""); } else { setListName(""); setListDescription(""); }
+    if (kind === "volunteer-groups") { setGroupName(""); setGroupSingularName(""); setGroupDescription(""); } else { setListName(""); setListDescription(""); }
     setMessage("Audience created."); await load();
   }
 
   async function renameSimple(kind: "volunteer-groups" | "manual-lists", item: Group | List) {
+    if (kind === "volunteer-groups") {
+      const group = item as Group;
+      setEditingGroup(group);
+      setEditingGroupName(group.name);
+      setEditingGroupSingularName(group.singularName ?? "");
+      return;
+    }
     const next = window.prompt("New name", item.name)?.trim();
     if (!next || next === item.name) return;
     const response = await fetch(`/api/membership/${kind}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, name: next, description: item.description ?? "" }) });
@@ -103,10 +114,29 @@ export function AudienceManager() {
     if (!response.ok) setError(value.error ?? "Unable to rename audience."); else { setMessage("Audience renamed."); await load(); }
   }
 
+  async function saveGroupEdit() {
+    if (!editingGroup) return;
+    const name = editingGroupName.trim();
+    const singularName = editingGroupSingularName.trim();
+    if (!name || !singularName) {
+      setError("Enter both the plural group name and its singular name.");
+      return;
+    }
+    const response = await fetch("/api/membership/volunteer-groups", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editingGroup.id, name, singularName, description: editingGroup.description ?? "" }) });
+    const value = await response.json();
+    if (!response.ok) {
+      setError(value.error ?? "Unable to update volunteer group.");
+      return;
+    }
+    setEditingGroup(null);
+    setMessage("Volunteer group names updated.");
+    await load();
+  }
+
   async function duplicateSimple(kind: "volunteer-groups" | "manual-lists", item: Group | List) {
     const name = window.prompt("Name for the duplicate", `Copy of ${item.name}`)?.trim();
     if (!name) return;
-    const response = await fetch(`/api/membership/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, description: item.description ?? "", copyOfId: item.id }) });
+    const response = await fetch(`/api/membership/${kind}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, singularName: kind === "volunteer-groups" ? (item as Group).singularName : undefined, description: item.description ?? "", copyOfId: item.id }) });
     const value = await response.json();
     if (!response.ok) setError(value.error ?? "Unable to duplicate audience."); else { setMessage("Audience duplicated."); await load(); }
   }
@@ -145,7 +175,7 @@ export function AudienceManager() {
 
   async function searchMembers(search: string) {
     setMemberSearch(search);
-    const response = await fetch(`/api/membership?status=active${search ? `&search=${encodeURIComponent(search)}` : ""}`);
+    const response = await fetch(`/api/membership?status=active&forAssignment=1${search ? `&search=${encodeURIComponent(search)}` : ""}`);
     const value = await response.json();
     if (response.ok) setMembers(value.members ?? []);
   }
@@ -180,13 +210,13 @@ export function AudienceManager() {
     if (memberSort === "firstName") return a.firstName.localeCompare(b.firstName);
     if (memberSort === "assignedAt") return 0;
     return (a.lastName ?? a.familyLastName ?? "").localeCompare(b.lastName ?? b.familyLastName ?? "") || a.firstName.localeCompare(b.firstName);
-  }).slice(0, 100), [members, memberSort]);
+  }), [members, memberSort]);
   return <div id="audiences" className="mt-8 grid gap-6 xl:grid-cols-2">
     {message && <Notification variant="success" className="xl:col-span-2">{message}</Notification>}
     {error && <Notification variant="danger" className="xl:col-span-2">{error}</Notification>}
     <section className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
       <h2 className="font-serif text-2xl">Volunteer groups</h2><p className="mt-2 text-sm text-ink/60">Create reusable volunteer audiences, order them, and manage their members.</p>
-      <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><input value={groupName} onChange={(event) => setGroupName(event.target.value)} className={`${inputClass} min-w-0`} placeholder="Group name" maxLength={100} /><input value={groupDescription} onChange={(event) => setGroupDescription(event.target.value)} className={inputClass} placeholder="Description (optional)" maxLength={500} /><Button type="button" onClick={() => void createSimple("volunteer-groups")}>Add</Button></div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]"><input value={groupName} onChange={(event) => setGroupName(event.target.value)} className={`${inputClass} min-w-0`} placeholder="Plural group name" maxLength={100} /><input value={groupSingularName} onChange={(event) => setGroupSingularName(event.target.value)} className={inputClass} placeholder="Singular name (optional)" maxLength={100} /><input value={groupDescription} onChange={(event) => setGroupDescription(event.target.value)} className={inputClass} placeholder="Description (optional)" maxLength={500} /><Button type="button" onClick={() => void createSimple("volunteer-groups")}>Add</Button></div>
       <div className="mt-4 grid gap-2"><DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event) => void reorder(event)}><SortableContext items={groups.map((group) => group.id)} strategy={verticalListSortingStrategy}>{groups.map((group) => <div key={group.id}><SortableGroup group={group} onEdit={(item) => void renameSimple("volunteer-groups", item)} onDelete={(item) => void deleteSimple("volunteer-groups", item)} /><p className="ml-10 text-xs text-ink/55">{group.description || "No description"} · {group.leaderCount ?? 0} leader{(group.leaderCount ?? 0) === 1 ? "" : "s"}</p><div className="ml-10 mt-1 flex flex-wrap gap-3"><button type="button" onClick={() => void openMembers("group", group.id)} className="text-xs font-semibold text-coral">Manage volunteers</button><button type="button" onClick={() => void duplicateSimple("volunteer-groups", group)} className="text-xs font-semibold text-coral">Duplicate</button><a href={`/admin/membership/messaging?target=volunteer-group&audienceId=${encodeURIComponent(group.id)}`} className="text-xs font-semibold text-coral">Message group</a></div></div>)}</SortableContext></DndContext>{!groups.length && <p className="text-sm text-ink/55">No volunteer groups yet.</p>}</div>
     </section>
     <section className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
@@ -226,5 +256,6 @@ export function AudienceManager() {
       <div className="mt-5 grid gap-2 md:grid-cols-2">{dynamicLists.map((list) => <div key={list.id} className="flex items-center gap-3 rounded-xl border border-ink/10 p-3"><div className="min-w-0 flex-1"><p className="font-semibold">{list.name}</p><p className="text-xs text-ink/55">{list.description || "No description"} · {criteriaSummary(list.criteria)} · {list.count} matching member{list.count === 1 ? "" : "s"}</p></div><a href={`/admin/membership?dynamicListId=${encodeURIComponent(list.id)}`} className="text-sm font-semibold text-coral">View members</a><button type="button" onClick={() => { setEditingDynamic(list.id); setDynamicName(list.name); setDynamicDescription(list.description ?? ""); setCriteria({ conditions: list.criteria.conditions ?? [], match: list.criteria.match ?? "all" }); }} className="text-sm font-semibold text-coral">Edit</button><button type="button" onClick={() => void fetch("/api/membership/dynamic-lists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: `Copy of ${list.name}`, description: list.description ?? "", criteria: list.criteria }) }).then(() => load())} className="text-sm font-semibold text-coral">Duplicate</button><button type="button" onClick={() => void deleteDynamic(list)} className="text-sm font-semibold text-coral">Delete</button></div>)}</div>
     </section>
     {selectedAudience && <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"><div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl"><div className="flex items-center justify-between"><h2 className="font-serif text-2xl">Assign members</h2><button type="button" onClick={() => setSelectedAudience(null)} className="text-ink/60">Close</button></div><div className="mt-4 flex gap-2"><input value={memberSearch} onChange={(event) => void searchMembers(event.target.value)} className={`${inputClass} min-w-0 flex-1`} placeholder="Search members" /><select value={memberSort} onChange={(event) => { const sort = event.target.value as typeof memberSort; setMemberSort(sort); void reloadAssignedMembers(sort); }} className={inputClass} aria-label="Sort assigned members"><option value="lastName">Last name</option><option value="firstName">First name</option><option value="assignedAt">Recently assigned</option></select></div><p className="mt-2 text-xs text-ink/55">Sorting changes the visible assignment order; it does not change membership.</p>    <div className="mt-4 grid max-h-96 gap-2 overflow-auto">{visibleMembers.map((member) => <label key={member.id} className="flex items-center gap-3 rounded-lg border border-ink/10 p-3"><input type="checkbox" checked={assigned.includes(member.id)} onChange={(event) => { setAssigned((current) => event.target.checked ? [...current, member.id] : current.filter((id) => id !== member.id)); if (event.target.checked && selectedAudience.kind === "group" && !volunteerDetails[member.id]) setVolunteerDetails((current) => ({ ...current, [member.id]: { role: "", isLeader: false, availability: "", skills: "" } })); }} /><span>{member.firstName} {member.lastName ?? member.familyLastName ?? ""}</span></label>)}</div>{selectedAudience.kind === "group" && <div className="mt-4 grid gap-3 border-t border-ink/10 pt-4"><h3 className="font-semibold">Volunteer details</h3>{visibleMembers.filter((member) => assigned.includes(member.id)).map((member) => { const detail = volunteerDetails[member.id] ?? { role: "", isLeader: false, availability: "", skills: "" }; return <div key={member.id} className="grid gap-2 rounded-lg bg-mist/40 p-3 sm:grid-cols-2"><p className="font-semibold sm:col-span-2">{member.firstName} {member.lastName ?? member.familyLastName ?? ""}</p><input value={detail.role} onChange={(event) => setVolunteerDetails((current) => ({ ...current, [member.id]: { ...detail, role: event.target.value } }))} className={inputClass} placeholder="Role in group" /><input value={detail.skills} onChange={(event) => setVolunteerDetails((current) => ({ ...current, [member.id]: { ...detail, skills: event.target.value } }))} className={inputClass} placeholder="Skills" /><input value={detail.availability} onChange={(event) => setVolunteerDetails((current) => ({ ...current, [member.id]: { ...detail, availability: event.target.value } }))} className={`${inputClass} sm:col-span-2`} placeholder="Availability (days, times, notes)" /><label className="flex items-center gap-2 text-sm font-semibold sm:col-span-2"><input type="checkbox" checked={detail.isLeader} onChange={(event) => setVolunteerDetails((current) => ({ ...current, [member.id]: { ...detail, isLeader: event.target.checked } }))} /> Group leader</label></div>; })}</div>}<div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setSelectedAudience(null)} className="rounded-full border border-ink/15 px-4 py-2 text-sm font-semibold">Cancel</button><Button type="button" onClick={() => void saveMembers()}>Save members</Button></div></div></div>}
+    {editingGroup && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/40 p-4" role="presentation"><div role="dialog" aria-modal="true" aria-labelledby="edit-group-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"><div className="flex items-start justify-between gap-4"><div><h2 id="edit-group-title" className="font-serif text-2xl">Edit volunteer group names</h2><p className="mt-1 text-sm text-ink/60">Use the plural name for the admin group and the singular name in messages to one volunteer.</p></div><button type="button" onClick={() => setEditingGroup(null)} className="text-ink/60" aria-label="Close">Close</button></div><div className="mt-5 grid gap-4"><label className="grid gap-1 text-sm font-semibold">Plural group name<input value={editingGroupName} onChange={(event) => setEditingGroupName(event.target.value)} className={inputClass} maxLength={100} /></label><label className="grid gap-1 text-sm font-semibold">Singular name<input value={editingGroupSingularName} onChange={(event) => setEditingGroupSingularName(event.target.value)} className={inputClass} maxLength={100} placeholder="e.g. Reader" /></label></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setEditingGroup(null)} className="rounded-full border border-ink/15 px-4 py-2 text-sm font-semibold">Cancel</button><Button type="button" onClick={() => void saveGroupEdit()}>Save names</Button></div></div></div>}
   </div>;
 }

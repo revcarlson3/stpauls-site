@@ -18,16 +18,36 @@ export async function GET(request: Request, { params }: { params: { id: string }
     await authorize();
     const event = await db.membershipEvent.findUnique({
       where: { id: params.id },
-      select: { id: true, title: true, startsAt: true, endsAt: true, status: true, eventType: true, location: true }
+      select: { id: true, title: true, startsAt: true, endsAt: true, status: true, eventType: true, location: true, visitorCount: true, attendanceAudienceType: true, attendanceAudienceId: true, volunteerGroups: { select: { groupId: true, group: { select: { name: true } } } } }
     });
     if (!event) return NextResponse.json({ error: "Membership event not found." }, { status: 404 });
     const url = new URL(request.url);
     const page = positiveInteger(url.searchParams.get("page"), 1, 100000);
     const pageSize = positiveInteger(url.searchParams.get("pageSize"), 50, 100);
     const search = url.searchParams.get("search")?.trim().slice(0, 120) ?? "";
+    const eventGroupIds = event.attendanceAudienceType === "VOLUNTEER" && event.attendanceAudienceId
+      ? [event.attendanceAudienceId]
+      : event.attendanceAudienceType ? [] : event.volunteerGroups.map((link) => link.groupId);
+    const manualListId = event.attendanceAudienceType === "MANUAL" ? event.attendanceAudienceId : null;
+    const manualList = manualListId ? await db.membershipManualList.findUnique({ where: { id: manualListId }, select: { name: true } }) : null;
+    const audienceGroup = event.attendanceAudienceType === "VOLUNTEER" && event.attendanceAudienceId
+      ? await db.membershipVolunteerGroup.findUnique({ where: { id: event.attendanceAudienceId }, select: { name: true } })
+      : null;
+    const linkedGroupNames = audienceGroup ? [audienceGroup.name] : event.volunteerGroups.filter((link) => eventGroupIds.includes(link.groupId)).map((link) => link.group.name);
+    const rosterSource = event.attendanceAudienceType === "VOLUNTEER"
+      ? { type: "VOLUNTEER_GROUP", label: `Linked volunteer group${linkedGroupNames[0] ? `: ${linkedGroupNames[0]}` : ""}` }
+      : event.attendanceAudienceType === "MANUAL"
+        ? { type: "MANUAL_AUDIENCE", label: `Explicit audience${manualList?.name ? `: ${manualList.name}` : ""}` }
+        : event.attendanceAudienceType === "DYNAMIC"
+          ? { type: "DYNAMIC_AUDIENCE", label: "Explicit dynamic audience" }
+          : { type: "VOLUNTEER_GROUP", label: `Linked volunteer group${linkedGroupNames.length ? `: ${linkedGroupNames.join(", ")}` : ""}` };
+    const rosterMembership = eventGroupIds.length
+      ? [{ volunteerGroups: { some: { groupId: { in: eventGroupIds } } } }]
+      : manualListId ? [{ manualLists: { some: { listId: manualListId } } }] : [];
     const memberWhere = {
       AND: [
-        { OR: [{ status: { not: "REMOVED" as const } }, { attendanceRecords: { some: { eventId: params.id } } }] },
+        { OR: [...rosterMembership, { attendanceRecords: { some: { eventId: params.id } } }] },
+        { status: { not: "REMOVED" as const } },
         ...(search ? [{ OR: [
           { firstName: { contains: search, mode: "insensitive" as const } },
           { lastName: { contains: search, mode: "insensitive" as const } },
@@ -47,7 +67,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
           attendanceRecords: {
             where: { eventId: params.id },
             take: 1,
-            select: { id: true, status: true, participationType: true, source: true, checkedInAt: true, minutesParticipated: true, notes: true, recordedAt: true, updatedAt: true }
+            select: { id: true, status: true, source: true, checkedInAt: true, minutesParticipated: true, notes: true, recordedAt: true, updatedAt: true }
           }
         }
       }),
@@ -55,13 +75,19 @@ export async function GET(request: Request, { params }: { params: { id: string }
       db.membershipAttendanceRecord.groupBy({ by: ["status"], where: { eventId: params.id }, _count: { _all: true } })
     ]);
     return NextResponse.json({
-      event,
+      event: { ...event, rosterSource },
       members: members.map(({ attendanceRecords, family, ...member }) => ({
         ...member,
         familyLastName: family.lastName,
         attendance: attendanceRecords[0] ?? null
       })),
-      summary: Object.fromEntries(grouped.map((row) => [row.status, row._count._all])),
+      summary: {
+        PRESENT: grouped.find((row) => row.status === "PRESENT")?._count._all ?? 0,
+        ABSENT: grouped.find((row) => row.status === "ABSENT")?._count._all ?? 0,
+        EXCUSED: grouped.find((row) => row.status === "EXCUSED")?._count._all ?? 0
+      },
+      visitorCount: event.visitorCount,
+      attendanceGroupId: eventGroupIds[0] ?? manualListId,
       pagination: { page, pageSize, total, pageCount: Math.ceil(total / pageSize) }
     });
   } catch {
@@ -76,7 +102,11 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     if (!event) return NextResponse.json({ error: "Membership event not found." }, { status: 404 });
     if (event.status === "CANCELLED") return NextResponse.json({ error: "Attendance cannot be changed for a cancelled event." }, { status: 409 });
     const body = await request.json();
-    const entries = normalizeAttendanceEntries(body?.records);
+    const visitorCount = body?.visitorCount === undefined ? undefined : Number(body.visitorCount);
+    if (visitorCount !== undefined && (!Number.isInteger(visitorCount) || visitorCount < 0 || visitorCount > 100000)) {
+      return NextResponse.json({ error: "Visitor count must be a whole number from 0 to 100000." }, { status: 400 });
+    }
+    const entries = Array.isArray(body?.records) && body.records.length ? normalizeAttendanceEntries(body.records) : [];
     const memberIds = entries.map((entry) => entry.individualId);
     const [members, existing] = await Promise.all([
       db.membershipIndividual.findMany({ where: { id: { in: memberIds } }, select: { id: true } }),
@@ -91,10 +121,11 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       const checkedInAt = entry.status === "PRESENT" ? (previous?.status === "PRESENT" ? previous.checkedInAt : now) : null;
       return db.membershipAttendanceRecord.upsert({
         where: { eventId_individualId: { eventId: params.id, individualId: entry.individualId } },
-        create: { eventId: params.id, individualId: entry.individualId, status: entry.status, participationType: entry.participationType, source: "MANUAL", checkedInAt, minutesParticipated: entry.minutesParticipated, notes: entry.notes, recordedById: user.id },
-        update: { status: entry.status, participationType: entry.participationType, source: "MANUAL", checkedInAt, minutesParticipated: entry.minutesParticipated, notes: entry.notes, recordedById: user.id }
+        create: { eventId: params.id, individualId: entry.individualId, status: entry.status, source: "MANUAL", checkedInAt, minutesParticipated: entry.minutesParticipated, notes: entry.notes, recordedById: user.id },
+        update: { status: entry.status, source: "MANUAL", checkedInAt, minutesParticipated: entry.minutesParticipated, notes: entry.notes, recordedById: user.id }
       });
     }));
+    if (visitorCount !== undefined) await db.membershipEvent.update({ where: { id: params.id }, data: { visitorCount } });
     const removed = entries.filter((entry) => !entry.status && existingByMember.has(entry.individualId)).length;
     const saved = entries.filter((entry) => entry.status).length;
     await logAudit({

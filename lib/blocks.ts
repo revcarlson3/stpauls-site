@@ -17,6 +17,7 @@ export type BlockType =
   | "carousel"
   | "buttons"
   | "table"
+  | "calendar"
   | "widget"
   ;
 
@@ -138,5 +139,6 @@ export const blockDefinitions: Record<BlockType, BlockDefinition> = {
   carousel: { label: "Carousel", description: "Rotating images or featured content", defaultSpan: 12 },
   buttons: { label: "Buttons", description: "One or more links, actions, or anchor buttons", defaultSpan: 8 },
   table: { label: "Table", description: "Structured rows and columns with responsive public rendering", defaultSpan: 12 },
+  calendar: { label: "Events calendar", description: "Public calendar of published church events", defaultSpan: 12 },
   widget: { label: "Widget", description: "Reusable menu or text content", defaultSpan: 12 },
 };

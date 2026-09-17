@@ -68,7 +68,7 @@ export function parseMembershipReportRequest(searchParams: URLSearchParams): Mem
   const start = Math.max(0, Number(searchParams.get("start") ?? "0") || 0);
   const length = Math.min(5000, Math.max(10, Number(searchParams.get("length") ?? "25") || 25));
   const page = Math.max(1, Number(searchParams.get("page") ?? "") || Math.floor(start / length) + 1);
-  const pageSize = Math.min(5000, Math.max(10, Number(searchParams.get("pageSize") ?? String(length)) || length));
+  const pageSize = Math.min(10000, Math.max(10, Number(searchParams.get("pageSize") ?? String(length)) || length));
   const requestedColumnIndex = Number(searchParams.get("order[0][column]") ?? "-1");
   const requestedColumnKey = requestedColumnIndex >= 0 ? searchParams.get(`columns[${requestedColumnIndex}][name]`) : null;
   return {
@@ -215,7 +215,6 @@ export const DEFAULT_MEMBERSHIP_REPORT_COLUMNS: MembershipReportColumn[] = [
   ,{ key: "eventStartsAt", label: "Event starts" }
   ,{ key: "eventEndsAt", label: "Event ends" }
   ,{ key: "attendanceStatus", label: "Attendance status" }
-  ,{ key: "participationType", label: "Participation type" }
   ,{ key: "attendanceSource", label: "Attendance source" }
   ,{ key: "checkedInAt", label: "Checked in" }
   ,{ key: "minutesParticipated", label: "Minutes participated" }

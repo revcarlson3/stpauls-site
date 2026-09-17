@@ -16,7 +16,7 @@ export default function MembershipReportsPage() {
         <a href="/admin/membership" className="focus-ring rounded-full border border-coral px-4 py-2 text-sm font-semibold text-coral">Back to directory</a>
       </div>
       <ReportManager />
-      <div className="mt-8"><ReportResults /></div>
+      <ReportResults />
     </Container>
   </main>;
 }

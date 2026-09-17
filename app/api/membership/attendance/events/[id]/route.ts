@@ -10,7 +10,7 @@ async function authorize() {
 
 const eventSelection = {
   id: true, title: true, description: true, eventType: true, status: true, category: true, location: true,
-  startsAt: true, endsAt: true, timeZone: true, createdAt: true, updatedAt: true, _count: { select: { attendance: true } }
+  startsAt: true, endsAt: true, timeZone: true, visitorCount: true, createdAt: true, updatedAt: true, _count: { select: { attendance: true } }
 } as const;
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
@@ -31,8 +31,13 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const user = await authorize();
     const current = await db.membershipEvent.findUnique({ where: { id: params.id }, select: { id: true, title: true, startsAt: true, endsAt: true } });
     if (!current) return NextResponse.json({ error: "Membership event not found." }, { status: 404 });
-    const data = normalizeMembershipEventInput(await request.json(), true);
-    if (!Object.keys(data).length) return NextResponse.json({ error: "Provide at least one event field to update." }, { status: 400 });
+    const input = await request.json();
+    const visitorCount = input?.visitorCount === undefined ? undefined : Number(input.visitorCount);
+    if (visitorCount !== undefined && (!Number.isInteger(visitorCount) || visitorCount < 0 || visitorCount > 100000)) {
+      return NextResponse.json({ error: "Visitor count must be a whole number from 0 to 100000." }, { status: 400 });
+    }
+    const data = normalizeMembershipEventInput(input, true);
+    if (!Object.keys(data).length && visitorCount === undefined) return NextResponse.json({ error: "Provide at least one event field to update." }, { status: 400 });
     if (data.title === null) return NextResponse.json({ error: "Event title is required." }, { status: 400 });
     if (data.startsAt === null) return NextResponse.json({ error: "Event start is required." }, { status: 400 });
     const nextStart = data.startsAt ?? current.startsAt;
@@ -41,8 +46,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const { title, startsAt, ...optionalData } = data;
     const event = await db.membershipEvent.update({
       where: { id: params.id },
-      data: { ...optionalData, ...(typeof title === "string" ? { title } : {}), ...(startsAt instanceof Date ? { startsAt } : {}) },
-      select: { id: true, title: true, description: true, eventType: true, status: true, category: true, location: true, startsAt: true, endsAt: true, timeZone: true, createdAt: true, updatedAt: true }
+      data: { ...optionalData, ...(typeof title === "string" ? { title } : {}), ...(startsAt instanceof Date ? { startsAt } : {}), ...(visitorCount !== undefined ? { visitorCount } : {}) },
+      select: { id: true, title: true, description: true, eventType: true, status: true, category: true, location: true, startsAt: true, endsAt: true, timeZone: true, visitorCount: true, createdAt: true, updatedAt: true }
     });
     await logAudit({ activityType: "membership-event-updated", summary: `Updated membership event “${event.title}”.`, details: JSON.stringify({ eventId: event.id }), actorId: user.id });
     const attendanceCount = await db.membershipAttendanceRecord.count({ where: { eventId: event.id } });

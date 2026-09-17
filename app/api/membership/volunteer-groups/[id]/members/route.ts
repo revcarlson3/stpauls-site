@@ -74,6 +74,19 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       db.membershipVolunteerGroupMember.createMany({ data: next.map((entry) => ({ groupId: params.id, ...entry, availability: entry.availability ?? undefined })) }),
       ...changes
     ]);
+    const activeOrders = await db.membershipVolunteerRotationOrder.findMany({
+      where: { groupId: params.id, isActive: true },
+      include: { entries: { orderBy: { position: "desc" }, take: 1, select: { individualId: true, position: true } } }
+    });
+    const addedMemberIds = next.map((entry) => entry.individualId);
+    for (const order of activeOrders) {
+      const existingIds = new Set((await db.membershipVolunteerRotationEntry.findMany({ where: { orderId: order.id }, select: { individualId: true } })).map((entry) => entry.individualId));
+      const newIds = addedMemberIds.filter((individualId) => !existingIds.has(individualId));
+      if (!newIds.length) continue;
+      await db.membershipVolunteerRotationEntry.createMany({
+        data: newIds.map((individualId, index) => ({ orderId: order.id, individualId, position: (order.entries[0]?.position ?? -1) + index + 1 }))
+      });
+    }
     return NextResponse.json({ saved: true, count: next.length });
   } catch {
     return NextResponse.json({ error: "Unable to save group members." }, { status: 400 });

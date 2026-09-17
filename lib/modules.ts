@@ -22,6 +22,11 @@ export async function isPublicSiteEnabled() {
   return settings?.publicSiteEnabled !== false;
 }
 
+export async function isMaintenanceModeEnabled() {
+  const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { maintenanceMode: true } });
+  return settings?.maintenanceMode === true;
+}
+
 export async function getAvailableModules(userId: string, effectivePermissions?: Permission[]) {
   const enabledSlugs = await getEnabledModuleSlugs();
   const permissions = new Set(effectivePermissions ?? (await db.user.findUnique({ where: { id: userId }, select: { group: { select: { permissions: { select: { permission: true } } } } } }))?.group?.permissions.map(({ permission }) => permission));

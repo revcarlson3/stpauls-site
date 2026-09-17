@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Container } from "@/components/ui";
 import { ModuleNavigation } from "@/components/module-navigation";
 import { AdminLogout } from "@/components/admin-logout";
+import { NotificationBell } from "@/components/notification-bell";
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
@@ -16,22 +17,34 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
   const [canAccessAdmin, setCanAccessAdmin] = useState(false);
   const [isAdministrator, setIsAdministrator] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
-  const [viewAsGroups, setViewAsGroups] = useState<{ id: string; name: string }[]>([]);
+  const [viewAsGroups, setViewAsGroups] = useState<{ id: string; name: string; canAccessAdmin: boolean }[]>([]);
   const [viewAsGroupId, setViewAsGroupId] = useState("");
   const [membershipMenuOpen, setMembershipMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const membershipButtonRef = useRef<HTMLButtonElement>(null);
   const isEditor = pathname === "/admin/editor" || pathname.startsWith("/admin/editor/");
   const [editorChromeVisible, setEditorChromeVisible] = useState(true);
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    if (!membershipMenuOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (membershipButtonRef.current?.contains(target) || (target instanceof Element && target.closest("#admin-member-navigation"))) return;
+      setMembershipMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setMembershipMenuOpen(false); };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => { document.removeEventListener("mousedown", closeOnOutsideClick); document.removeEventListener("keydown", closeOnEscape); };
+  }, [membershipMenuOpen]);
 
   useEffect(() => {
     if (pathname === "/admin/login") return;
     const loadIdentity = () => {
       void Promise.all([fetch("/api/site-settings"), fetch("/api/site-identity")]).then(async ([settingsResponse, identityResponse]) => {
-        if (!settingsResponse.ok) return;
-        const settings = await settingsResponse.json();
+        const settings = settingsResponse.ok ? await settingsResponse.json() : {};
         const identity = identityResponse.ok ? await identityResponse.json() : {};
-        setIdentity({ siteName: settings.siteName ?? "Site administration", siteTagline: settings.siteTagline ?? "Management workspace", siteLogoUrl: identity.siteLogoLightUrl ?? identity.siteLogoUrl ?? "", siteShowLogo: identity.siteShowLogo ?? false });
+        setIdentity({ siteName: settings.adminSiteName ?? "Site administration", siteTagline: settings.adminSiteTagline ?? "Management workspace", siteLogoUrl: identity.siteLogoLightUrl ?? identity.siteLogoUrl ?? "", siteShowLogo: identity.siteShowLogo ?? false });
       });
     };
     loadIdentity();
@@ -75,7 +88,12 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
     const response = await fetch("/api/view-as", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId }) });
     if (response.ok) {
       setViewAsGroupId(groupId);
-      window.location.reload();
+      if (!groupId) {
+        window.location.href = pathname.startsWith("/admin") ? pathname : "/admin";
+        return;
+      }
+      const selectedGroup = viewAsGroups.find((group) => group.id === groupId);
+      window.location.href = selectedGroup?.canAccessAdmin ? window.location.href : pathname === "/admin/membership/prayer-requests" ? "/account/membership/prayer-requests" : "/account/membership";
     }
   }
 
@@ -101,7 +119,8 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
             {isEditor && <button type="button" aria-label="Hide admin bar" aria-expanded={editorChromeVisible} className="focus-ring rounded-full border border-ink/15 px-3 py-2 text-xs font-semibold text-ink/70 transition-colors duration-200 hover:border-coral hover:text-coral" onClick={() => setEditorChromeVisible(false)}>Hide admin bar</button>}
             {isAdministrator && viewAsGroups.length > 0 && <label className="flex items-center gap-2 text-xs font-semibold text-ink/60"><span className="sr-only">View as security group</span><select aria-label="View as security group" value={viewAsGroupId} onChange={(event) => void changeViewAs(event.target.value)} className="focus-ring rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-xs font-semibold text-ink"><option value="">View as: Administrator</option>{viewAsGroups.map((group) => <option key={group.id} value={group.id}>View as: {group.name}</option>)}</select>{viewAsGroupId && <button type="button" className="focus-ring text-xs font-semibold text-coral hover:underline" onClick={() => void changeViewAs("")}>Clear</button>}</label>}
             <Link className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href="/account">Account</Link>
-            {membershipLinked && <div className="relative"><button type="button" aria-expanded={membershipMenuOpen} aria-controls="admin-member-navigation" className="focus-ring rounded-full border border-coral px-3 py-2 text-sm font-semibold text-coral hover:bg-coral hover:text-white" onClick={() => setMembershipMenuOpen((current) => !current)}>My membership <span aria-hidden="true">{membershipMenuOpen ? "⌃" : "⌄"}</span></button>{membershipMenuOpen && mounted && createPortal(<div id="admin-member-navigation" className="fixed right-6 top-20 z-[100] grid min-w-56 gap-1 rounded-xl border border-ink/10 bg-white p-2 text-ink shadow-lg"><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership">Member center</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/profile">Member profile</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/prayer-requests">Prayer requests</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/scheduling">Scheduling</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving">Online giving</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving-history">Giving history and pledges</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/documents">Documents and forms</Link></div>, document.body)}</div>}
+            <NotificationBell />
+            {membershipLinked && <div className="relative"><button ref={membershipButtonRef} type="button" aria-expanded={membershipMenuOpen} aria-controls="admin-member-navigation" className="focus-ring rounded-full border border-coral px-3 py-2 text-sm font-semibold text-coral hover:bg-coral hover:text-white" onClick={() => setMembershipMenuOpen((current) => !current)}>My membership <span aria-hidden="true">{membershipMenuOpen ? "⌃" : "⌄"}</span></button>{membershipMenuOpen && mounted && createPortal(<div id="admin-member-navigation" className="fixed right-6 top-20 z-[100] grid min-w-56 gap-1 rounded-xl border border-ink/10 bg-white p-2 text-ink shadow-lg"><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership">Member center</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/profile">Member profile</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/prayer-requests">Prayer requests</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/scheduling">Scheduling</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving">Online giving</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving-history">Giving history and pledges</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/documents">Documents and forms</Link></div>, document.body)}</div>}
             {publicSiteEnabled && <Link className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href="/">View site</Link>}
           </div>
         </Container>
@@ -150,12 +169,14 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/theme/footer">Footer</Link>
               </div>
             </details>}
-            {can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/site-settings") || pathname.startsWith("/admin/site-identity")} className="group">
+            {can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/site-settings") || pathname.startsWith("/admin/site-identity") || pathname.startsWith("/admin/report-automations")} className="group">
               <summary className="focus-ring cursor-pointer list-none rounded-lg px-4 py-3 font-semibold hover:bg-mist">Site Settings <span className="float-right text-ink/50 group-open:rotate-180">⌄</span></summary>
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
                 {publicSiteEnabled && <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-identity">Site Identity</Link>}
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings">General Settings</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/messaging">Messaging</Link>
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/cron">Cron</Link>
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/report-automations">Report Automations</Link>
               </div>
             </details>}
             <ModuleNavigation />

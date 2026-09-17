@@ -32,16 +32,23 @@ export async function GET(request: Request) {
       ...(status !== "all" ? { status: status as (typeof MEMBERSHIP_EVENT_STATUSES)[number] } : {}),
       ...(search ? { OR: [{ title: { contains: search, mode: "insensitive" as const } }, { category: { contains: search, mode: "insensitive" as const } }, { location: { contains: search, mode: "insensitive" as const } }] } : {})
     };
-    const [events, total] = await Promise.all([
+    const [allEvents, total] = await Promise.all([
       db.membershipEvent.findMany({
         where,
-        orderBy: [{ startsAt: "desc" }, { title: "asc" }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        select: { id: true, title: true, description: true, eventType: true, status: true, category: true, location: true, startsAt: true, endsAt: true, timeZone: true, createdAt: true, updatedAt: true, _count: { select: { attendance: true } } }
+        orderBy: [{ startsAt: "asc" }, { title: "asc" }],
+        select: { id: true, title: true, description: true, eventType: true, status: true, category: true, location: true, startsAt: true, endsAt: true, timeZone: true, visitorCount: true, createdAt: true, updatedAt: true, _count: { select: { attendance: true } } }
       }),
       db.membershipEvent.count({ where })
     ]);
+    const now = Date.now();
+    const events = allEvents.sort((a, b) => {
+      const aTime = a.startsAt.getTime();
+      const bTime = b.startsAt.getTime();
+      const aPast = aTime <= now;
+      const bPast = bTime <= now;
+      if (aPast !== bPast) return aPast ? -1 : 1;
+      return aPast ? bTime - aTime : aTime - bTime;
+    }).slice((page - 1) * pageSize, page * pageSize);
     const eventIds = events.map((event) => event.id);
     const grouped = eventIds.length ? await db.membershipAttendanceRecord.groupBy({ by: ["eventId", "status"], where: { eventId: { in: eventIds } }, _count: { _all: true } }) : [];
     const counts = new Map<string, Record<string, number>>();
@@ -61,7 +68,7 @@ export async function POST(request: Request) {
     const data = normalizeMembershipEventInput(await request.json());
     const event = await db.membershipEvent.create({
       data: { ...data, title: data.title!, startsAt: data.startsAt!, createdById: user.id },
-      select: { id: true, title: true, description: true, eventType: true, status: true, category: true, location: true, startsAt: true, endsAt: true, timeZone: true, createdAt: true, updatedAt: true }
+      select: { id: true, title: true, description: true, eventType: true, status: true, category: true, location: true, startsAt: true, endsAt: true, timeZone: true, visitorCount: true, createdAt: true, updatedAt: true }
     });
     await logAudit({ activityType: "membership-event-created", summary: `Created membership event “${event.title}”.`, details: JSON.stringify({ eventId: event.id }), actorId: user.id });
     return NextResponse.json({ event: { ...event, attendanceCount: 0, attendanceByStatus: {} } }, { status: 201 });

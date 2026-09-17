@@ -154,19 +154,19 @@ function BlockContent({ id, data }: { id: BlockId; data: DashboardData }) {
   </section>;
 }
 
-function SortableBlock({ id, width, sortOrder, data }: { id: BlockId; width: Width; sortOrder: number; data: DashboardData }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  return <div ref={setNodeRef} style={{ order: sortOrder, transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined }} {...attributes} className={`${width === "full" ? "lg:col-span-2" : ""} rounded-2xl border bg-white p-5 shadow-sm ${isDragging ? "border-coral/50 opacity-70 shadow-xl" : "border-ink/10"}`}>
-    <div className="mb-4 flex items-center justify-between"><button type="button" {...listeners} className="focus-ring touch-none cursor-grab rounded-md bg-mist px-2 py-1 text-xs font-semibold uppercase tracking-wide text-ink/50" aria-label={`Drag ${blockLabels[id]}`}>☷ Drag block</button><span className="text-xs text-ink/35">{blockLabels[id]}</span></div>
+function SortableBlock({ id, width, sortOrder, data, dragLocked }: { id: BlockId; width: Width; sortOrder: number; data: DashboardData; dragLocked: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: dragLocked });
+  return <div ref={setNodeRef} style={{ order: sortOrder, transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined }} {...attributes} className={`${width === "quarter" ? "lg:col-span-1" : width === "half" ? "lg:col-span-2" : "lg:col-span-4"} rounded-2xl border bg-white p-5 shadow-sm ${isDragging ? "border-coral/50 opacity-70 shadow-xl" : "border-ink/10"}`}>
+    <div className="mb-4 flex items-center justify-between">{!dragLocked && <button type="button" {...listeners} className="focus-ring touch-none cursor-grab rounded-md bg-mist px-2 py-1 text-xs font-semibold uppercase tracking-wide text-ink/50" aria-label={`Drag ${blockLabels[id]}`}>☷</button>}<span className="text-xs text-ink/35">{blockLabels[id]}</span></div>
     <BlockContent id={id} data={data} />
   </div>;
 }
 
 function LoadingDashboard() {
-  return <div className="mt-6 grid gap-6 lg:grid-cols-2" role="status" aria-label="Loading membership dashboard">{defaultOrder.map((id) => <div key={id} className={`${defaultWidths[id] === "full" ? "lg:col-span-2" : ""} h-48 animate-pulse rounded-2xl border border-ink/10 bg-white p-5`}><div className="h-4 w-28 rounded bg-ink/10" /><div className="mt-6 h-8 w-48 rounded bg-ink/10" /><div className="mt-5 h-20 rounded bg-mist" /></div>)}</div>;
+  return <div className="mt-6 grid gap-6 lg:grid-cols-4" role="status" aria-label="Loading membership dashboard">{defaultOrder.map((id) => <div key={id} className={`${defaultWidths[id] === "quarter" ? "lg:col-span-1" : defaultWidths[id] === "half" ? "lg:col-span-2" : "lg:col-span-4"} h-48 animate-pulse rounded-2xl border border-ink/10 bg-white p-5`}><div className="h-4 w-28 rounded bg-ink/10" /><div className="mt-6 h-8 w-48 rounded bg-ink/10" /><div className="mt-5 h-20 rounded bg-mist" /></div>)}</div>;
 }
 
-export function MembershipDashboard({ sharedConfigureOpen, hideConfigureButton = false, hideConfigurePanel = false, disableDnd = false, orderOverride }: { sharedConfigureOpen?: boolean; hideConfigureButton?: boolean; hideConfigurePanel?: boolean; disableDnd?: boolean; orderOverride?: string[] } = {}) {
+export function MembershipDashboard({ sharedConfigureOpen, dragLocked = false, hideConfigureButton = false, hideConfigurePanel = false, disableDnd = false, orderOverride }: { sharedConfigureOpen?: boolean; dragLocked?: boolean; hideConfigureButton?: boolean; hideConfigurePanel?: boolean; disableDnd?: boolean; orderOverride?: string[] } = {}) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -178,6 +178,7 @@ export function MembershipDashboard({ sharedConfigureOpen, hideConfigureButton =
   const [layoutStatus, setLayoutStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const layoutRequestQueue = useRef<Promise<void>>(Promise.resolve());
   const layoutRequestVersion = useRef(0);
+  const dashboardRef = useRef<HTMLElement>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const applyLayout = useCallback((layout: MembershipDashboardLayout) => {
@@ -237,6 +238,14 @@ export function MembershipDashboard({ sharedConfigureOpen, hideConfigureButton =
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    if (!internalConfigureOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => { if (!dashboardRef.current?.contains(event.target as Node)) setInternalConfigureOpen(false); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setInternalConfigureOpen(false); };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => { document.removeEventListener("mousedown", closeOnOutsideClick); document.removeEventListener("keydown", closeOnEscape); };
+  }, [internalConfigureOpen]);
 
   useEffect(() => {
     const refresh = () => void load();
@@ -267,8 +276,8 @@ export function MembershipDashboard({ sharedConfigureOpen, hideConfigureButton =
   };
 
   const isConfigureOpen = sharedConfigureOpen ?? internalConfigureOpen;
-  return <section className={disableDnd ? "contents" : "mt-8"} aria-labelledby="membership-dashboard-heading">
+  return <section ref={dashboardRef} className={disableDnd ? "contents" : "mt-8"} aria-labelledby="membership-dashboard-heading">
     {!disableDnd && <div className="flex flex-wrap items-end justify-between gap-4"><div><h2 id="membership-dashboard-heading" className="sr-only">Dashboard blocks</h2><p className="sr-only">At-a-glance care, engagement, and serving insights. Your layout follows your account across devices.</p></div><div className="relative">{!hideConfigureButton && <button type="button" className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold" aria-expanded={isConfigureOpen} onClick={() => setInternalConfigureOpen((open) => !open)}>Configure dashboard</button>}</div></div>}
-    {loading ? <LoadingDashboard /> : error ? <div className="mt-6 rounded-xl border border-coral/25 bg-coral/5 p-5" role="alert"><p className="font-semibold text-coral">Dashboard unavailable</p><p className="mt-1 text-sm text-ink/65">{error}</p><button type="button" onClick={() => void load()} className="focus-ring mt-4 rounded-full border border-coral px-4 py-2 text-sm font-semibold text-coral">Try again</button></div> : visibleOrder.length && data ? disableDnd ? <div className="contents">{visibleOrder.map((id) => <SortableBlock key={id} id={id as BlockId} sortOrder={(orderOverride ?? order).indexOf(id)} width={widths[id as BlockId]} data={data} />)}</div> : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={visibleOrder} strategy={verticalListSortingStrategy}><div className="mt-6 grid gap-6 lg:grid-cols-2">{visibleOrder.map((id) => <SortableBlock key={id} id={id as BlockId} sortOrder={(orderOverride ?? order).indexOf(id)} width={widths[id as BlockId]} data={data} />)}</div></SortableContext></DndContext> : null}
+    {loading ? <LoadingDashboard /> : error ? <div className="mt-6 rounded-xl border border-coral/25 bg-coral/5 p-5" role="alert"><p className="font-semibold text-coral">Dashboard unavailable</p><p className="mt-1 text-sm text-ink/65">{error}</p><button type="button" onClick={() => void load()} className="focus-ring mt-4 rounded-full border border-coral px-4 py-2 text-sm font-semibold text-coral">Try again</button></div> : visibleOrder.length && data ? disableDnd ? <div className="contents">{visibleOrder.map((id) => <SortableBlock key={id} id={id as BlockId} dragLocked={dragLocked} sortOrder={(orderOverride ?? order).indexOf(id)} width={widths[id as BlockId]} data={data} />)}</div> : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}><SortableContext items={visibleOrder} strategy={verticalListSortingStrategy}><div className="mt-6 grid gap-6 grid-cols-1 lg:grid-cols-4">{visibleOrder.map((id) => <SortableBlock key={id} id={id as BlockId} dragLocked={dragLocked} sortOrder={(orderOverride ?? order).indexOf(id)} width={widths[id as BlockId]} data={data} />)}</div></SortableContext></DndContext> : null}
   </section>;
 }

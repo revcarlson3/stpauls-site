@@ -12,7 +12,7 @@ export async function GET() {
     await authorize();
     const groups = await db.membershipVolunteerGroup.findMany({
       orderBy: [{ position: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, description: true, slug: true, position: true, members: { where: { isLeader: true }, select: { individualId: true } }, _count: { select: { members: true } } }
+      select: { id: true, name: true, singularName: true, description: true, slug: true, position: true, members: { where: { isLeader: true }, select: { individualId: true } }, _count: { select: { members: true } } }
     });
     return NextResponse.json({ groups: groups.map(({ members, ...group }) => ({ ...group, leaderCount: members.length })) });
   } catch {
@@ -25,6 +25,7 @@ export async function POST(request: Request) {
     await authorize();
     const input = await request.json();
     const name = typeof input?.name === "string" ? input.name.trim().replace(/\s+/g, " ") : "";
+    const singularName = typeof input?.singularName === "string" ? input.singularName.trim().replace(/\s+/g, " ").slice(0, 100) : null;
     const description = typeof input?.description === "string" ? input.description.trim().slice(0, 500) : null;
     if (!name || name.length > 100) return NextResponse.json({ error: "Enter a volunteer group name." }, { status: 400 });
     const last = await db.membershipVolunteerGroup.aggregate({ _max: { position: true } });
@@ -32,8 +33,8 @@ export async function POST(request: Request) {
     const source = copyOfId ? await db.membershipVolunteerGroup.findUnique({ where: { id: copyOfId }, select: { members: { select: { individualId: true, role: true, isLeader: true, availability: true, skills: true } } } }) : null;
     if (copyOfId && !source) return NextResponse.json({ error: "Volunteer group to duplicate was not found." }, { status: 404 });
     const group = await db.membershipVolunteerGroup.create({
-      data: { name, description, slug: `${audienceSlug(name)}-${Date.now().toString(36)}`, position: (last._max.position ?? -1) + 1, ...(source ? { members: { create: source.members.map((member) => ({ role: member.role, isLeader: member.isLeader, availability: member.availability ?? undefined, skills: member.skills, individual: { connect: { id: member.individualId } } })) } } : {}) },
-      select: { id: true, name: true, description: true, slug: true, position: true, members: { where: { isLeader: true }, select: { individualId: true } }, _count: { select: { members: true } } }
+      data: { name, singularName: singularName || null, description, slug: `${audienceSlug(name)}-${Date.now().toString(36)}`, position: (last._max.position ?? -1) + 1, ...(source ? { members: { create: source.members.map((member) => ({ role: member.role, isLeader: member.isLeader, availability: member.availability ?? undefined, skills: member.skills, individual: { connect: { id: member.individualId } } })) } } : {}) },
+      select: { id: true, name: true, singularName: true, description: true, slug: true, position: true, members: { where: { isLeader: true }, select: { individualId: true } }, _count: { select: { members: true } } }
     });
     const { members, ...groupData } = group;
     return NextResponse.json({ group: { ...groupData, leaderCount: members.length } }, { status: 201 });
@@ -55,9 +56,10 @@ export async function PATCH(request: Request) {
     }
     const id = typeof input?.id === "string" ? input.id.trim() : "";
     const name = typeof input?.name === "string" ? input.name.trim().replace(/\s+/g, " ") : "";
+    const singularName = typeof input?.singularName === "string" ? input.singularName.trim().replace(/\s+/g, " ").slice(0, 100) : undefined;
     const description = typeof input?.description === "string" ? input.description.trim().slice(0, 500) : undefined;
     if (!id || !name || name.length > 100) return NextResponse.json({ error: "Group and name are required." }, { status: 400 });
-    const group = await db.membershipVolunteerGroup.update({ where: { id }, data: { name, ...(description !== undefined ? { description: description || null } : {}) }, select: { id: true, name: true, description: true, slug: true, position: true, members: { where: { isLeader: true }, select: { individualId: true } }, _count: { select: { members: true } } } });
+    const group = await db.membershipVolunteerGroup.update({ where: { id }, data: { name, ...(singularName !== undefined ? { singularName: singularName || null } : {}), ...(description !== undefined ? { description: description || null } : {}) }, select: { id: true, name: true, singularName: true, description: true, slug: true, position: true, members: { where: { isLeader: true }, select: { individualId: true } }, _count: { select: { members: true } } } });
     const { members, ...groupData } = group;
     return NextResponse.json({ group: { ...groupData, leaderCount: members.length } });
   } catch {

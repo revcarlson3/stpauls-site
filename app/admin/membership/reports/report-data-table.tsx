@@ -21,8 +21,13 @@ DT.Buttons.jszip(JSZip);
 DT.Buttons.pdfMake(pdfMake);
 pdfMake.vfs = pdfFonts.vfs;
 
-type Result = { id: string; [key: string]: string | number };
+type Result = { id: string; [key: string]: string | number | boolean | undefined };
 type Column = { key: string; label: string };
+type PdfDocument = {
+  content: Array<{ text?: string; style?: string; table?: { widths?: Array<string>; body?: unknown[][] } }>;
+  pageOrientation?: "portrait" | "landscape";
+  pageMargins?: [number, number, number, number];
+};
 
 function getInitialOrder(columns: Column[], layout: MembershipReportLayout) {
   const saved = (layout.order ?? []).map((key) => columns.findIndex((column) => column.key === key)).filter((index) => index >= 0);
@@ -65,7 +70,7 @@ function addResizeHandles(api: DTApi<any>, columns: Column[], onLayoutChange: (l
   });
 }
 
-export function ReportDataTable({ rows, columns, sort, direction, layout, reportName, generatedAt, generatedBy, serverUrl, onLayoutChange }: { rows: Result[]; columns: Column[]; sort: string; direction: "asc" | "desc"; layout: MembershipReportLayout; reportName: string; generatedAt: string; generatedBy: string; serverUrl?: string; onLayoutChange: (layout: MembershipReportLayout) => void }) {
+export function ReportDataTable({ rows, columns, sort, direction, layout, reportName, generatedAt, generatedBy, reportPeriod, serverUrl, onLayoutChange }: { rows: Result[]; columns: Column[]; sort: string; direction: "asc" | "desc"; layout: MembershipReportLayout; reportName: string; generatedAt: string; generatedBy: string; reportPeriod?: { from?: string; to?: string }; serverUrl?: string; onLayoutChange: (layout: MembershipReportLayout) => void }) {
   const tableRef = useRef<DataTableRef>(null);
   const initialOrder = getInitialOrder(columns, layout);
   const saveCurrentLayout = () => {
@@ -77,7 +82,7 @@ export function ReportDataTable({ rows, columns, sort, direction, layout, report
     onLayoutChange({ order: orderKeys, visibility });
   };
 
-  const generatedLabel = `Generated ${new Date(generatedAt).toLocaleString()}${generatedBy ? ` by ${generatedBy}` : ""}`;
+  const generatedLabel = `Generated ${new Date(generatedAt).toLocaleString()}${generatedBy ? ` by ${generatedBy}` : ""} · Date from: ${reportPeriod?.from || "—"} · Date to: ${reportPeriod?.to || "—"}`;
   return <DataTable
     ref={tableRef}
     data={serverUrl ? undefined : rows}
@@ -110,15 +115,21 @@ export function ReportDataTable({ rows, columns, sort, direction, layout, report
       lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
       colReorder: { order: initialOrder },
       order: [[Math.max(0, columns.findIndex((column) => column.key === sort)), direction]],
+      createdRow: (row: HTMLTableRowElement, data: unknown) => {
+        const record = data as { isGroup?: boolean; isSubtotal?: boolean; isTotal?: boolean };
+        if (record.isGroup) row.classList.add("accounting-report-category-row");
+        if (record.isSubtotal) row.classList.add("accounting-report-subtotal-row");
+        if (record.isTotal) row.classList.add("accounting-report-total-row");
+      },
       initComplete: function (settings) {
         addResizeHandles(new DT.Api(settings), columns, onLayoutChange);
       },
       layout: {
         topStart: { buttons: [
           "copy",
-          "csv",
-          "excel",
-          { extend: "pdfHtml5", customize: (document: { content: Array<{ text?: string; style?: string }> }) => { document.content.unshift({ text: generatedLabel, style: "small" }); document.content.unshift({ text: reportName, style: "header" }); } },
+          { extend: "csv", title: reportName },
+          { extend: "excel", title: reportName },
+          { extend: "pdfHtml5", title: reportName, customize: (document: PdfDocument) => { document.pageOrientation = "landscape"; document.pageMargins = [20, 30, 20, 30]; const table = document.content.find((item) => item.table)?.table; if (table) table.widths = columns.map(() => "*"); document.content.unshift({ text: generatedLabel, style: "small" }); document.content.unshift({ text: reportName, style: "header" }); } },
           { extend: "print", title: reportName, messageTop: `<div class="report-print-meta">${generatedLabel}</div>` },
           "colvis"
         ] },

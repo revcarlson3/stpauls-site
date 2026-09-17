@@ -8,6 +8,8 @@ export type FormInput = {
   slug: string;
   status?: string;
   enabled?: boolean;
+  audience?: string;
+  audienceGroupIds?: string[];
   definition: FormDefinition;
   notificationSettings?: Record<string, unknown>;
   exportSettings?: Record<string, unknown>;
@@ -33,12 +35,12 @@ export async function getForm(id: string) {
 
 export async function createForm(input: FormInput) {
   await requirePermission("EDIT_PAGES");
-  return db.form.create({ data: { name: input.name, slug: input.slug, status: input.status ?? "DRAFT", enabled: input.enabled ?? true, definition: json(normalizeFormDefinition(input.definition)), notificationSettings: json(input.notificationSettings ?? {}), exportSettings: json(input.exportSettings ?? {}) } });
+  return db.form.create({ data: { name: input.name, slug: input.slug, status: input.status ?? "DRAFT", enabled: input.enabled ?? true, audience: input.audience === "MEMBERS" || input.audience === "GROUP" ? input.audience : "PUBLIC", audienceGroupIds: json(input.audienceGroupIds ?? []), definition: json(normalizeFormDefinition(input.definition)), notificationSettings: json(input.notificationSettings ?? {}), exportSettings: json(input.exportSettings ?? {}) } });
 }
 
 export async function updateForm(id: string, input: FormInput) {
   await requirePermission("EDIT_PAGES");
-  return db.form.update({ where: { id }, data: { name: input.name, slug: input.slug, status: input.status ?? "DRAFT", enabled: input.enabled ?? true, definition: json(normalizeFormDefinition(input.definition)), notificationSettings: json(input.notificationSettings ?? {}), exportSettings: json(input.exportSettings ?? {}) } });
+  return db.form.update({ where: { id }, data: { name: input.name, slug: input.slug, status: input.status ?? "DRAFT", enabled: input.enabled ?? true, audience: input.audience === "MEMBERS" || input.audience === "GROUP" ? input.audience : "PUBLIC", audienceGroupIds: json(input.audienceGroupIds ?? []), definition: json(normalizeFormDefinition(input.definition)), notificationSettings: json(input.notificationSettings ?? {}), exportSettings: json(input.exportSettings ?? {}) } });
 }
 
 export async function deleteForm(id: string) {
@@ -47,7 +49,16 @@ export async function deleteForm(id: string) {
 }
 
 export async function getPublicForm(id: string) {
-  const form = await db.form.findFirst({ where: { id, enabled: true, status: "PUBLISHED" }, select: { id: true, name: true, definition: true } });
+  const form = await db.form.findFirst({ where: { id, enabled: true, status: "PUBLISHED" }, select: { id: true, name: true, definition: true, audience: true, audienceGroupIds: true } });
+  if (form && form.audience !== "PUBLIC") {
+    const { getCurrentUser } = await import("@/lib/auth");
+    const user = await getCurrentUser();
+    if (!user?.permissions.includes("MY_MEMBERSHIP")) return null;
+    if (form.audience === "GROUP") {
+      const groups = Array.isArray(form.audienceGroupIds) ? form.audienceGroupIds.filter((value): value is string => typeof value === "string") : [];
+      if (!user.effectiveGroupId || !groups.includes(user.effectiveGroupId)) return null;
+    }
+  }
   return form ? { id: form.id, name: form.name, definition: publicFormDefinition(form.definition) } : null;
 }
 

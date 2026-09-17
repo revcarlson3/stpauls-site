@@ -34,6 +34,9 @@ type Family = {
 type FamilyDocument = {
   id: string;
   originalName: string;
+  category: string;
+  description: string | null;
+  memberVisible: boolean;
   mimeType: string;
   sizeBytes: number;
   expiresAt: string | null;
@@ -65,6 +68,9 @@ export default function EditFamilyPage() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [documents, setDocuments] = useState<FamilyDocument[]>([]);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentCategory, setDocumentCategory] = useState("OTHER");
+  const [documentDescription, setDocumentDescription] = useState("");
+  const [documentMemberVisible, setDocumentMemberVisible] = useState(true);
   const [documentInputKey, setDocumentInputKey] = useState(0);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
@@ -124,12 +130,18 @@ export default function EditFamilyPage() {
     setMessage("");
     const formData = new FormData();
     formData.set("document", documentFile);
+    formData.set("category", documentCategory);
+    formData.set("description", documentDescription);
+    formData.set("memberVisible", String(documentMemberVisible));
     try {
       const response = await fetch(`/api/membership/families/${params.id}/documents`, { method: "POST", body: formData });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error ?? "Unable to upload family document.");
       setDocuments((current) => [body.document, ...current]);
       setDocumentFile(null);
+      setDocumentCategory("OTHER");
+      setDocumentDescription("");
+      setDocumentMemberVisible(true);
       setDocumentInputKey((current) => current + 1);
       setMessage("Family document uploaded.");
     } catch (error) {
@@ -173,6 +185,24 @@ export default function EditFamilyPage() {
       setMessage(error instanceof Error ? error.message : "Unable to update document retention.");
     } finally {
       setSavingDocumentId(null);
+    }
+  }
+
+  async function saveDocumentMetadata(document: FamilyDocument) {
+      setSavingDocumentId(document.id);
+      try {
+        const response = await fetch(`/api/membership/families/${params.id}/documents/${document.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expiresAt: document.expiresAt ? document.expiresAt.slice(0, 10) : null, category: document.category, description: document.description, memberVisible: document.memberVisible })
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error ?? "Unable to update document metadata.");
+        setDocuments((current) => current.map((entry) => entry.id === document.id ? body.document : entry));
+        setMessage("Document metadata saved.");
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Unable to update document metadata.");
+      } finally {
+        setSavingDocumentId(null);
     }
   }
 
@@ -261,12 +291,15 @@ export default function EditFamilyPage() {
             <section className="mt-3 border-t border-ink/10 pt-5" aria-labelledby="family-documents-heading">
               <h2 id="family-documents-heading" className="font-serif text-2xl">Documents</h2>
               <p className="mt-1 text-sm text-ink/60">Upload PDF, JPG, PNG, or WebP files up to 10 MB. Documents require membership access to download.</p>
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-sm font-semibold">Category<select value={documentCategory} onChange={(event) => setDocumentCategory(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="OTHER">Other</option><option value="POLICY">Policy</option><option value="DIRECTORY">Directory</option><option value="FORM">Form</option><option value="LETTER">Letter</option><option value="PHOTO">Photo</option></select></label>
+                <label className="grid gap-1 text-sm font-semibold">Description<input value={documentDescription} maxLength={500} onChange={(event) => setDocumentDescription(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
                 <label className="grid flex-1 gap-1 text-sm font-semibold">
                   Choose document
                   <input key={documentInputKey} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" />
                 </label>
-                <button type="button" disabled={!documentFile || uploadingDocument} onClick={() => void uploadDocument()} className="focus-ring rounded-full bg-coral px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={documentMemberVisible} onChange={(event) => setDocumentMemberVisible(event.target.checked)} /> Visible to linked members</label>
+                <button type="button" disabled={!documentFile || uploadingDocument} onClick={() => void uploadDocument()} className="focus-ring w-fit rounded-full bg-coral px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
                   {uploadingDocument ? "Uploading..." : "Upload document"}
                 </button>
               </div>
@@ -276,7 +309,8 @@ export default function EditFamilyPage() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{document.originalName}</p>
-                      <p className="text-xs text-ink/55">{fileSizeLabel(document.sizeBytes)} · Uploaded {new Date(document.createdAt).toLocaleDateString()}</p>
+                      <p className="text-xs text-ink/55">{document.category} · {fileSizeLabel(document.sizeBytes)} · Uploaded {new Date(document.createdAt).toLocaleDateString()}</p>
+                      {document.description && <p className="mt-1 text-xs text-ink/65">{document.description}</p>}
                       </div>
                       <div className="flex items-center gap-2">
                         <a href={document.downloadUrl} className="focus-ring rounded-full border border-coral px-3 py-1.5 text-xs font-semibold text-coral">Download</a>
@@ -300,6 +334,8 @@ export default function EditFamilyPage() {
                       </button>
                       {document.expiresAt && <button type="button" disabled={savingDocumentId === document.id} onClick={() => void saveDocumentExpiry(document, null)} className="focus-ring rounded-full border border-ink/20 px-3 py-1.5 text-xs font-semibold text-ink/70 disabled:opacity-50">Clear expiry</button>}
                       <p className="basis-full text-xs text-ink/55">{document.expiresAt ? `Eligible for cleanup after ${new Date(document.expiresAt).toLocaleDateString()}.` : "No expiry. This document is never eligible for retention cleanup."}</p>
+                      <label className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={document.memberVisible} onChange={(event) => setDocuments((current) => current.map((entry) => entry.id === document.id ? { ...entry, memberVisible: event.target.checked } : entry))} /> Visible to members</label>
+                      <button type="button" disabled={savingDocumentId === document.id} onClick={() => void saveDocumentMetadata(document)} className="focus-ring rounded-full border border-coral px-3 py-1.5 text-xs font-semibold text-coral">Save metadata</button>
                     </div>
                   </div>
                 )) : <p className="rounded-lg border border-dashed border-ink/15 p-4 text-sm text-ink/60">No documents uploaded.</p>}

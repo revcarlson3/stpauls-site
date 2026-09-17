@@ -77,7 +77,6 @@ export async function GET() {
       incompleteProfiles,
       incompleteProfileCount,
       attendanceByStatus,
-      participationByType,
       recentEventCount,
       engagedRows,
       priorPresentAttendance,
@@ -137,11 +136,6 @@ export async function GET() {
       db.membershipAttendanceRecord.groupBy({
         by: ["status"],
         where: { event: { startsAt: { gte: attendanceSince, lte: now }, status: { not: "CANCELLED" } } },
-        _count: { _all: true }
-      }),
-      db.membershipAttendanceRecord.groupBy({
-        by: ["participationType"],
-        where: { status: "PRESENT", event: { startsAt: { gte: attendanceSince, lte: now }, status: { not: "CANCELLED" } } },
         _count: { _all: true }
       }),
       db.membershipEvent.count({ where: { startsAt: { gte: attendanceSince, lte: now }, status: { not: "CANCELLED" } } }),
@@ -307,7 +301,6 @@ export async function GET() {
         eventCount: recentEventCount,
         attendanceRecords: presentAttendance,
         attendanceByStatus: attendanceByStatus.map((item) => ({ label: item.status, count: item._count._all })),
-        participationByType: participationByType.map((item) => ({ label: item.participationType, count: item._count._all })),
         trend: attendanceTrendRows.map((item) => ({ startsAt: item.startsAt.toISOString(), count: item.count })),
         comparison: {
           attendanceRecords: periodComparison(presentAttendance, priorPresentAttendance),

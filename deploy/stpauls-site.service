@@ -1,0 +1,16 @@
+[Unit]
+Description=St. Paul's Site beta
+After=network.target
+
+[Service]
+Type=simple
+User=stpauls
+WorkingDirectory=/var/www/stpauls-site
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

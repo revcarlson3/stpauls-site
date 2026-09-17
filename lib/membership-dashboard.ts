@@ -4,7 +4,7 @@ export const MEMBERSHIP_DASHBOARD_DETAIL_LIMIT = 8;
 export const MEMBERSHIP_DASHBOARD_BLOCK_IDS = ["birthdays", "anniversaries", "profiles", "engagement", "volunteer"] as const;
 
 export type MembershipDashboardBlockId = (typeof MEMBERSHIP_DASHBOARD_BLOCK_IDS)[number];
-export type MembershipDashboardBlockWidth = "half" | "full";
+export type MembershipDashboardBlockWidth = "quarter" | "half" | "full";
 export type MembershipDashboardLayout = {
   order: MembershipDashboardBlockId[];
   visible: Record<MembershipDashboardBlockId, boolean>;
@@ -117,7 +117,7 @@ export function normalizeDashboardLayout(input: unknown): MembershipDashboardLay
   const widths = { ...DEFAULT_MEMBERSHIP_DASHBOARD_LAYOUT.widths };
   for (const id of MEMBERSHIP_DASHBOARD_BLOCK_IDS) {
     if (typeof requestedVisible[id] === "boolean") visible[id] = requestedVisible[id] as boolean;
-    if (requestedWidths[id] === "half" || requestedWidths[id] === "full") widths[id] = requestedWidths[id];
+    if (requestedWidths[id] === "quarter" || requestedWidths[id] === "half" || requestedWidths[id] === "full") widths[id] = requestedWidths[id];
   }
   return { order, visible, widths };
 }

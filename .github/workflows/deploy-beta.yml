@@ -1,0 +1,68 @@
+name: Deploy beta
+
+on:
+  push:
+    branches:
+      - beta
+  workflow_dispatch:
+
+concurrency:
+  group: beta-deployment
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: beta
+    steps:
+      - name: Check out beta
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          DEPLOY_KEY: ${{ secrets.BETA_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.BETA_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/beta_deploy_key"
+          chmod 600 "$HOME/.ssh/beta_deploy_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+      - name: Sync source to VPS
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.BETA_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.BETA_DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.BETA_DEPLOY_PORT || 22 }}
+          DEPLOY_PATH: ${{ secrets.BETA_DEPLOY_PATH || '/var/www/stpauls-site' }}
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" -i "$HOME/.ssh/beta_deploy_key" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
+          rsync -az --delete \
+            --exclude '.env' \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            --exclude 'storage' \
+            -e "ssh -p $DEPLOY_PORT -i $HOME/.ssh/beta_deploy_key" \
+            ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+
+      - name: Install, build, and restart beta
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.BETA_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.BETA_DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.BETA_DEPLOY_PORT || 22 }}
+          DEPLOY_PATH: ${{ secrets.BETA_DEPLOY_PATH || '/var/www/stpauls-site' }}
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" -i "$HOME/.ssh/beta_deploy_key" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && npm ci && npm run deployment:check && npm run db:generate && npm run build && sudo -n systemctl restart stpauls-site"

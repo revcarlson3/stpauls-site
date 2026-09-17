@@ -61,6 +61,27 @@ export function FormRenderer({ formId, title, alignment = "left", previewDefinit
     if (!form?.definition.steps.some((stepItem) => stepItem.fields.some((field) => field.type === "button" && field.settings?.loggedInOnly === true))) return;
     void fetch("/api/account").then((response) => setIsAuthenticated(response.ok)).catch(() => setIsAuthenticated(false));
   }, [form]);
+  useEffect(() => {
+    if (!form) return;
+    void fetch("/api/account/membership").then(async (response) => {
+      if (!response.ok) return;
+      const value = await response.json();
+      const individual = value.individual && typeof value.individual === "object" ? value.individual as Record<string, unknown> : {};
+      const family = individual.family && typeof individual.family === "object" ? individual.family as Record<string, unknown> : {};
+      const known: Record<string, unknown> = {
+        firstName: individual.firstName, middleName: individual.middleName, lastName: individual.lastName ?? family.lastName,
+        calledByName: individual.calledByName, email: individual.email, cellphone: individual.cellphone, otherPhone: individual.otherPhone,
+        familyName: family.lastName, familyEmail: family.email, familyPhone: family.phone,
+        fullName: [individual.firstName, individual.lastName ?? family.lastName].filter(Boolean).join(" ")
+      };
+      const fieldNames = form.definition.steps.flatMap((stepItem) => stepItem.fields).map((field) => field.name);
+      setValues((current) => fieldNames.reduce((next, name) => {
+        const valueForField = known[name];
+        if (next[name] === undefined && valueForField !== undefined && valueForField !== null) next[name] = valueForField;
+        return next;
+      }, { ...current }));
+    }).catch(() => undefined);
+  }, [form]);
 
   const currentStep = form?.definition.steps[step];
   const hasButtonFields = currentStep?.fields.some((field) => field.type === "button") === true;

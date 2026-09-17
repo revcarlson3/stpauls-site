@@ -10,8 +10,58 @@ export async function PATCH(request: Request) {
     const input = await request.json();
     const rawMemberIds: unknown[] = Array.isArray(input?.memberIds) ? input.memberIds : [];
     const memberIds: string[] = Array.from(new Set(rawMemberIds.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)));
-    if (!memberIds.length || !["archive", "restore", "update"].includes(input.action)) {
+    if (!memberIds.length || !["archive", "restore", "update", "add-to-group"].includes(input.action)) {
+      if (input.action === "add-to-group") {
+        return NextResponse.json({ error: "Select at least one member and choose a group." }, { status: 400 });
+      }
       return NextResponse.json({ error: "Select at least one member and choose a valid action." }, { status: 400 });
+    }
+    if (input.action === "add-to-group") {
+      const audienceType = input.audienceType === "manual-list" ? "manual-list" : "volunteer-group";
+      const groupId = typeof input.groupId === "string" ? input.groupId.trim() : "";
+      if (!groupId) return NextResponse.json({ error: "Choose a group." }, { status: 400 });
+      const group = audienceType === "manual-list"
+        ? await db.membershipManualList.findUnique({ where: { id: groupId }, select: { id: true, name: true } })
+        : await db.membershipVolunteerGroup.findUnique({ where: { id: groupId }, select: { id: true, name: true } });
+      if (!group) return NextResponse.json({ error: "Group not found." }, { status: 404 });
+      const activeMembers = await db.membershipIndividual.findMany({
+        where: { id: { in: memberIds }, status: { not: "REMOVED" } },
+        select: { id: true }
+      });
+      if (audienceType === "manual-list") {
+        const result = await db.membershipManualListMember.createMany({
+          data: activeMembers.map((member) => ({ listId: groupId, individualId: member.id })),
+          skipDuplicates: true
+        });
+        return NextResponse.json({ updatedCount: result.count, alreadyAssigned: activeMembers.length - result.count, groupName: group.name });
+      }
+      const existing = await db.membershipVolunteerGroupMember.findMany({
+        where: { groupId, individualId: { in: activeMembers.map((member) => member.id) } },
+        select: { individualId: true }
+      });
+      const existingIds = new Set(existing.map((member) => member.individualId));
+      const addedIds = activeMembers.map((member) => member.id).filter((id) => !existingIds.has(id));
+      if (addedIds.length) {
+        await db.$transaction([
+          db.membershipVolunteerGroupMember.createMany({ data: addedIds.map((individualId) => ({ groupId, individualId })) }),
+          ...addedIds.map((individualId) => db.membershipVolunteerAssignment.create({ data: { groupId, individualId, action: "ASSIGNED", changedById: user.id } }))
+        ]);
+        const orders = await db.membershipVolunteerRotationOrder.findMany({
+          where: { groupId, isActive: true },
+          include: { entries: { orderBy: { position: "desc" }, take: 1, select: { position: true } } }
+        });
+        for (const order of orders) {
+          const orderMembers = await db.membershipVolunteerRotationEntry.findMany({ where: { orderId: order.id }, select: { individualId: true } });
+          const orderIds = new Set(orderMembers.map((entry) => entry.individualId));
+          const newIds = addedIds.filter((id) => !orderIds.has(id));
+          if (newIds.length) {
+            await db.membershipVolunteerRotationEntry.createMany({
+              data: newIds.map((individualId, index) => ({ orderId: order.id, individualId, position: (order.entries[0]?.position ?? -1) + index + 1 }))
+            });
+          }
+        }
+      }
+      return NextResponse.json({ updatedCount: addedIds.length, alreadyAssigned: activeMembers.length - addedIds.length, groupName: group.name });
     }
     if (input.action === "update") {
       const updates: { status?: "ACTIVE" | "INACTIVE" | "DECEASED"; memberTypeId?: string; familyRoleId?: string } = {};

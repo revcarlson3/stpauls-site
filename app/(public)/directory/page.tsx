@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Container } from "@/components/ui";
 import { formatPhoneNumber } from "@/lib/phone-numbers";
 
@@ -11,6 +12,7 @@ type DirectoryMember = {
   familyName: string;
   email: string | null;
   phone: string | null;
+  familyPhotoUrl: string | null;
   address: string;
 };
 
@@ -18,10 +20,15 @@ export default function MemberDirectoryPage() {
   const [members, setMembers] = useState<DirectoryMember[]>([]);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     void fetch("/api/membership/directory").then(async (response) => {
       const value = await response.json();
+      if (response.status === 401 || response.status === 403) {
+        router.replace("/account");
+        return;
+      }
       if (!response.ok) throw new Error(value.error ?? "Unable to load the member directory.");
       setMembers(value.members ?? []);
     }).catch((reason: Error) => setError(reason.message));
@@ -40,6 +47,7 @@ export default function MemberDirectoryPage() {
     <label className="mt-7 grid max-w-xl gap-1 text-sm font-semibold">Search directory<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name or family" className="focus-ring rounded-lg border border-ink/15 bg-white px-3 py-2 font-normal" /></label>
     {error ? <p role="alert" className="mt-6 text-sm font-semibold text-coral">{error}</p> : <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">
       {visibleMembers.map((member) => <article key={member.id} className="rounded-2xl border border-ink/10 bg-white p-5 shadow-sm">
+        {member.familyPhotoUrl && <img src={member.familyPhotoUrl} alt={`${member.familyName} family`} className="mb-4 aspect-[4/3] w-full rounded-xl object-cover" />}
         <h2 className="font-serif text-2xl">{member.firstName} {member.lastName}</h2>
         <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-coral">{member.familyName}</p>
         <dl className="mt-4 grid gap-2 text-sm">

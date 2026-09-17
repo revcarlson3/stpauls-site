@@ -28,7 +28,7 @@ function reportData(input: unknown) {
 export async function PATCH(request: Request, context: { params: { id: string } }) {
   try {
     const user = await authorize();
-    const existing = await db.membershipReport.findFirst({ where: { id: context.params.id, createdById: user.id } });
+    const existing = await db.membershipReport.findFirst({ where: { id: context.params.id, scope: "MEMBERSHIP", createdById: user.id } });
     if (!existing) return NextResponse.json({ error: "Report not found." }, { status: 404 });
     const body = await request.json();
     if (body && typeof body === "object" && Object.prototype.hasOwnProperty.call(body, "layout") && !Object.prototype.hasOwnProperty.call(body, "name")) {
@@ -48,7 +48,7 @@ export async function PATCH(request: Request, context: { params: { id: string } 
 export async function DELETE(_: Request, context: { params: { id: string } }) {
   try {
     const user = await authorize();
-    const existing = await db.membershipReport.findFirst({ where: { id: context.params.id, createdById: user.id } });
+    const existing = await db.membershipReport.findFirst({ where: { id: context.params.id, scope: "MEMBERSHIP", createdById: user.id } });
     if (!existing) return NextResponse.json({ error: "Report not found." }, { status: 404 });
     await db.membershipReport.delete({ where: { id: existing.id } });
     return NextResponse.json({ ok: true });

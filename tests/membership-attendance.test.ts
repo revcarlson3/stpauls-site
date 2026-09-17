@@ -35,18 +35,26 @@ describe("membership event validation", () => {
 describe("membership attendance validation", () => {
   it("normalizes a bounded batch and allows clearing a record", () => {
     expect(normalizeAttendanceEntries([
-      { individualId: "member-1", status: "PRESENT", participationType: "VOLUNTEER", minutesParticipated: "90", notes: "  Usher team  " },
-      { individualId: "member-2", status: "", participationType: "ATTENDEE", minutesParticipated: "" }
+      { individualId: "member-1", status: "PRESENT", minutesParticipated: "90", notes: "  Usher team  " },
+      { individualId: "member-2", status: "", minutesParticipated: "" }
     ])).toEqual([
-      { individualId: "member-1", status: "PRESENT", participationType: "VOLUNTEER", minutesParticipated: 90, notes: "Usher team" },
-      { individualId: "member-2", status: null, participationType: "ATTENDEE", minutesParticipated: null, notes: null }
+      { individualId: "member-1", status: "PRESENT", minutesParticipated: 90, notes: "Usher team" },
+      { individualId: "member-2", status: null, minutesParticipated: null, notes: null }
     ]);
+  });
+
+  it("accepts all editable attendance statuses", () => {
+    expect(normalizeAttendanceEntries([
+      { individualId: "present", status: "PRESENT" },
+      { individualId: "absent", status: "ABSENT" },
+      { individualId: "excused", status: "EXCUSED" }
+    ]).map((entry) => entry.status)).toEqual(["PRESENT", "ABSENT", "EXCUSED"]);
   });
 
   it("rejects duplicate members and unreasonable participation duration", () => {
     expect(() => normalizeAttendanceEntries([
       { individualId: "member-1", status: "PRESENT", minutesParticipated: 10081 }
-    ])).toThrow("Participation minutes");
+    ])).toThrow("Attendance minutes");
     expect(() => normalizeAttendanceEntries([
       { individualId: "member-1", status: "PRESENT" },
       { individualId: "member-1", status: "ABSENT" }
@@ -56,7 +64,6 @@ describe("membership attendance validation", () => {
   it("maps attendance records to stable reporting fields", () => {
     const row = membershipAttendanceReportRow({
       status: "PRESENT",
-      participationType: "LEADER",
       source: "MANUAL",
       checkedInAt: new Date("2026-09-13T13:55:00.000Z"),
       minutesParticipated: 75,
@@ -70,7 +77,6 @@ describe("membership attendance validation", () => {
       individualId: "member-1",
       memberName: "Alex Johnson",
       attendanceStatus: "PRESENT",
-      participationType: "LEADER",
       minutesParticipated: 75
     });
   });

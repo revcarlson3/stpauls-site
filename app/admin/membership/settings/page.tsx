@@ -45,8 +45,6 @@ export default function MembershipSettingsPage() {
   const [cleanupPreview, setCleanupPreview] = useState<DocumentCleanupPreview | null>(null);
   const [previewingCleanup, setPreviewingCleanup] = useState(false);
   const [cleaningDocuments, setCleaningDocuments] = useState(false);
-  const [cronCopied, setCronCopied] = useState(false);
-  const cronCommand = "0 2 1 9 * cd /path/to/stpauls-site && npm run membership:advance-grades >> /path/to/stpauls-site/logs/membership-cron.log 2>&1";
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   async function loadTypes() {
@@ -151,16 +149,6 @@ export default function MembershipSettingsPage() {
     setMessage(`${value.updated ?? 0} grade level${value.updated === 1 ? "" : "s"} updated.`);
   }
 
-  async function copyCronCommand() {
-    if (!navigator.clipboard) {
-      setError("Copy is unavailable in this browser. Select the command and copy it manually.");
-      return;
-    }
-    await navigator.clipboard.writeText(cronCommand);
-    setCronCopied(true);
-    window.setTimeout(() => setCronCopied(false), 2500);
-  }
-
   async function previewDocumentCleanup() {
     setPreviewingCleanup(true);
     setCleanupPreview(null);
@@ -250,15 +238,6 @@ export default function MembershipSettingsPage() {
         </ul>}
         {cleanupPreview.truncated && <p className="mt-2 text-xs text-ink/55">Showing the first 100 expired documents. Cleanup applies to the full preview count.</p>}
       </div>}
-    </section>
-    <section className="mt-8 max-w-3xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
-      <h2 className="font-serif text-2xl">Scheduled tasks</h2>
-      <p className="mt-2 text-sm text-ink/60">For shared hosting or servers with cron, add this line to run grade advancement once each September. Replace both <code>/path/to/stpauls-site</code> values with the absolute installation path and make sure the log directory exists.</p>
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start">
-        <textarea readOnly value={cronCommand} aria-label="Grade advancement cron command" className="focus-ring min-h-24 flex-1 rounded-lg border border-ink/15 bg-ink/[0.03] p-3 font-mono text-xs leading-5 text-ink/75" />
-        <Button type="button" onClick={() => void copyCronCommand()} className="shrink-0">{cronCopied ? "Copied" : "Copy command"}</Button>
-      </div>
-      <p className="mt-3 text-xs text-ink/55">The command is idempotent for each school year, so rerunning it does not advance grades twice.</p>
     </section>
   </Container></main>;
 }

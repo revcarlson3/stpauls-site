@@ -8,7 +8,6 @@ import { siteIdentityAssetUrl } from "@/lib/site-identity";
 
 export async function GET() {
   try {
-    await requirePermission("MANAGE_SETTINGS");
     const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { siteName: true, siteUrl: true, siteTagline: true, siteLogoUrl: true, siteLogoLightUrl: true, siteLogoDarkUrl: true, siteFaviconUrl: true, siteShowTitle: true, siteShowTagline: true, siteShowLogo: true } });
     return NextResponse.json({ siteName: settings?.siteName ?? "St. Paul's", siteUrl: settings?.siteUrl ?? "", siteTagline: settings?.siteTagline ?? "A place to belong.", siteLogoUrl: siteIdentityAssetUrl(settings?.siteLogoUrl), siteLogoLightUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl), siteLogoDarkUrl: siteIdentityAssetUrl(settings?.siteLogoDarkUrl), siteFaviconUrl: siteIdentityAssetUrl(settings?.siteFaviconUrl), siteShowTitle: settings?.siteShowTitle ?? true, siteShowTagline: settings?.siteShowTagline ?? true, siteShowLogo: settings?.siteShowLogo ?? false });
   } catch {

@@ -56,3 +56,15 @@ export async function getSmsSettings() {
     from: settings?.smsFrom ?? ""
   };
 }
+
+export async function getPrayerRequestSettings() {
+  const settings = await db.securitySettings.findUnique({
+    where: { id: 1 },
+    select: { prayerRequestsAdminEmail: true, prayerRequestsSundayEmail: true, prayerRequestsEldersEmail: true }
+  });
+  return {
+    adminEmail: settings?.prayerRequestsAdminEmail ?? "",
+    sundayEmail: settings?.prayerRequestsSundayEmail ?? "",
+    eldersEmail: settings?.prayerRequestsEldersEmail ?? ""
+  };
+}

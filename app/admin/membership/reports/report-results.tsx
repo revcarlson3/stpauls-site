@@ -30,6 +30,8 @@ export function ReportResults() {
   const [groupingCounts, setGroupingCounts] = useState<GroupCount[]>([]);
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [error, setError] = useState("");
+  const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
+  const [open, setOpen] = useState(false);
 
   async function loadReports(preferredId?: string) {
     const response = await fetch("/api/membership/reports", { cache: "no-store" });
@@ -54,8 +56,39 @@ export function ReportResults() {
       void loadReports(id);
     };
     window.addEventListener("membership-reports-updated", handleReportsUpdated);
-    return () => window.removeEventListener("membership-reports-updated", handleReportsUpdated);
+    const handlePreview = (event: Event) => {
+      const definition = (event as CustomEvent<Record<string, unknown>>).detail;
+      setPreview(definition);
+      void run("preview", definition);
+    };
+    const handleRun = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (id) void run(id);
+    };
+    window.addEventListener("membership-report-preview", handlePreview);
+    window.addEventListener("membership-report-run", handleRun);
+    return () => {
+      window.removeEventListener("membership-reports-updated", handleReportsUpdated);
+      window.removeEventListener("membership-report-preview", handlePreview);
+      window.removeEventListener("membership-report-run", handleRun);
+    };
   }, []);
+
+  async function runPreview(definition: Record<string, unknown>) {
+    setError("");
+    const response = await fetch(`/api/membership/reports/preview/results?definition=${encodeURIComponent(JSON.stringify(definition))}&page=1&pageSize=10000&sort=name&direction=asc&_=${Date.now()}`, { cache: "no-store" });
+    const value = await response.json();
+    if (!response.ok) { setError(value.error ?? "Unable to run report."); return; }
+    setColumns(value.report.columns ?? []);
+    setRows(value.rows ?? []);
+    setLayout(value.report.layout ?? {});
+    setGeneratedAt(value.report.generatedAt ?? new Date().toISOString());
+    setGeneratedBy(value.report.generatedBy ?? "");
+    setReportType(value.report.reportType ?? "");
+    setGrouping(value.report.grouping ?? "");
+    setGroupingCounts(value.report.groupingCounts ?? []);
+    setSummary(value.report.summary ?? null);
+  }
 
   function selectReport(id: string) {
     const report = reports.find((item) => item.id === id);
@@ -65,13 +98,24 @@ export function ReportResults() {
     setLayout(report?.layout ?? {});
   }
 
-  async function run() {
-    if (!reportId) return;
+  async function run(targetId = reportId, previewDefinition = preview) {
+    if (!targetId) return;
+    setReportId(targetId);
+    setOpen(true);
+    if (targetId === "preview" && previewDefinition) {
+      await runPreview(previewDefinition);
+      return;
+    }
+    const selectedReport = reports.find((report) => report.id === targetId);
+    const requestedSort = selectedReport?.sort?.[0]?.key ?? sort;
+    const requestedDirection = selectedReport?.sort?.[0]?.direction ?? direction;
+    setSort(requestedSort);
+    setDirection(requestedDirection);
     setError("");
     setGrouping("");
     setGroupingCounts([]);
     setSummary(null);
-    const response = await fetch(`/api/membership/reports/${reportId}/results?page=1&pageSize=10&sort=${encodeURIComponent(sort)}&direction=${direction}&_=${Date.now()}`, { cache: "no-store" });
+    const response = await fetch(`/api/membership/reports/${targetId}/results?page=1&pageSize=10000&sort=${encodeURIComponent(requestedSort)}&direction=${requestedDirection}&_=${Date.now()}`, { cache: "no-store" });
     const value = await response.json();
     if (!response.ok) { setError(value.error ?? "Unable to run report."); return; }
     setColumns(value.report.columns ?? []);
@@ -88,17 +132,22 @@ export function ReportResults() {
   async function saveLayout(nextLayout: MembershipReportLayout) {
     if (!reportId) return;
     setLayout(nextLayout);
+    if (reportId === "preview") {
+      setLayoutMessage("Table layout updated for this report.");
+      return;
+    }
     const response = await fetch(`/api/membership/reports/${reportId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ layout: nextLayout }) });
     setLayoutMessage(response.ok ? "Table layout saved." : "Unable to save table layout.");
   }
 
-  return <section className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="font-serif text-2xl">Run a report</h2><p className="mt-1 text-sm text-ink/60">Results are loaded from the current membership records.</p></div><div className="flex flex-wrap gap-2"><select value={reportId} onChange={(event) => selectReport(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm"><option value="">Choose a saved report</option>{reports.map((report) => <option key={report.id} value={report.id}>{report.name}</option>)}</select><Button type="button" onClick={() => void run()}>Run report</Button></div></div>
+  return <>
+    {open && <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/40 p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="report-results-title"><div className="mx-auto min-h-[calc(100vh-2rem)] w-full max-w-[96rem] rounded-2xl bg-white p-5 shadow-2xl sm:p-8"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="report-results-title" className="font-serif text-2xl">Report results</h2><p className="mt-1 text-sm text-ink/60">Results are loaded from the current membership records.</p></div><Button type="button" variant="default" onClick={() => setOpen(false)}>Close</Button></div>
+    <div className="mt-4 flex items-center gap-2"><span className="text-sm text-ink/60">{reportId === "preview" ? "One-time report" : reports.find((report) => report.id === reportId)?.name ?? "Report"}</span></div>
     {error && <Notification variant="danger" className="mt-4">{error}</Notification>}
     {summary && <div className="mt-5 grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-ink/10 bg-mist/30 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-ink/55">{reportType === "family-overview" ? "Matching families" : reportType === "attendance-participation" ? "Attendance records" : reportType === "service-history" ? "Service records" : "Matching members"}</p><p className="mt-1 text-2xl font-semibold">{summary.total}</p></div><div className="rounded-xl border border-ink/10 bg-mist/30 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-ink/55">{reportType === "attendance-participation" ? "Present" : reportType === "service-history" ? "Completed" : "Active"}</p><p className="mt-1 text-2xl font-semibold">{summary.active}</p></div><div className="rounded-xl border border-ink/10 bg-mist/30 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-ink/55">{reportType === "attendance-participation" ? "Absent or excused" : reportType === "service-history" ? "No-show" : "Other statuses"}</p><p className="mt-1 text-2xl font-semibold">{summary.inactive}</p></div></div>}
     {grouping && groupingCounts.length > 0 && <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{groupingCounts.map((group) => <div key={group.label} className="rounded-xl border border-ink/10 bg-mist/30 p-3"><p className="truncate text-xs font-semibold uppercase tracking-wide text-ink/55">{group.label}</p><p className="mt-1 text-2xl font-semibold">{group.count}</p><p className="text-xs text-ink/55">{reportType === "family-overview" ? "families" : reportType === "attendance-participation" || reportType === "service-history" ? "records" : "members"}</p></div>)}</div>}
     {grouping && groupingCounts.length > 0 && <div className="mt-5"><ReportSummaryChart title={`Breakdown by ${columns.find((column) => column.key === grouping)?.label ?? grouping}`} items={groupingCounts} noun={reportType === "family-overview" ? "families" : reportType === "attendance-participation" || reportType === "service-history" ? "records" : "members"} /></div>}
-    {rows.length > 0 && <div className="mt-5 overflow-x-auto"><ReportDataTable key={`${reportId}-${columns.map((column) => column.key).join("-")}`} rows={rows} columns={columns} sort={sort} direction={direction} layout={layout} serverUrl={`/api/membership/reports/${reportId}/results?`} reportName={reports.find((report) => report.id === reportId)?.name ?? "Membership report"} generatedAt={generatedAt} generatedBy={generatedBy} onLayoutChange={(nextLayout) => void saveLayout({ ...layout, ...nextLayout, widths: { ...layout.widths, ...nextLayout.widths }, visibility: { ...layout.visibility, ...nextLayout.visibility } })} /></div>}
-    {layoutMessage && <p className="mt-2 text-xs text-ink/55">{layoutMessage}</p>}
-  </section>;
+    {rows.length > 0 && <div className="mt-5 overflow-x-auto"><ReportDataTable key={`${reportId}-${columns.map((column) => column.key).join("-")}`} rows={rows} columns={columns} sort={sort} direction={direction} layout={layout} reportName={reports.find((report) => report.id === reportId)?.name ?? (reportId === "preview" ? "One-time report" : "Membership report")} generatedAt={generatedAt} generatedBy={generatedBy} onLayoutChange={(nextLayout) => void saveLayout({ ...layout, ...nextLayout, widths: { ...layout.widths, ...nextLayout.widths }, visibility: { ...layout.visibility, ...nextLayout.visibility } })} /></div>}
+    {layoutMessage && <p className="mt-2 text-xs text-ink/55">{layoutMessage}</p>}</div></div>}
+  </>;
 }

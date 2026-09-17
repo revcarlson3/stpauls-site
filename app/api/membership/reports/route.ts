@@ -29,7 +29,7 @@ export async function GET() {
   try {
     const user = await authorize();
     const reports = await db.membershipReport.findMany({
-      where: { OR: [{ createdById: user.id }, { visibility: "MEMBERSHIP_MANAGERS" }] },
+      where: { scope: "MEMBERSHIP", OR: [{ createdById: user.id }, { visibility: "MEMBERSHIP_MANAGERS" }] },
       orderBy: [{ updatedAt: "desc" }],
       select: { id: true, name: true, description: true, reportType: true, criteria: true, columns: true, sort: true, grouping: true, layout: true, striped: true, visibility: true, createdAt: true, updatedAt: true }
     });
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const user = await authorize();
     const data = reportData(await request.json());
     if (!data.name || !data.reportType) return NextResponse.json({ error: "Report name and type are required." }, { status: 400 });
-    const report = await db.membershipReport.create({ data: { ...data, createdById: user.id } });
+    const report = await db.membershipReport.create({ data: { ...data, scope: "MEMBERSHIP", createdById: user.id } });
     return NextResponse.json({ report }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Unable to create report." }, { status: 400 });

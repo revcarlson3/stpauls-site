@@ -18,6 +18,7 @@ import {
 import { formatPhoneNumber } from "@/lib/phone-numbers";
 import { membershipAttendanceReportRow } from "@/lib/membership-attendance";
 import { membershipServiceReportRow } from "@/lib/membership-volunteers";
+import { formatReportDate } from "@/lib/report-date-format";
 
 async function databaseGroupingCounts(
   where: Prisma.MembershipIndividualWhereInput,
@@ -71,7 +72,30 @@ export async function GET(request: Request, context: { params: { id: string } })
   try {
     const user = await requirePermission("MANAGE_MEMBERSHIP");
     await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
-    const report = await db.membershipReport.findFirst({ where: { id: context.params.id, OR: [{ createdById: user.id }, { visibility: "MEMBERSHIP_MANAGERS" }] } });
+    const savedReport = await db.membershipReport.findFirst({ where: { id: context.params.id, scope: "MEMBERSHIP", OR: [{ createdById: user.id }, { visibility: "MEMBERSHIP_MANAGERS" }] } });
+    let report = savedReport;
+    if (context.params.id === "preview") {
+      const definition = new URL(request.url).searchParams.get("definition");
+      if (!definition) return NextResponse.json({ error: "Report definition is required." }, { status: 400 });
+      try {
+        const parsed = JSON.parse(definition) as Record<string, unknown>;
+        if (typeof parsed.reportType !== "string" || !parsed.criteria || !Array.isArray(parsed.columns)) return NextResponse.json({ error: "Invalid report definition." }, { status: 400 });
+        report = {
+          id: "preview",
+          name: typeof parsed.name === "string" ? parsed.name : "One-time report",
+          reportType: parsed.reportType,
+          criteria: parsed.criteria,
+          columns: parsed.columns,
+          sort: Array.isArray(parsed.sort) ? parsed.sort : [],
+          grouping: parsed.grouping ?? {},
+          layout: {},
+          visibility: "PRIVATE",
+          createdById: user.id
+        } as typeof savedReport;
+      } catch {
+        return NextResponse.json({ error: "Invalid report definition." }, { status: 400 });
+      }
+    }
     if (!report) return NextResponse.json({ error: "Report not found." }, { status: 404 });
     const url = new URL(request.url);
     const reportRequest = parseMembershipReportRequest(url.searchParams);
@@ -87,7 +111,7 @@ export async function GET(request: Request, context: { params: { id: string } })
         orderBy: { lastAttemptAt: "desc" },
         select: { id: true, displayName: true, address: true, status: true, attemptCount: true, deliveredAt: true, failureReason: true, message: { select: { subject: true, channel: true, createdAt: true } } }
       });
-      const rows: Array<{ id: string; [key: string]: string | number }> = recipients.map((recipient) => ({ id: recipient.id, name: recipient.displayName, email: recipient.address, messageSubject: recipient.message.subject ?? "—", messageChannel: recipient.message.channel, deliveryStatus: recipient.status, attemptCount: recipient.attemptCount, deliveredAt: recipient.deliveredAt?.toISOString() ?? "—", failureReason: recipient.failureReason ?? "—" }));
+      const rows: Array<{ id: string; [key: string]: string | number }> = recipients.map((recipient) => ({ id: recipient.id, name: recipient.displayName, email: recipient.address, messageSubject: recipient.message.subject ?? "—", messageChannel: recipient.message.channel, deliveryStatus: recipient.status, attemptCount: recipient.attemptCount, deliveredAt: formatReportDate(recipient.deliveredAt), failureReason: recipient.failureReason ?? "—" }));
       const availableColumns = DEFAULT_MEMBERSHIP_REPORT_COLUMNS;
       const selectedColumns = (Array.isArray(report.columns) ? report.columns : availableColumns).filter((column): column is MembershipReportColumn => Boolean(column) && typeof column === "object" && availableColumns.some((available) => available.key === String((column as MembershipReportColumn).key)));
       const safeColumns = selectedColumns.length ? selectedColumns : availableColumns;
@@ -114,8 +138,8 @@ export async function GET(request: Request, context: { params: { id: string } })
         },
         orderBy: [{ event: { startsAt: "desc" } }, { individual: { lastName: "asc" } }],
         select: {
-          id: true, status: true, participationType: true, source: true, checkedInAt: true, minutesParticipated: true, recordedAt: true,
-          event: { select: { id: true, title: true, eventType: true, category: true, location: true, startsAt: true, endsAt: true } },
+          id: true, status: true, source: true, checkedInAt: true, minutesParticipated: true, recordedAt: true,
+          event: { select: { id: true, title: true, eventType: true, category: true, location: true, startsAt: true, endsAt: true, timeZone: true } },
           individual: { select: { id: true, memberNumber: true, firstName: true, lastName: true, family: { select: { lastName: true } } } }
         },
         take: 10000
@@ -125,10 +149,10 @@ export async function GET(request: Request, context: { params: { id: string } })
         return {
           id: record.id,
           ...row,
-          eventStartsAt: row.eventStartsAt.toISOString(),
-          eventEndsAt: row.eventEndsAt?.toISOString() ?? "—",
-          checkedInAt: row.checkedInAt?.toISOString() ?? "—",
-          recordedAt: row.recordedAt.toISOString(),
+          eventStartsAt: formatReportDate(row.eventStartsAt, String(row.eventTimeZone)),
+          eventEndsAt: formatReportDate(row.eventEndsAt, String(row.eventTimeZone)),
+          checkedInAt: formatReportDate(row.checkedInAt),
+          recordedAt: formatReportDate(row.recordedAt),
           eventCategory: row.eventCategory ?? "—",
           eventLocation: row.eventLocation ?? "—",
           minutesParticipated: row.minutesParticipated ?? 0,
@@ -174,11 +198,11 @@ export async function GET(request: Request, context: { params: { id: string } })
           name: row.memberName,
           serviceRole: row.serviceRole ?? "—",
           serviceLocation: row.serviceLocation ?? "—",
-          shiftStartsAt: row.shiftStartsAt.toISOString(),
-          shiftEndsAt: row.shiftEndsAt?.toISOString() ?? "—",
+          shiftStartsAt: formatReportDate(row.shiftStartsAt),
+          shiftEndsAt: formatReportDate(row.shiftEndsAt),
           minutesServed: row.minutesServed ?? 0,
           serviceNotes: row.serviceNotes ?? "—",
-          serviceRecordedAt: row.serviceRecordedAt.toISOString()
+          serviceRecordedAt: formatReportDate(row.serviceRecordedAt)
         };
       });
       const availableColumns = DEFAULT_MEMBERSHIP_REPORT_COLUMNS;
@@ -254,15 +278,15 @@ export async function GET(request: Request, context: { params: { id: string } })
       otherPhone: formatPhoneNumber(member.otherPhone),
       otherPhoneType: member.otherPhoneType ?? "—",
       maritalStatus: member.maritalStatus,
-      birthday: member.birthday.toISOString().slice(0, 10),
-      weddingDate: member.weddingDate?.toISOString().slice(0, 10) ?? "—",
-      deceasedDate: member.deceasedDate?.toISOString().slice(0, 10) ?? "—",
+      birthday: formatReportDate(member.birthday.toISOString().slice(0, 10)),
+      weddingDate: formatReportDate(member.weddingDate ? member.weddingDate.toISOString().slice(0, 10) : null),
+      deceasedDate: formatReportDate(member.deceasedDate ? member.deceasedDate.toISOString().slice(0, 10) : null),
       volunteerGroups: member.volunteerGroups.map((item) => item.group.name).join(", ") || "—",
       volunteerGroupCount: member.volunteerGroups.length,
       volunteerRoles: member.volunteerGroups.map((item) => item.role).filter(Boolean).join(", ") || "—",
       volunteerLeader: member.volunteerGroups.some((item) => item.isLeader) ? "Yes" : "No"
       ,volunteerAssignmentCount: member.volunteerAssignmentHistory.length
-      ,lastVolunteerChange: member.volunteerAssignmentHistory[0]?.createdAt.toISOString() ?? "—"
+      ,lastVolunteerChange: formatReportDate(member.volunteerAssignmentHistory[0]?.createdAt)
     }));
     rows.forEach((row, index) => {
       const member = members[index];

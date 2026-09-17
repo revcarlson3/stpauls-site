@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     const search = url.searchParams.get("search")?.trim() ?? "";
     const memberType = url.searchParams.get("memberType")?.trim() ?? "";
     const status = url.searchParams.get("status")?.trim() ?? "active";
+    const forAssignment = url.searchParams.get("forAssignment") === "1";
     const dynamicListId = url.searchParams.get("dynamicListId")?.trim() ?? "";
     const id = url.searchParams.get("id");
     const dynamicIds = dynamicListId ? await db.membershipDynamicList.findUnique({ where: { id: dynamicListId }, select: { criteria: true } }).then((list) => list ? dynamicMemberIds(list.criteria) : []) : null;
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
       },
       orderBy: [{ family: { lastName: "asc" } }, { lastName: "asc" }, { firstName: "asc" }],
       include: { family: { include: { individuals: { where: { status: { not: "REMOVED" } }, select: { id: true, firstName: true, lastName: true, birthday: true, familyRole: { select: { name: true, slug: true } } } } } }, memberType: true, familyRole: true, customValues: { where: { definition: { isActive: true } }, select: { definitionId: true, value: true } } },
-      take: 200
+      take: forAssignment ? 10000 : 200
     });
     const selected = id ? members.find((member) => member.id === id) ?? null : members[0] ?? null;
     if (selected) {

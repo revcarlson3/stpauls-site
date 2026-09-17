@@ -2,15 +2,32 @@ import { readFile, unlink } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
 import { logAudit } from "@/lib/audit";
-import { requirePermission } from "@/lib/auth";
+import { getCurrentUser, requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { documentDownloadDisposition, isSafeDocumentStorageKey, parseMembershipDocumentExpiry } from "@/lib/membership-documents";
 import { requireEnabledModule } from "@/lib/modules";
 import { membershipAuditDetails } from "@/lib/membership-timeline";
 
-async function authorize() {
+async function authorizeManager() {
   const user = await requirePermission("MANAGE_MEMBERSHIP");
   await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
+  return user;
+}
+
+async function authorizeDownload(familyId: string) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized: sign-in required.");
+  if (user.permissions.includes("MANAGE_MEMBERSHIP")) {
+    await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
+    return user;
+  }
+  if (!user.permissions.includes("MY_MEMBERSHIP")) throw new Error("Unauthorized: membership access is not enabled.");
+  const link = await db.membershipUserMemberLink.findFirst({
+    where: { userId: user.id, individual: { familyId } },
+    select: { id: true }
+  });
+  if (!link) throw new Error("Unauthorized: this document is not available to the account.");
+  await requireEnabledModule("membership", user.id, "MY_MEMBERSHIP");
   return user;
 }
 
@@ -20,6 +37,9 @@ async function findDocument(familyId: string, documentId: string) {
     select: {
       id: true,
       originalName: true,
+      category: true,
+      description: true,
+      memberVisible: true,
       storageKey: true,
       mimeType: true,
       sizeBytes: true,
@@ -32,7 +52,7 @@ async function findDocument(familyId: string, documentId: string) {
 
 export async function PATCH(request: Request, { params }: { params: { id: string; documentId: string } }) {
   try {
-    const user = await authorize();
+    const user = await authorizeManager();
     const body = await request.json();
     const parsed = parseMembershipDocumentExpiry(body.expiresAt);
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
@@ -42,10 +62,18 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     const document = await db.membershipDocument.update({
       where: { id: existing.id },
-      data: { expiresAt: parsed.expiresAt },
+      data: {
+        expiresAt: parsed.expiresAt,
+        ...(typeof body.category === "string" ? { category: body.category.trim().slice(0, 40) || "OTHER" } : {}),
+        ...(typeof body.description === "string" ? { description: body.description.trim().slice(0, 500) || null } : {}),
+        ...(typeof body.memberVisible === "boolean" ? { memberVisible: body.memberVisible } : {})
+      },
       select: {
         id: true,
         originalName: true,
+        category: true,
+        description: true,
+        memberVisible: true,
         mimeType: true,
         sizeBytes: true,
         expiresAt: true,
@@ -73,9 +101,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
 export async function GET(_request: Request, { params }: { params: { id: string; documentId: string } }) {
   try {
-    const user = await authorize();
+    const user = await authorizeDownload(params.id);
     const document = await findDocument(params.id, params.documentId);
     if (!document || !isSafeDocumentStorageKey(document.storageKey)) {
+      return NextResponse.json({ error: "Family document not found." }, { status: 404 });
+    }
+    if (document.expiresAt && document.expiresAt <= new Date()) {
+      return NextResponse.json({ error: "This document has expired." }, { status: 404 });
+    }
+    if (!user.permissions.includes("MANAGE_MEMBERSHIP") && !document.memberVisible) {
       return NextResponse.json({ error: "Family document not found." }, { status: 404 });
     }
 
@@ -102,7 +136,7 @@ export async function GET(_request: Request, { params }: { params: { id: string;
 
 export async function DELETE(_request: Request, { params }: { params: { id: string; documentId: string } }) {
   try {
-    const user = await authorize();
+    const user = await authorizeManager();
     const document = await findDocument(params.id, params.documentId);
     if (!document) return NextResponse.json({ error: "Family document not found." }, { status: 404 });
 

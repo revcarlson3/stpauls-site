@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Button, Container, Notification } from "@/components/ui";
+import { Container, Notification } from "@/components/ui";
 import { MODULES } from "@/lib/modules";
 
 export default function SiteSettingsPage() {
   const pathname = usePathname();
   const messagingPage = pathname.endsWith("/messaging");
-  const [settings, setSettings] = useState({ siteName: "St. Paul's", siteTagline: "A place to belong.", emailProvider: "smtp", emailApiKey: "", emailApiSecret: "", emailApiDomain: "", emailApiRegion: "", smtpHost: "", smtpPort: 587, smtpUser: "", smtpPassword: "", emailFrom: "", smsProvider: "twilio", smsAccountId: "", smsAuthSecret: "", smsFrom: "", registrationCode: "", pollinationsApiKey: "", pollinationsApiKeyConfigured: false, membershipMessageRecipientLimit: 200, publicSiteEnabled: true, enabledModules: [] as string[] });
+  const [settings, setSettings] = useState({ siteName: "St. Paul's", siteTagline: "A place to belong.", adminSiteName: "Site administration", adminSiteTagline: "Management workspace", emailProvider: "smtp", emailApiKey: "", emailApiSecret: "", emailApiDomain: "", emailApiRegion: "", smtpHost: "", smtpPort: 587, smtpUser: "", smtpPassword: "", emailFrom: "", prayerRequestsAdminEmail: "", prayerRequestsSundayEmail: "", prayerRequestsEldersEmail: "", smsProvider: "twilio", smsAccountId: "", smsAuthSecret: "", smsFrom: "", registrationCode: "", pollinationsApiKey: "", pollinationsApiKeyConfigured: false, membershipMessageRecipientLimit: 200, publicSiteEnabled: true, maintenanceMode: false, enabledModules: [] as string[] });
   const [message, setMessage] = useState("");
   const [messageVariant, setMessageVariant] = useState<"success" | "danger">("success");
   const [testRecipient, setTestRecipient] = useState("");
   const [testingChannel, setTestingChannel] = useState<"EMAIL" | "SMS" | null>(null);
   const [canManageModules, setCanManageModules] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveRevision, setSaveRevision] = useState(0);
+  const pendingSaveField = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     void Promise.all([fetch("/api/site-settings"), fetch("/api/modules")]).then(async ([settingsResponse, modulesResponse]) => {
@@ -31,18 +33,25 @@ export default function SiteSettingsPage() {
     }).catch((error: Error) => { setMessageVariant("danger"); setMessage(error.message); });
   }, []);
 
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function saveSettings(field?: HTMLElement) {
+    setSaving(true);
     const payload = canManageModules ? settings : { ...settings, enabledModules: undefined };
     const response = await fetch("/api/site-settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     setMessageVariant(response.ok ? "success" : "danger");
-    setMessage(response.ok ? "Settings saved." : "Unable to save site settings.");
+    setMessage(response.ok ? "Changes saved." : "Unable to save site settings.");
     if (response.ok) {
-      setSettings((current) => ({ ...current, smtpPassword: "", emailApiKey: "", emailApiSecret: "", smsAuthSecret: "", pollinationsApiKeyConfigured: current.pollinationsApiKeyConfigured || Boolean(current.pollinationsApiKey), pollinationsApiKey: "" }));
+      field?.closest("label")?.setAttribute("data-settings-saved", "true");
       window.dispatchEvent(new Event("site-settings-updated"));
     }
-
+    setSaving(false);
   }
+
+  useEffect(() => {
+    const field = pendingSaveField.current;
+    if (!field) return;
+    pendingSaveField.current = null;
+    void saveSettings(field);
+  }, [saveRevision, settings]);
 
   async function sendTest(channel: "EMAIL" | "SMS") {
     setMessage("");
@@ -63,7 +72,7 @@ export default function SiteSettingsPage() {
       <Container className="py-10 sm:py-14">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Administration</p>
         <h1 className="mt-2 font-serif text-4xl">{messagingPage ? "Messaging Settings" : "Site Settings"}</h1>
-        <form autoComplete="off" onSubmit={(event) => void save(event)} className="mt-8 grid max-w-2xl gap-6">
+        <form autoComplete="off" onSubmit={(event) => { event.preventDefault(); void saveSettings(); }} onBlurCapture={(event) => { const target = event.target; if (target instanceof HTMLInputElement && target.type !== "checkbox" && target.type !== "radio" || target instanceof HTMLTextAreaElement) { target.closest("label")?.removeAttribute("data-settings-saved"); window.setTimeout(() => void saveSettings(target), 0); } }} onChangeCapture={(event) => { const target = event.target; if (target instanceof HTMLSelectElement || target instanceof HTMLInputElement && (target.type === "checkbox" || target.type === "radio")) { target.closest("label")?.removeAttribute("data-settings-saved"); pendingSaveField.current = target; setSaveRevision((current) => current + 1); } }} className="settings-form mt-8 grid gap-6 lg:grid-cols-2 xl:grid-cols-3 xl:items-start" data-settings-saving={saving ? "true" : "false"}>
           {messagingPage && <section className="grid gap-4 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
             <h2 className="font-serif text-2xl">Email messaging</h2>
             <p className="text-sm text-ink/60">Choose the email service used throughout the site. Secrets are encrypted and never returned to the browser.</p>
@@ -93,8 +102,15 @@ export default function SiteSettingsPage() {
           {!messagingPage && <section className="grid gap-4 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
             <h2 className="font-serif text-2xl">Administration identity</h2>
             <p className="text-sm text-ink/60">Set the title and subtitle shown in the administration header. These values are available even when the public website is disabled.</p>
-            <label className="grid gap-1 text-sm font-semibold">Administration title<input required value={settings.siteName} onChange={(event) => setSettings({ ...settings, siteName: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
-            <label className="grid gap-1 text-sm font-semibold">Administration subtitle<input value={settings.siteTagline} onChange={(event) => setSettings({ ...settings, siteTagline: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
+            <label className="grid gap-1 text-sm font-semibold">Administration title<input required value={settings.adminSiteName} onChange={(event) => setSettings({ ...settings, adminSiteName: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
+            <label className="grid gap-1 text-sm font-semibold">Administration subtitle<input value={settings.adminSiteTagline} onChange={(event) => setSettings({ ...settings, adminSiteTagline: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
+          </section>}
+          {!messagingPage && <section className="grid gap-4 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+            <h2 className="font-serif text-2xl">Prayer request notifications</h2>
+            <p className="text-sm text-ink/60">Use comma-separated addresses when more than one person should receive a notification.</p>
+            <label className="grid gap-1 text-sm font-semibold">Administrators who approve requests<input type="text" value={settings.prayerRequestsAdminEmail} onChange={(event) => setSettings({ ...settings, prayerRequestsAdminEmail: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" placeholder="admin@example.org" /></label>
+            <label className="grid gap-1 text-sm font-semibold">Sunday morning prayer distribution<input type="text" value={settings.prayerRequestsSundayEmail} onChange={(event) => setSettings({ ...settings, prayerRequestsSundayEmail: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
+            <label className="grid gap-1 text-sm font-semibold">Pastor / elder distribution<input type="text" value={settings.prayerRequestsEldersEmail} onChange={(event) => setSettings({ ...settings, prayerRequestsEldersEmail: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
           </section>}
           {!messagingPage && <section className="grid gap-4 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
             <h2 className="font-serif text-2xl">AI image generation</h2>
@@ -106,13 +122,15 @@ export default function SiteSettingsPage() {
             <h2 className="font-serif text-2xl">Public website</h2>
             <p className="text-sm text-ink/60">Turn the public-facing church website on or off. When disabled, visitors are sent to the administrator sign-in page and site-building tools are hidden from the admin menu.</p>
             <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={settings.publicSiteEnabled} onChange={(event) => setSettings((current) => ({ ...current, publicSiteEnabled: event.target.checked }))} /> Enable public website</label>
+            {settings.publicSiteEnabled && <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={settings.maintenanceMode} onChange={(event) => setSettings((current) => ({ ...current, maintenanceMode: event.target.checked }))} /> Enable maintenance mode</label>}
+            {settings.publicSiteEnabled && settings.maintenanceMode && <p className="text-xs text-ink/60">Visitors will see the maintenance page until this switch is turned off. Administrator login remains available.</p>}
           </section>}
           {!messagingPage && canManageModules && <section className="grid gap-3 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
             <h2 className="font-serif text-2xl">Available modules</h2>
             <p className="text-sm text-ink/60">Enabled modules appear in the admin menu for users who have the module&apos;s management permission.</p>
             {MODULES.map((module) => <label key={module.slug} className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={settings.enabledModules.includes(module.slug)} onChange={(event) => setSettings((current) => ({ ...current, enabledModules: event.target.checked ? [...current.enabledModules, module.slug] : current.enabledModules.filter((slug) => slug !== module.slug) }))} /> {module.name}</label>)}
           </section>}
-          <div><Button type="submit">Save settings</Button>{message && <Notification variant={messageVariant} className="mt-3">{message}</Notification>}</div>
+          <div className="xl:col-span-3">{saving && <span className="sr-only" role="status">Saving changes...</span>}{message && messageVariant === "danger" && <Notification variant="danger" className="mt-1">{message}</Notification>}</div>
         </form>
       </Container>
     </main>

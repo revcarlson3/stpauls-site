@@ -9,6 +9,7 @@ import { ImageDisplay } from "@/components/image-display";
 import { FormRenderer } from "@/components/form-renderer";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { PublicWidget } from "@/components/public-widget";
+import { PublicEventCalendar } from "@/components/public-event-calendar";
 
 type RenderBlock = {
   id: string;
@@ -374,6 +375,9 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
     }
     if (block.type === "table") {
       return <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}><TableBlock config={parseTableConfig(block.props?.content)} /></BlockSurface>;
+    }
+    if (block.type === "calendar") {
+      return <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}><PublicEventCalendar /></BlockSurface>;
     }
     if (block.type === "form") {
       const formId = typeof block.props?.formId === "string" ? block.props.formId : "";

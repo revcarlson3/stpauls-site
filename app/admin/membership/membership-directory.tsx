@@ -48,6 +48,9 @@ export function MembershipDirectory() {
   const [bulkRole, setBulkRole] = useState("");
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkGroupOpen, setBulkGroupOpen] = useState(false);
+  const [bulkGroupId, setBulkGroupId] = useState("");
+  const [groups, setGroups] = useState<{ id: string; name: string; type: "volunteer-group" | "manual-list" }[]>([]);
   const photoUrl = selected && typeof selected.family.photographUrl === "string" && selected.family.photographUrl ? selected.family.photographUrl : "/no-family-photo.jpg";
   const selectedId = selected?.id;
 
@@ -68,6 +71,15 @@ export function MembershipDirectory() {
   useEffect(() => {
     void fetch("/api/membership/reference").then((response) => response.ok ? response.json() : null).then((value) => {
       if (value) setRoles(value.roles);
+    }).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    void Promise.all([fetch("/api/membership/volunteer-groups"), fetch("/api/membership/manual-lists")]).then(async ([volunteerResponse, manualResponse]) => {
+      const [volunteer, manual] = await Promise.all([volunteerResponse.json(), manualResponse.json()]);
+      setGroups([
+        ...(volunteer.groups ?? []).map((group: { id: string; name: string }) => ({ ...group, type: "volunteer-group" as const })),
+        ...(manual.lists ?? []).map((list: { id: string; name: string }) => ({ id: list.id, name: list.name, type: "manual-list" as const }))
+      ]);
     }).catch(() => undefined);
   }, []);
 
@@ -140,6 +152,32 @@ export function MembershipDirectory() {
         setBulkMessage(reason instanceof Error ? reason.message : "Unable to update selected members.");
       } finally {
         setBulkSubmitting(false);
+    }
+  }
+  async function addSelectedToGroup() {
+    if (!selectedIds.size || !bulkGroupId) {
+      setBulkMessage("Choose a group.");
+      return;
+    }
+    setBulkSubmitting(true);
+    setBulkMessage("");
+    try {
+      const target = groups.find((group) => `${group.type}:${group.id}` === bulkGroupId);
+      const response = await fetch("/api/membership/individuals/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add-to-group", memberIds: Array.from(selectedIds), groupId: target?.id, audienceType: target?.type })
+      });
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error ?? "Unable to add selected members to the group.");
+      setBulkGroupOpen(false);
+      setBulkGroupId("");
+      setSelectedIds(new Set());
+      setBulkMessage(`${value.updatedCount} member${value.updatedCount === 1 ? "" : "s"} added to ${value.groupName}.${value.alreadyAssigned ? ` ${value.alreadyAssigned} already assigned.` : ""}`);
+    } catch (reason) {
+      setBulkMessage(reason instanceof Error ? reason.message : "Unable to add selected members to the group.");
+    } finally {
+      setBulkSubmitting(false);
     }
   }
     async function undoBulkAction() {
@@ -221,7 +259,8 @@ export function MembershipDirectory() {
       </div>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-y border-ink/10 py-3">
         <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} /> Select all visible</label>
-        {selectedIds.size > 0 && <details className="relative"><summary className="focus-ring list-none cursor-pointer rounded-full bg-coral px-4 py-2 text-xs font-semibold text-white">Bulk actions <span aria-hidden="true">⌄</span></summary><div className="absolute right-0 z-10 mt-2 grid min-w-48 gap-1 rounded-xl border border-ink/10 bg-white p-2 shadow-lg"><button type="button" className="focus-ring rounded-lg px-3 py-2 text-left text-sm hover:bg-mist" onClick={() => { const params = new URLSearchParams(); Array.from(selectedIds).forEach((id) => params.append("memberIds", id)); window.location.href = `/admin/membership/messaging?${params.toString()}`; }}>Message selected</button><button type="button" className="focus-ring rounded-lg px-3 py-2 text-left text-sm hover:bg-mist" onClick={() => setBulkEditOpen(true)}>Bulk modify</button>{members.some((member) => selectedIds.has(member.id) && member.status !== "REMOVED") && <button type="button" disabled={bulkSubmitting} onClick={() => void updateSelected("archive")} className="focus-ring rounded-lg px-3 py-2 text-left text-sm text-coral hover:bg-mist disabled:opacity-60">Archive selected</button>}{members.some((member) => selectedIds.has(member.id) && member.status === "REMOVED") && <button type="button" disabled={bulkSubmitting} onClick={() => void updateSelected("restore")} className="focus-ring rounded-lg px-3 py-2 text-left text-sm hover:bg-mist disabled:opacity-60">Restore selected</button>}</div></details>}
+        {selectedIds.size > 0 && <details className="relative"><summary className="focus-ring list-none cursor-pointer rounded-full bg-coral px-4 py-2 text-xs font-semibold text-white">Bulk actions <span aria-hidden="true">⌄</span></summary><div className="absolute right-0 z-10 mt-2 grid min-w-48 gap-1 rounded-xl border border-ink/10 bg-white p-2 shadow-lg"><button type="button" className="focus-ring rounded-lg px-3 py-2 text-left text-sm hover:bg-mist" onClick={() => { const params = new URLSearchParams(); Array.from(selectedIds).forEach((id) => params.append("memberIds", id)); window.location.href = `/admin/membership/messaging?${params.toString()}`; }}>Message selected</button><button type="button" className="focus-ring rounded-lg px-3 py-2 text-left text-sm hover:bg-mist" onClick={() => setBulkGroupOpen(true)}>Add to group</button><button type="button" className="focus-ring rounded-lg px-3 py-2 text-left text-sm hover:bg-mist" onClick={() => setBulkEditOpen(true)}>Bulk modify</button>{members.some((member) => selectedIds.has(member.id) && member.status !== "REMOVED") && <button type="button" disabled={bulkSubmitting} onClick={() => void updateSelected("archive")} className="focus-ring rounded-lg px-3 py-2 text-left text-sm text-coral hover:bg-mist disabled:opacity-60">Archive selected</button>}{members.some((member) => selectedIds.has(member.id) && member.status === "REMOVED") && <button type="button" disabled={bulkSubmitting} onClick={() => void updateSelected("restore")} className="focus-ring rounded-lg px-3 py-2 text-left text-sm hover:bg-mist disabled:opacity-60">Restore selected</button>}</div></details>}
+        {bulkGroupOpen && <div role="dialog" aria-modal="true" aria-labelledby="bulk-group-heading" className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-5"><div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-wider text-coral">Add to group</p><h3 id="bulk-group-heading" className="mt-1 font-serif text-2xl">{selectedIds.size} selected member{selectedIds.size === 1 ? "" : "s"}</h3></div><button type="button" className="focus-ring rounded-full px-2 py-1 text-xl text-ink/60 hover:text-coral" onClick={() => setBulkGroupOpen(false)} aria-label="Close add to group dialog">×</button></div><p className="mt-3 text-sm text-ink/60">Choose a volunteer or manual group. Dynamic groups are not included. Existing assignments are skipped.</p><label className="mt-5 grid gap-1 text-sm font-semibold">Group<select value={bulkGroupId} onChange={(event) => setBulkGroupId(event.target.value)} className="focus-ring rounded-lg border border-ink/15 bg-white px-3 py-2 font-normal"><option value="">Select a group</option>{groups.map((group) => <option key={`${group.type}-${group.id}`} value={`${group.type}:${group.id}`}>{group.name} · {group.type === "manual-list" ? "Manual group" : "Volunteer group"}</option>)}</select></label><div className="mt-6 flex justify-end gap-3"><button type="button" className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold" onClick={() => setBulkGroupOpen(false)}>Cancel</button><button type="button" disabled={bulkSubmitting || !bulkGroupId} className="focus-ring rounded-full bg-coral px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" onClick={() => void addSelectedToGroup()}>Add members</button></div></div></div>}
         {bulkEditOpen && <div role="dialog" aria-modal="true" aria-labelledby="bulk-edit-heading" className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-5"><div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-wider text-coral">Bulk modify</p><h3 id="bulk-edit-heading" className="mt-1 font-serif text-2xl">{selectedIds.size} selected member{selectedIds.size === 1 ? "" : "s"}</h3></div><button type="button" className="focus-ring rounded-full px-2 py-1 text-xl text-ink/60 hover:text-coral" onClick={() => setBulkEditOpen(false)} aria-label="Close bulk modify dialog">×</button></div><p className="mt-3 text-sm text-ink/60">Only fields with a new value will be changed.</p><div className="mt-5 grid gap-3"><label className="grid gap-1 text-sm font-semibold">Member type<select value={bulkType} onChange={(event) => setBulkType(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">Keep current</option>{types.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label><label className="grid gap-1 text-sm font-semibold">Family role<select value={bulkRole} onChange={(event) => setBulkRole(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">Keep current</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label><label className="grid gap-1 text-sm font-semibold">Status<select value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">Keep current</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="DECEASED">Deceased</option></select></label></div><div className="mt-6 flex justify-end gap-3"><button type="button" className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold" onClick={() => setBulkEditOpen(false)}>Cancel</button><button type="button" disabled={bulkSubmitting} className="focus-ring rounded-full bg-coral px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" onClick={() => { setBulkEditOpen(false); void bulkEditSelected(); }}>Apply changes</button></div></div></div>}
       </div>
       {bulkMessage && <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-coral"><p role="status">{bulkMessage}</p>{bulkUndoId && <button type="button" disabled={bulkSubmitting} onClick={() => void undoBulkAction()} className="focus-ring rounded-full border border-coral px-3 py-1 font-semibold text-coral disabled:opacity-60">Undo</button>}</div>}

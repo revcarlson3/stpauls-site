@@ -3,6 +3,7 @@ import { Inter, Lora } from "next/font/google";
 import "./globals.css";
 import { getSiteTheme, googleFontStylesheet, themeComponentColorCssVars, themeCssVars, themeFontCssVars, themeStyleCssVars } from "@/lib/theme";
 import { getSiteIdentity } from "@/lib/site-identity";
+import { triggerReportAutomationScheduler } from "@/lib/report-automations";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const lora = Lora({ subsets: ["latin"], variable: "--font-lora" });
@@ -31,6 +32,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  if (process.env.NEXT_PHASE !== "phase-production-build") void triggerReportAutomationScheduler();
   const theme = await getSiteTheme();
   const identity = await getSiteIdentity();
   return (

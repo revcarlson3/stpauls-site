@@ -8,6 +8,8 @@ export async function GET() {
     const [user, enabledModules] = await Promise.all([getCurrentUser(), getEnabledModuleSlugs()]);
     if (!user) return NextResponse.json({ error: "Sign in to view the member directory." }, { status: 401 });
     if (!enabledModules.includes("membership")) return NextResponse.json({ error: "The member directory is unavailable." }, { status: 404 });
+    const memberLink = await db.membershipUserMemberLink.findUnique({ where: { userId: user.id }, select: { id: true } });
+    if (!memberLink) return NextResponse.json({ error: "A linked membership account is required to view the member directory." }, { status: 403 });
 
     const members = await db.membershipIndividual.findMany({
       where: {
@@ -32,6 +34,7 @@ export async function GET() {
             addressCity: true,
             addressState: true,
             addressZip: true
+            ,photographUrl: true
           }
         }
       }
@@ -45,6 +48,7 @@ export async function GET() {
         email: member.email ?? member.family.email,
         phone: member.cellphone ?? member.family.phone,
         familyName: member.family.familyNameOverride ?? `${member.family.lastName} family`,
+        familyPhotoUrl: member.family.photographUrl,
         address: [member.family.addressStreet, [member.family.addressCity, member.family.addressState].filter(Boolean).join(", "), member.family.addressZip].filter(Boolean).join(" ")
       }))
     });

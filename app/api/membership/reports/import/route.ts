@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const created = [];
     for (const input of reports) {
       if (!input || typeof input.name !== "string" || typeof input.reportType !== "string") continue;
-      created.push(await db.membershipReport.create({ data: { name: `${input.name} (Imported)`.slice(0, 120), description: typeof input.description === "string" ? input.description.slice(0, 500) : null, reportType: input.reportType, criteria: normalizeCriteria(input.criteria), columns: Array.isArray(input.columns) ? input.columns : [], sort: Array.isArray(input.sort) ? input.sort : [], grouping: input.grouping && typeof input.grouping === "object" ? input.grouping : {}, layout: {}, striped: input.striped !== false, visibility: "PRIVATE", createdById: user.id } }));
+      created.push(await db.membershipReport.create({ data: { scope: "MEMBERSHIP", name: `${input.name} (Imported)`.slice(0, 120), description: typeof input.description === "string" ? input.description.slice(0, 500) : null, reportType: input.reportType, criteria: normalizeCriteria(input.criteria), columns: Array.isArray(input.columns) ? input.columns : [], sort: Array.isArray(input.sort) ? input.sort : [], grouping: input.grouping && typeof input.grouping === "object" ? input.grouping : {}, layout: {}, striped: input.striped !== false, visibility: "PRIVATE", createdById: user.id } }));
     }
     return NextResponse.json({ reports: created }, { status: 201 });
   } catch {

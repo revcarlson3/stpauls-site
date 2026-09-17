@@ -3,12 +3,13 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
+import { canAccessAdmin } from "@/lib/permissions";
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") return NextResponse.json({ error: "Administrator access required." }, { status: 403 });
-  const groups = await db.securityGroup.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
-  return NextResponse.json({ groups, activeGroupId: cookies().get("viewAsGroupId")?.value ?? null });
+  const groups = await db.securityGroup.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, permissions: { select: { permission: true } } } });
+  return NextResponse.json({ groups: groups.map((group) => ({ id: group.id, name: group.name, canAccessAdmin: canAccessAdmin(group.permissions.map((permission) => permission.permission)) })), activeGroupId: cookies().get("viewAsGroupId")?.value ?? null });
 }
 
 export async function POST(request: Request) {

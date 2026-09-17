@@ -8,6 +8,54 @@
   position: relative;
 }
 
+.accounting-report-category-row {
+  background: #f2eee7 !important;
+  font-weight: 700;
+}
+
+.accounting-report-category-row td {
+  border-top: 2px solid rgba(31, 41, 55, 0.2) !important;
+}
+
+.accounting-report-subtotal-row {
+  background: #faf8f4 !important;
+  font-weight: 700;
+}
+
+.accounting-report-total-row {
+  background: #e8e1d7 !important;
+  border-top: 2px solid rgba(31, 41, 55, 0.35);
+  font-weight: 800;
+}
+
+.treasurer-category {
+  background: #f2eee7;
+  border-top: 2px solid rgba(31, 41, 55, 0.25);
+  font-weight: 700;
+}
+
+.treasurer-subtotal {
+  background: #faf8f4;
+  border-top: 1px solid rgba(31, 41, 55, 0.2);
+  font-weight: 700;
+}
+
+.treasurer-total {
+  background: #e8e1d7;
+  border-top: 2px solid rgba(31, 41, 55, 0.35);
+  font-weight: 800;
+}
+
+@media print {
+  .treasurer-statement {
+    box-shadow: none;
+  }
+
+  .treasurer-second-page {
+    break-before: page;
+  }
+}
+
 .dt-resize-handle {
   position: absolute;
   inset-block: 0;
@@ -61,6 +109,21 @@ body {
   margin: 0;
   background: rgb(var(--color-sand));
   color: rgb(var(--color-ink));
+}
+
+.settings-form label:has(> input:not([type="checkbox"]), > select, > textarea) {
+  position: relative;
+  padding-inline-end: 1.75rem;
+}
+
+.settings-form label[data-settings-saved="true"]:has(> input:not([type="checkbox"]), > select, > textarea)::after {
+  color: rgb(47 133 90);
+  content: "✓";
+  font-size: 1rem;
+  line-height: 1;
+  position: absolute;
+  inset-inline-end: 0;
+  top: 2rem;
 }
 
 .theme-preview-stage {

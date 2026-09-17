@@ -6,6 +6,7 @@ import { resolvePublicMenu } from "@/lib/content";
 import { getSiteIdentity } from "@/lib/site-identity";
 import { getSiteTheme } from "@/lib/theme";
 import { getSiteLayout } from "@/lib/site-layout";
+import { NotificationBell } from "@/components/notification-bell";
 
 export async function SiteHeader({ menuId = null, menuLocationId = null }: { menuId?: string | null; menuLocationId?: string | null }) {
   const user = await getCurrentUser();
@@ -30,6 +31,7 @@ export async function SiteHeader({ menuId = null, menuLocationId = null }: { men
         <div className="site-header-navigation min-w-0 flex-1">
           <ResponsivePublicNav items={menu?.items ?? []} authenticated={Boolean(user)} />
         </div>
+        {user && <NotificationBell />}
       </Container>
     </header>
   );

@@ -12,6 +12,9 @@ import { membershipAuditDetails } from "@/lib/membership-timeline";
 const documentSelect = {
   id: true,
   originalName: true,
+  category: true,
+  description: true,
+  memberVisible: true,
   mimeType: true,
   sizeBytes: true,
   expiresAt: true,
@@ -80,7 +83,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
         originalName: validation.originalName,
         storageKey,
         mimeType: validation.mimeType,
-        sizeBytes: contents.length
+        sizeBytes: contents.length,
+        category: typeof formData.get("category") === "string" ? String(formData.get("category")).slice(0, 40) || "OTHER" : "OTHER",
+        description: typeof formData.get("description") === "string" ? String(formData.get("description")).trim().slice(0, 500) || null : null,
+        memberVisible: formData.get("memberVisible") !== "false"
       },
       select: documentSelect
     });
