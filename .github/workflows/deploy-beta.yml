@@ -24,6 +24,20 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Validate deployment secrets
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.BETA_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.BETA_DEPLOY_USER }}
+          DEPLOY_KEY: ${{ secrets.BETA_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.BETA_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$DEPLOY_HOST" ]] || { echo "BETA_DEPLOY_HOST is not configured in the beta environment."; exit 1; }
+          [[ -n "$DEPLOY_USER" ]] || { echo "BETA_DEPLOY_USER is not configured in the beta environment."; exit 1; }
+          [[ -n "$DEPLOY_KEY" ]] || { echo "BETA_DEPLOY_KEY is not configured in the beta environment."; exit 1; }
+          [[ -n "$KNOWN_HOSTS" ]] || { echo "BETA_DEPLOY_KNOWN_HOSTS is not configured in the beta environment."; exit 1; }
+
       - name: Configure SSH
         shell: bash
         env:
