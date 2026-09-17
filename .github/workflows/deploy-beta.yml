@@ -56,7 +56,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.BETA_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.BETA_DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.BETA_DEPLOY_PORT || 22 }}
-          DEPLOY_PATH: ${{ secrets.BETA_DEPLOY_PATH || '/var/www/stpauls-site' }}
+          DEPLOY_PATH: ${{ secrets.BETA_DEPLOY_PATH || '/var/www/mychurch' }}
         run: |
           set -euo pipefail
           ssh -p "$DEPLOY_PORT" -i "$HOME/.ssh/beta_deploy_key" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
@@ -75,7 +75,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.BETA_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.BETA_DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.BETA_DEPLOY_PORT || 22 }}
-          DEPLOY_PATH: ${{ secrets.BETA_DEPLOY_PATH || '/var/www/stpauls-site' }}
+          DEPLOY_PATH: ${{ secrets.BETA_DEPLOY_PATH || '/var/www/mychurch' }}
         run: |
           set -euo pipefail
           ssh -p "$DEPLOY_PORT" -i "$HOME/.ssh/beta_deploy_key" "$DEPLOY_USER@$DEPLOY_HOST" \
