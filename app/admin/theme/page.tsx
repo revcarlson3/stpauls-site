@@ -366,8 +366,8 @@ export default function ThemePage() {
                 <p className="mt-1 text-sm text-ink/60">A sample surface using the selected style.</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button type="button" className="rounded-[var(--site-radius-control)] bg-[rgb(var(--site-button-primary))] px-3 py-2 text-xs font-semibold text-white shadow-[var(--site-shadow-card)]">Primary</button>
-                <button type="button" className="rounded-[var(--site-radius-control)] bg-[rgb(var(--site-button-secondary))] px-3 py-2 text-xs font-semibold text-white">Secondary</button>
+                <button type="button" className="rounded-[var(--site-radius-control)] bg-[rgb(var(--site-button-primary))] px-3 py-2 text-xs font-semibold text-[rgb(var(--site-button-primary-text))] shadow-[var(--site-shadow-card)]">Primary</button>
+                <button type="button" className="rounded-[var(--site-radius-control)] bg-[rgb(var(--site-button-secondary))] px-3 py-2 text-xs font-semibold text-[rgb(var(--site-button-secondary-text))]">Secondary</button>
                 <button type="button" className="rounded-[var(--site-radius-control)] border border-ink/20 bg-[rgb(var(--site-button-default))] px-3 py-2 text-xs font-semibold">Default</button>
               </div>
             </div>

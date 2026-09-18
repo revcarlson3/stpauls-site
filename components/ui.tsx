@@ -10,10 +10,10 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "default" }) {
   const variantClass = variant === "secondary"
-    ? "bg-[rgb(var(--site-button-secondary))]"
+    ? "bg-[rgb(var(--site-button-secondary))] text-[rgb(var(--site-button-secondary-text))]"
     : variant === "default"
-      ? "border border-ink/20 bg-[rgb(var(--site-button-default))] text-ink"
-      : "bg-[rgb(var(--site-button-primary))] text-white";
+      ? "border border-ink/20 bg-[rgb(var(--site-button-default))] text-[rgb(var(--site-button-default-text))]"
+      : "bg-[rgb(var(--site-button-primary))] text-[rgb(var(--site-button-primary-text))]";
   return (
     <button
       className={`site-button focus-ring inline-flex items-center justify-center rounded-[var(--site-radius-control)] px-5 py-3 text-sm font-semibold shadow-[var(--site-shadow-card)] transition ${variantClass} ${className}`}

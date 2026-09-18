@@ -79,6 +79,13 @@ export function hexToRgb(value: string) {
   return `${Number.parseInt(normalized.slice(0, 2), 16)} ${Number.parseInt(normalized.slice(2, 4), 16)} ${Number.parseInt(normalized.slice(4, 6), 16)}`;
 }
 
+function contrastTextColor(value: string) {
+  const normalized = value.replace("#", "");
+  const channels = [0, 2, 4].map((offset) => Number.parseInt(normalized.slice(offset, offset + 2), 16) / 255);
+  const luminance = channels.map((channel) => channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * luminance[0] + 0.7152 * luminance[1] + 0.0722 * luminance[2] > 0.179 ? "#17324d" : "#ffffff";
+}
+
 export function themeCssVars(theme: ThemeColors) {
   return {
     "--color-sand": hexToRgb(theme.background),
@@ -104,6 +111,9 @@ export function themeComponentColorCssVars(theme: {
     "--site-button-primary": hexToRgb(theme.buttonPrimary),
     "--site-button-secondary": hexToRgb(theme.buttonSecondary),
     "--site-button-default": hexToRgb(theme.buttonDefault),
+    "--site-button-primary-text": hexToRgb(contrastTextColor(theme.buttonPrimary)),
+    "--site-button-secondary-text": hexToRgb(contrastTextColor(theme.buttonSecondary)),
+    "--site-button-default-text": hexToRgb(contrastTextColor(theme.buttonDefault)),
     "--site-notification-primary": hexToRgb(theme.notificationPrimary),
     "--site-notification-secondary": hexToRgb(theme.notificationSecondary),
     "--site-notification-default": hexToRgb(theme.notificationDefault),

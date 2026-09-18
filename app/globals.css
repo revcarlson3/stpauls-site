@@ -81,6 +81,9 @@
   --site-button-primary: 230 111 81;
   --site-button-secondary: 23 50 77;
   --site-button-default: 255 255 255;
+  --site-button-primary-text: 255 255 255;
+  --site-button-secondary-text: 255 255 255;
+  --site-button-default-text: 23 50 77;
   --site-notification-primary: 230 111 81;
   --site-notification-secondary: 23 50 77;
   --site-notification-default: 255 255 255;
