@@ -111,21 +111,22 @@ model User {
 }
 
 model Church {
-  id                 String                   @id @default(cuid())
-  name               String
-  slug               String                   @unique
-  status             ChurchStatus             @default(ACTIVE)
-  memberships        ChurchUser[]
-  accountingSettings AccountingSettings?
-  fiscalYears        AccountingFiscalYear[]
-  bankAccounts       AccountingBankAccount[]
-  chartOfAccounts    AccountingAccount[]
-  funds              AccountingFund[]
-  contacts           AccountingContact[]
-  budgets            AccountingBudget[]
-  journalEntries     AccountingJournalEntry[]
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
+  id                  String                    @id @default(cuid())
+  name                String
+  slug                String                    @unique
+  status              ChurchStatus              @default(ACTIVE)
+  memberships         ChurchUser[]
+  accountingSettings  AccountingSettings?
+  fiscalYears         AccountingFiscalYear[]
+  bankAccounts        AccountingBankAccount[]
+  chartOfAccounts     AccountingAccount[]
+  funds               AccountingFund[]
+  contacts            AccountingContact[]
+  budgets             AccountingBudget[]
+  journalEntries      AccountingJournalEntry[]
+  contributionBatches GivingContributionBatch[]
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
 
   @@index([status])
 }
@@ -177,21 +178,24 @@ model AccountingBankAccount {
 }
 
 model AccountingAccount {
-  id           String                       @id @default(cuid())
-  churchId     String
-  church       Church                       @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  parentId     String?
-  parent       AccountingAccount?           @relation("AccountingAccountHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children     AccountingAccount[]          @relation("AccountingAccountHierarchy")
-  code         String
-  name         String
-  type         String                       @default("EXPENSE")
-  description  String?
-  isActive     Boolean                      @default(true)
-  journalLines AccountingJournalEntryLine[]
-  budgetItems  AccountingBudgetItem[]
-  createdAt    DateTime                     @default(now())
-  updatedAt    DateTime                     @updatedAt
+  id                  String                       @id @default(cuid())
+  churchId            String
+  church              Church                       @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  parentId            String?
+  parent              AccountingAccount?           @relation("AccountingAccountHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children            AccountingAccount[]          @relation("AccountingAccountHierarchy")
+  code                String
+  name                String
+  type                String                       @default("EXPENSE")
+  description         String?
+  isActive            Boolean                      @default(true)
+  givingEnabled       Boolean                      @default(true)
+  givingFundId        String?
+  journalLines        AccountingJournalEntryLine[]
+  budgetItems         AccountingBudgetItem[]
+  givingContributions GivingContribution[]
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
 
   @@unique([churchId, code])
   @@index([churchId, type, isActive])
@@ -239,46 +243,46 @@ model AccountingContact {
 }
 
 model AccountingBudget {
-  id         String   @id @default(cuid())
+  id         String                 @id @default(cuid())
   churchId   String
-  church     Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church     Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name       String
   fiscalYear Int
   startDate  DateTime
   endDate    DateTime
-  status     String   @default("DRAFT")
+  status     String                 @default("DRAFT")
   notes      String?
-  entryMode  String   @default("MONTHLY")
+  entryMode  String                 @default("MONTHLY")
   items      AccountingBudgetItem[]
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
 
   @@unique([churchId, name, fiscalYear])
   @@index([churchId, fiscalYear])
 }
 
 model AccountingBudgetItem {
-  id          String            @id @default(cuid())
-  budgetId    String
-  budget      AccountingBudget  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  accountId   String
-  account     AccountingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  isEnabled   Boolean           @default(true)
+  id           String            @id @default(cuid())
+  budgetId     String
+  budget       AccountingBudget  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  accountId    String
+  account      AccountingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  isEnabled    Boolean           @default(true)
   annualAmount Decimal           @default(0) @db.Decimal(14, 2)
-  month01     Decimal           @default(0) @db.Decimal(14, 2)
-  month02     Decimal           @default(0) @db.Decimal(14, 2)
-  month03     Decimal           @default(0) @db.Decimal(14, 2)
-  month04     Decimal           @default(0) @db.Decimal(14, 2)
-  month05     Decimal           @default(0) @db.Decimal(14, 2)
-  month06     Decimal           @default(0) @db.Decimal(14, 2)
-  month07     Decimal           @default(0) @db.Decimal(14, 2)
-  month08     Decimal           @default(0) @db.Decimal(14, 2)
-  month09     Decimal           @default(0) @db.Decimal(14, 2)
-  month10     Decimal           @default(0) @db.Decimal(14, 2)
-  month11     Decimal           @default(0) @db.Decimal(14, 2)
-  month12     Decimal           @default(0) @db.Decimal(14, 2)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  month01      Decimal           @default(0) @db.Decimal(14, 2)
+  month02      Decimal           @default(0) @db.Decimal(14, 2)
+  month03      Decimal           @default(0) @db.Decimal(14, 2)
+  month04      Decimal           @default(0) @db.Decimal(14, 2)
+  month05      Decimal           @default(0) @db.Decimal(14, 2)
+  month06      Decimal           @default(0) @db.Decimal(14, 2)
+  month07      Decimal           @default(0) @db.Decimal(14, 2)
+  month08      Decimal           @default(0) @db.Decimal(14, 2)
+  month09      Decimal           @default(0) @db.Decimal(14, 2)
+  month10      Decimal           @default(0) @db.Decimal(14, 2)
+  month11      Decimal           @default(0) @db.Decimal(14, 2)
+  month12      Decimal           @default(0) @db.Decimal(14, 2)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   @@unique([budgetId, accountId])
   @@index([budgetId, isEnabled])
@@ -297,6 +301,9 @@ model AccountingJournalEntry {
   transactionType String                       @default("CREDIT")
   entryType       String                       @default("STANDARD")
   status          String                       @default("POSTED")
+  deletedGivingBatch Boolean                  @default(false)
+  deletedGivingBatchAt DateTime?
+  deletedGivingBatchById String?
   lines           AccountingJournalEntryLine[]
   createdAt       DateTime                     @default(now())
   updatedAt       DateTime                     @updatedAt
@@ -845,12 +852,55 @@ model MembershipIndividual {
   serviceRecords             MembershipServiceRecord[]
   memberLink                 MembershipUserMemberLink?
   linkRequests               MembershipLinkRequest[]              @relation("MembershipLinkRequestMatch")
+  givingContributions        GivingContribution[]
   createdAt                  DateTime                             @default(now())
   updatedAt                  DateTime                             @updatedAt
 
   @@index([familyId, status])
   @@index([lastName, firstName])
   @@index([externalSource, externalId])
+}
+
+model GivingContributionBatch {
+  id            String               @id @default(cuid())
+  churchId      String
+  church        Church               @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  batchDate     DateTime
+  description   String?
+  isPosted      Boolean             @default(false)
+  depositStatus String              @default("UNPOSTED")
+  isLocked      Boolean             @default(false)
+  postedAt      DateTime?
+  depositBankAccountId String?
+  depositMemo   String?
+  depositJournalEntryId String?
+  lockedAt      DateTime?
+  contributions GivingContribution[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([churchId, batchDate])
+}
+
+model GivingContribution {
+  id          String                  @id @default(cuid())
+  batchId     String
+  batch       GivingContributionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  memberId    String?
+  member      MembershipIndividual?   @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  categoryId  String
+  category    AccountingAccount       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  amount      Decimal                 @db.Decimal(14, 2)
+  deductible  Boolean                 @default(true)
+  paymentType String                  @default("CASH")
+  checkNumber String?
+  memo        String?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@index([batchId])
+  @@index([memberId])
+  @@index([categoryId])
 }
 
 model MembershipEvent {
