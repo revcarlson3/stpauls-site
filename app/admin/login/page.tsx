@@ -70,8 +70,8 @@ export default function AdminLoginPage() {
     <main className="grid min-h-screen place-items-center py-8 sm:py-12">
       <Container className="max-w-md" style={{ maxWidth: "28rem" }}>
         <Card>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Site studio</p>
-          <h1 className="mt-3 font-serif text-4xl">Sign in</h1>
+          <img src="/mychurch-one-logo.svg" alt="mychurch.one" className="mb-8 h-14 w-auto object-contain object-left" />
+          <h1 className="font-serif text-4xl">Sign in</h1>
           <p className="mt-3 text-sm leading-6 text-ink/60">{mfaChallenge ? mfaChannel === "email" ? "Enter the six-digit code sent to your email address." : mfaChannel === "sms" ? "Enter the six-digit code sent by text message." : "Enter the six-digit code from your authenticator app, or use one of your recovery codes." : "Use an account provisioned by an administrator. Your sign-in can be remembered for 60 days unless you sign out or clear your browser data. Five failed attempts within 15 minutes temporarily lock the account."}</p>
           <form className="mt-8 grid gap-4" onSubmit={handleSubmit}>
             <label className="grid gap-1 text-sm font-semibold">Email<input required type="email" autoComplete="email" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" value={email} onChange={(event) => setEmail(event.target.value)} /></label>

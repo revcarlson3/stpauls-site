@@ -14,7 +14,7 @@ export const DEFAULT_SITE_IDENTITY = {
   logoUrl: "",
   logoLightUrl: "",
   logoDarkUrl: "",
-  faviconUrl: "",
+  faviconUrl: "/mychurch-one-favicon.svg",
   showTitle: true,
   showTagline: true,
   showLogo: false
@@ -33,7 +33,7 @@ export async function getSiteIdentity() {
     logoUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl) || DEFAULT_SITE_IDENTITY.logoUrl,
     logoLightUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl) || DEFAULT_SITE_IDENTITY.logoLightUrl,
     logoDarkUrl: siteIdentityAssetUrl(settings?.siteLogoDarkUrl) || DEFAULT_SITE_IDENTITY.logoDarkUrl,
-    faviconUrl: siteIdentityAssetUrl(settings?.siteFaviconUrl) || DEFAULT_SITE_IDENTITY.faviconUrl,
+    faviconUrl: DEFAULT_SITE_IDENTITY.faviconUrl,
     showTitle: settings?.siteShowTitle ?? DEFAULT_SITE_IDENTITY.showTitle,
     showTagline: settings?.siteShowTagline ?? DEFAULT_SITE_IDENTITY.showTagline,
     showLogo: settings?.siteShowLogo ?? DEFAULT_SITE_IDENTITY.showLogo

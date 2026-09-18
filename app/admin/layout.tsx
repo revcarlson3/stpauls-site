@@ -8,10 +8,10 @@ import { Container } from "@/components/ui";
 import { ModuleNavigation } from "@/components/module-navigation";
 import { AdminLogout } from "@/components/admin-logout";
 import { NotificationBell } from "@/components/notification-bell";
+import { AdminNavIcon } from "@/components/admin-nav-icon";
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
-  const [identity, setIdentity] = useState({ siteName: "Site administration", siteTagline: "Management workspace", siteLogoUrl: "", siteShowLogo: false });
   const [publicSiteEnabled, setPublicSiteEnabled] = useState(true);
   const [membershipLinked, setMembershipLinked] = useState(false);
   const [canAccessAdmin, setCanAccessAdmin] = useState(false);
@@ -37,20 +37,6 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
     document.addEventListener("keydown", closeOnEscape);
     return () => { document.removeEventListener("mousedown", closeOnOutsideClick); document.removeEventListener("keydown", closeOnEscape); };
   }, [membershipMenuOpen]);
-
-  useEffect(() => {
-    if (pathname === "/admin/login") return;
-    const loadIdentity = () => {
-      void Promise.all([fetch("/api/site-settings"), fetch("/api/site-identity")]).then(async ([settingsResponse, identityResponse]) => {
-        const settings = settingsResponse.ok ? await settingsResponse.json() : {};
-        const identity = identityResponse.ok ? await identityResponse.json() : {};
-        setIdentity({ siteName: settings.adminSiteName ?? "Site administration", siteTagline: settings.adminSiteTagline ?? "Management workspace", siteLogoUrl: identity.siteLogoLightUrl ?? identity.siteLogoUrl ?? "", siteShowLogo: identity.siteShowLogo ?? false });
-      });
-    };
-    loadIdentity();
-    window.addEventListener("site-settings-updated", loadIdentity);
-    return () => window.removeEventListener("site-settings-updated", loadIdentity);
-  }, [pathname]);
 
   useEffect(() => {
     if (pathname === "/admin/login") return;
@@ -109,11 +95,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
       <header className={`overflow-hidden border-b border-ink/10 bg-white transition-[max-height,opacity,transform] duration-300 ease-out ${isEditor && !editorChromeVisible ? "pointer-events-none max-h-0 -translate-y-2 opacity-0" : "max-h-40 translate-y-0 opacity-100"}`}>
         <Container className="flex min-h-20 flex-wrap items-center justify-between gap-4 py-4">
           <div className="flex items-center gap-3">
-            {identity.siteShowLogo && identity.siteLogoUrl && <img src={identity.siteLogoUrl} alt="" className="h-10 w-auto object-contain" />}
-            <div>
-              <Link href={canAccessAdmin ? "/admin" : membershipLinked ? "/account/membership" : "/account"} className="focus-ring font-serif text-xl font-bold">{identity.siteName}</Link>
-              <p className="text-xs text-ink/55">{identity.siteTagline}</p>
-            </div>
+            <Link href={canAccessAdmin ? "/admin" : membershipLinked ? "/account/membership" : "/account"} className="focus-ring rounded-lg"><img src="/mychurch-one-logo.svg" alt="mychurch.one" className="h-14 w-auto object-contain" /></Link>
           </div>
           <div className="flex items-center gap-4">
             {isEditor && <button type="button" aria-label="Hide admin bar" aria-expanded={editorChromeVisible} className="focus-ring rounded-full border border-ink/15 px-3 py-2 text-xs font-semibold text-ink/70 transition-colors duration-200 hover:border-coral hover:text-coral" onClick={() => setEditorChromeVisible(false)}>Hide admin bar</button>}
@@ -129,9 +111,10 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
         {!canAccessAdmin ? <div className="min-h-[calc(100vh-5rem)] flex-1">{pathname.startsWith("/admin") ? <Container className="py-16"><h1 className="font-serif text-3xl">Administration access required</h1><p className="mt-3 text-sm text-ink/60">This account can manage its Account page, but does not have access to Site Administration.</p></Container> : children}</div> : <>
         <aside className={`max-h-[2000px] overflow-hidden border-b border-ink/10 bg-white transition-[max-height,max-width,opacity,transform,width] duration-300 ease-out lg:max-w-72 lg:shrink-0 lg:border-b-0 lg:border-r ${isEditor ? "lg:min-h-0 lg:overflow-y-auto" : "lg:min-h-[calc(100vh-5rem)]"} ${isEditor && !editorChromeVisible ? "pointer-events-none max-h-0 -translate-x-2 opacity-0 lg:w-0 lg:max-w-0" : "translate-x-0 opacity-100 lg:w-72"}`}>
           <nav aria-label="Admin navigation" className="grid gap-1 p-4 sm:p-6">
-            <Link className="focus-ring rounded-lg bg-mist px-4 py-3 font-semibold hover:bg-coral hover:text-white" href="/admin">Admin Dashboard</Link>
+            <Link className="focus-ring flex items-center gap-3 rounded-lg bg-mist px-4 py-3 font-semibold hover:bg-coral hover:text-white" href="/admin"><AdminNavIcon name="dashboard" />Admin Dashboard</Link>
+            <p className="mt-4 border-t border-ink/10 px-4 pt-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Site administration</p>
             {publicSiteEnabled && can("EDIT_PAGES") && <details open={pathname.startsWith("/admin/pages")} className="group">
-              <summary className="focus-ring cursor-pointer list-none rounded-lg px-4 py-3 font-semibold hover:bg-mist">Pages <span className="float-right text-ink/50 group-open:rotate-180">⌄</span></summary>
+              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="pages" />Pages <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/pages">Pages</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/pages/add">Add a Page</Link>
@@ -139,30 +122,30 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/forms">Forms</Link>
               </div>
             </details>}
-            {publicSiteEnabled && can("EDIT_PAGES") && <Link className={`focus-ring rounded-lg px-4 py-3 font-semibold hover:bg-mist ${pathname.startsWith("/admin/media") ? "bg-mist text-coral" : ""}`} href="/admin/media">Media Library</Link>}
+            {publicSiteEnabled && can("EDIT_PAGES") && <Link className={`focus-ring flex items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist ${pathname.startsWith("/admin/media") ? "bg-mist text-coral" : ""}`} href="/admin/media"><AdminNavIcon name="media" />Media Library</Link>}
             {can("MANAGE_USERS") && <details open={pathname.startsWith("/admin/security")} className="group">
-              <summary className="focus-ring cursor-pointer list-none rounded-lg px-4 py-3 font-semibold hover:bg-mist">Security <span className="float-right text-ink/50 group-open:rotate-180">⌄</span></summary>
+              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="security" />Security <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/security">Security Groups</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/security/settings">Settings</Link>
               </div>
             </details>}
             {can("MANAGE_USERS") && <details open={pathname.startsWith("/admin/users")} className="group">
-              <summary className="focus-ring cursor-pointer list-none rounded-lg px-4 py-3 font-semibold hover:bg-mist">Users <span className="float-right text-ink/50 group-open:rotate-180">⌄</span></summary>
+              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="users" />Users <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/users/add">Add User</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/users">Edit Users</Link>
               </div>
             </details>}
             {publicSiteEnabled && can("MANAGE_MENUS") && <details open={pathname.startsWith("/admin/navigation")} className="group">
-              <summary className="focus-ring cursor-pointer list-none rounded-lg px-4 py-3 font-semibold hover:bg-mist">Navigation <span className="float-right text-ink/50 group-open:rotate-180">⌄</span></summary>
+              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="navigation" />Navigation <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/navigation">Menus</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/navigation/locations">Locations</Link>
               </div>
             </details>}
             {publicSiteEnabled && can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/theme")} className="group">
-              <summary className="focus-ring cursor-pointer list-none rounded-lg px-4 py-3 font-semibold hover:bg-mist">Theme</summary>
+              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="theme" />Theme</summary>
               <div className="ml-3 grid gap-1 border-l border-ink/10 pl-3">
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/theme">Visual theme</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/theme/header">Header</Link>
@@ -170,17 +153,18 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
               </div>
             </details>}
             {can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/site-settings") || pathname.startsWith("/admin/site-identity") || pathname.startsWith("/admin/report-automations")} className="group">
-              <summary className="focus-ring cursor-pointer list-none rounded-lg px-4 py-3 font-semibold hover:bg-mist">Site Settings <span className="float-right text-ink/50 group-open:rotate-180">⌄</span></summary>
+              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="settings" />Site Settings <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
-                {publicSiteEnabled && <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-identity">Site Identity</Link>}
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-identity">Site Identity</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings">General Settings</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/messaging">Messaging</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/cron">Cron</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/report-automations">Report Automations</Link>
               </div>
             </details>}
+            <p className="mt-4 border-t border-ink/10 px-4 pt-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Modules</p>
             <ModuleNavigation />
-            {publicSiteEnabled && <Link className="focus-ring rounded-lg px-4 py-3 font-semibold hover:bg-mist" href="/">View site</Link>}
+            {publicSiteEnabled && <Link className="focus-ring flex items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist" href="/"><AdminNavIcon name="site" />View site</Link>}
             <AdminLogout />
           </nav>
         </aside>

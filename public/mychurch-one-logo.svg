@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 112" role="img" aria-labelledby="title desc">
+  <title id="title">mychurch.one</title>
+  <desc id="desc">Mychurch.one church management logo</desc>
+  <g transform="translate(12 16)">
+    <path d="M12 80V18h18l24 31 24-31h18v62H78V48L54 77 30 48v32Z" fill="#233b53"/>
+    <circle cx="116" cy="29" r="13" fill="#d9ad57"/>
+    <path d="M116 22v14" stroke="#fffdf9" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  <text x="162" y="68" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="800" fill="#233b53">mychurch<tspan fill="#b4842d">.one</tspan></text>
+  <text x="165" y="96" font-family="Arial, Helvetica, sans-serif" font-size="14" letter-spacing="3" fill="#718096">CHURCH MANAGEMENT</text>
+</svg>

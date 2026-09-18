@@ -65,8 +65,9 @@ export default function AdminDashboard() {
   };
   const handleDragStart = ({ active }: DragStartEvent) => setActiveId(String(active.id));
 
-  return <div ref={dashboardRef} className="relative mt-8">
-    <div className="flex justify-end">
+  return <div ref={dashboardRef} className="relative mt-2">
+    <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+      <h1 className="font-serif text-4xl">Admin Dashboard</h1>
       <button type="button" className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold" aria-expanded={configureOpen} onClick={() => setConfigureOpen((open) => !open)}>Configure Dashboard</button>
     </div>
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragCancel={() => setActiveId(null)} onDragEnd={(event) => { handleDragEnd(event); setActiveId(null); }}>

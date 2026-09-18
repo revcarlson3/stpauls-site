@@ -17,15 +17,15 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   const input = await request.json();
-  if (!input || typeof input.siteName !== "string" || !input.siteName.trim() || typeof input.siteUrl !== "string" || typeof input.siteTagline !== "string" || typeof input.siteLogoUrl !== "string" || typeof input.siteLogoLightUrl !== "string" || typeof input.siteLogoDarkUrl !== "string" || typeof input.siteFaviconUrl !== "string" || typeof input.siteShowTitle !== "boolean" || typeof input.siteShowTagline !== "boolean" || typeof input.siteShowLogo !== "boolean") {
+  if (!input || typeof input.siteUrl !== "string") {
     return NextResponse.json({ error: "Invalid site identity." }, { status: 400 });
   }
   try {
     await requirePermission("MANAGE_SETTINGS");
     await db.securitySettings.upsert({
       where: { id: 1 },
-      update: { siteName: input.siteName.trim(), siteUrl: input.siteUrl.trim(), siteTagline: input.siteTagline.trim(), siteLogoUrl: input.siteLogoUrl.trim(), siteLogoLightUrl: input.siteLogoLightUrl.trim(), siteLogoDarkUrl: input.siteLogoDarkUrl.trim(), siteFaviconUrl: input.siteFaviconUrl.trim(), siteShowTitle: input.siteShowTitle, siteShowTagline: input.siteShowTagline, siteShowLogo: input.siteShowLogo },
-      create: { id: 1, siteName: input.siteName.trim(), siteUrl: input.siteUrl.trim(), siteTagline: input.siteTagline.trim(), siteLogoUrl: input.siteLogoUrl.trim(), siteLogoLightUrl: input.siteLogoLightUrl.trim(), siteLogoDarkUrl: input.siteLogoDarkUrl.trim(), siteFaviconUrl: input.siteFaviconUrl.trim(), siteShowTitle: input.siteShowTitle, siteShowTagline: input.siteShowTagline, siteShowLogo: input.siteShowLogo }
+      update: { siteUrl: input.siteUrl.trim() },
+      create: { id: 1, siteUrl: input.siteUrl.trim() }
     });
     return NextResponse.json({ saved: true });
   } catch {
