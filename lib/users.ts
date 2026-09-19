@@ -109,7 +109,7 @@ export async function deleteUser(id: string) {
 
 export async function getOwnAccount() {
   const actor = await requireOwnAccount();
-  return db.user.findUnique({ where: { id: actor.id }, select: { id: true, email: true, name: true, emailVerifiedAt: true } }).then((account) => account ? { ...account, canAccessAdmin: actor.canAccessAdmin, isAdministrator: actor.role === "admin", permissions: actor.permissions } : account);
+  return db.user.findUnique({ where: { id: actor.id }, select: { id: true, email: true, name: true, emailVerifiedAt: true, isPlatformAdmin: true } }).then((account) => account ? { ...account, canAccessAdmin: actor.canAccessAdmin, isAdministrator: actor.role === "admin", permissions: actor.permissions } : account);
 }
 
 export async function signOutAllSessions() {

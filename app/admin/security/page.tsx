@@ -16,7 +16,8 @@ const permissionOptions = [
   ["MANAGE_EVENTS", "Manage events and scheduling"],
   ["MANAGE_GIVING", "Manage giving and pledges"],
   ["MANAGE_ACCOUNTING", "Manage accounting and budget"],
-  ["MANAGE_SERVICES", "Manage services and sermons"]
+  ["MANAGE_SERVICES", "Manage services and sermons"],
+  ["CREATE_SUPPORT_TICKETS", "Create Support Tickets"]
 ] as const;
 
 type Group = { id: string; name: string; slug: string; permissions: { permission: string }[]; _count: { users: number } };

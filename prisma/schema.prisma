@@ -2054,6 +2054,7 @@ model SupportTicket {
   status       SupportTicketStatus    @default(OPEN)
   priority     SupportTicketPriority  @default(NORMAL)
   messages     SupportTicketMessage[]
+  attachments  SupportTicketAttachment[]
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt
   closedAt     DateTime?
@@ -2070,7 +2071,23 @@ model SupportTicketMessage {
   author     User          @relation("SupportTicketMessageAuthor", fields: [authorId], references: [id], onDelete: Restrict)
   body       String
   isInternal Boolean       @default(false)
+  attachments SupportTicketAttachment[]
   createdAt  DateTime      @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+model SupportTicketAttachment {
+  id           String                 @id @default(cuid())
+  ticketId     String
+  ticket       SupportTicket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  messageId    String?
+  message      SupportTicketMessage?  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  originalName String
+  storedName   String                 @unique
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime               @default(now())
 
   @@index([ticketId, createdAt])
 }
