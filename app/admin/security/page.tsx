@@ -106,6 +106,7 @@ export default function SecurityPage() {
           <div className="mt-8 grid gap-6 lg:grid-cols-2">
             {groups.map((group) => {
               const selected = new Set(group.permissions.map((item) => item.permission));
+              const protectedGroup = ["visitor", "church-member", "editor", "administrator"].includes(group.slug);
               return <Card key={group.id} className="p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div><h2 className="font-serif text-2xl">{group.name}</h2><p className="mt-1 text-xs text-ink/50">{group.slug} · {group._count.users} users</p></div>
@@ -113,7 +114,7 @@ export default function SecurityPage() {
                 </div>
                 <div className="mt-6 grid gap-3">
                   {permissionOptions.map(([permission, label]) => <label key={permission} className="flex items-center gap-3 text-sm">
-                    <input type="checkbox" checked={selected.has(permission)} onChange={(event) => {
+                    <input type="checkbox" checked={selected.has(permission)} disabled={protectedGroup} onChange={(event) => {
                       const next = new Set(selected);
                       event.target.checked ? next.add(permission) : next.delete(permission);
                       void save(group, Array.from(next));

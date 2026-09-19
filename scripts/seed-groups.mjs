@@ -5,7 +5,7 @@ const groups = [
   { slug: "visitor", name: "Visitor", permissions: [] },
   { slug: "church-member", name: "Church Member", permissions: ["MY_MEMBERSHIP"] },
   { slug: "editor", name: "Editor", permissions: ["ACCESS_ADMIN", "EDIT_PAGES", "MANAGE_MENUS"] },
-  { slug: "administrator", name: "Administrator", permissions: ["ACCESS_ADMIN", "MY_MEMBERSHIP", "EDIT_PAGES", "PUBLISH_PAGES", "MANAGE_MENUS", "MANAGE_USERS", "MANAGE_SETTINGS", "MANAGE_MODULES", "MANAGE_MEMBERSHIP", "MANAGE_EVENTS", "MANAGE_GIVING", "MANAGE_ACCOUNTING", "MANAGE_SERVICES"] }
+  { slug: "administrator", name: "Administrator", permissions: ["ACCESS_ADMIN", "MY_MEMBERSHIP", "EDIT_PAGES", "PUBLISH_PAGES", "MANAGE_MENUS", "MANAGE_USERS", "MANAGE_SETTINGS", "MANAGE_MODULES", "MANAGE_MEMBERSHIP", "MANAGE_EVENTS", "MANAGE_GIVING", "MANAGE_ACCOUNTING", "MANAGE_SERVICES", "CREATE_SUPPORT_TICKETS"] }
 ];
 
 try {

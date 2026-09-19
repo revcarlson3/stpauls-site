@@ -1,5 +1,11 @@
 ALTER TYPE "Permission" ADD VALUE IF NOT EXISTS 'CREATE_SUPPORT_TICKETS';
 
+INSERT INTO "GroupPermission" ("groupId", "permission")
+SELECT "id", 'CREATE_SUPPORT_TICKETS'::"Permission"
+FROM "SecurityGroup"
+WHERE "slug" = 'administrator'
+ON CONFLICT ("groupId", "permission") DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS "SupportTicketAttachment" (
     "id" TEXT NOT NULL,
     "ticketId" TEXT NOT NULL,
