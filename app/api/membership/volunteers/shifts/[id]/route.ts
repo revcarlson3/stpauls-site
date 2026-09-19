@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { authorizeVolunteerScheduling } from "@/lib/volunteer-scheduling-auth";
@@ -34,7 +35,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     await db.membershipServiceShift.delete({ where: { id: params.id } });
     await logAudit({ activityType: "membership-service-shift-deleted", summary: `Deleted an event date for “${shift.opportunity.title}”.`, details: JSON.stringify({ shiftId: shift.id }), actorId: user.id });
     return NextResponse.json({ deleted: true });
-  } catch {
-    return NextResponse.json({ error: "Unable to delete the event date." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to delete the event date.");
   }
 }

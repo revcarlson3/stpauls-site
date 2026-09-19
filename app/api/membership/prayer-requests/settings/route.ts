@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
@@ -46,7 +47,7 @@ export async function PATCH(request: Request) {
       sundayEmail: settings.prayerRequestsSundayEmail ?? "",
       eldersEmail: settings.prayerRequestsEldersEmail ?? ""
     });
-  } catch {
-    return NextResponse.json({ error: "Unable to save prayer notification settings." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to save prayer notification settings.");
   }
 }

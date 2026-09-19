@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Notification } from "@/components/ui";
 import { ReportSummaryChart } from "@/components/report-summary-chart";
 import { ReportChartExportActions } from "@/components/report-chart-export-actions";
@@ -59,31 +59,7 @@ export function GivingReportResults() {
   const [groupingCounts, setGroupingCounts] = useState<{ label: string; count: number }[]>([]);
   const requestId = useRef(0);
 
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const id = (event as CustomEvent<{ id: string }>).detail.id;
-      void run(id);
-    };
-    const previewHandler = (event: Event) => {
-      void runPreview((event as CustomEvent<ResultReport>).detail);
-    };
-    window.addEventListener("giving-report-run", handler);
-    window.addEventListener("giving-report-preview", previewHandler);
-    return () => {
-      window.removeEventListener("giving-report-run", handler);
-      window.removeEventListener("giving-report-preview", previewHandler);
-    };
-  }, []);
-
-  async function run(id: string) {
-    await loadResults(`/api/giving/reports/${id}/results`);
-  }
-
-  async function runPreview(definition: ResultReport) {
-    await loadResults(`/api/giving/reports/preview/results?definition=${encodeURIComponent(JSON.stringify(definition))}`);
-  }
-
-  async function loadResults(url: string) {
+  const loadResults = useCallback(async (url: string) => {
     const currentRequest = ++requestId.current;
     setOpen(true);
     setError("");
@@ -110,7 +86,28 @@ export function GivingReportResults() {
     setGroupingCounts(value.groupingCounts ?? []);
     setLayout(value.report?.layout ?? {});
     setLayoutMessage("");
-  }
+  }, []);
+  const run = useCallback(async (id: string) => {
+    await loadResults(`/api/giving/reports/${id}/results`);
+  }, [loadResults]);
+  const runPreview = useCallback(async (definition: ResultReport) => {
+    await loadResults(`/api/giving/reports/preview/results?definition=${encodeURIComponent(JSON.stringify(definition))}`);
+  }, [loadResults]);
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const id = (event as CustomEvent<{ id: string }>).detail.id;
+      void run(id);
+    };
+    const previewHandler = (event: Event) => {
+      void runPreview((event as CustomEvent<ResultReport>).detail);
+    };
+    window.addEventListener("giving-report-run", handler);
+    window.addEventListener("giving-report-preview", previewHandler);
+    return () => {
+      window.removeEventListener("giving-report-run", handler);
+      window.removeEventListener("giving-report-preview", previewHandler);
+    };
+  }, [run, runPreview]);
 
   function exportCsv() {
     if (!report) return;
@@ -136,7 +133,7 @@ export function GivingReportResults() {
     ];
     const generalRows = givingRows.filter((row) => row.section === "general");
     const nonBudgetRows = givingRows.filter((row) => row.section === "nonBudget");
-    const chartSvg = report.criteria?.chart !== false && groupingCounts.length > 0
+    const chartSvg = report.criteria?.chart === true && groupingCounts.length > 0
       ? reportChartSvg("Giving breakdown", groupingCounts, report.criteria?.chartType ?? "bar", {}, report.grouping?.aggregation === "sumAmount" ? "currency" : "number")
       : "";
     const tableRows = (sectionRows: GivingSummaryRow[]) => [
@@ -222,8 +219,8 @@ export function GivingReportResults() {
           <GivingSummaryReport report={report} rows={rows as GivingSummaryRow[]} summary={summary} />
         ) : report ? (
           <>
-          {report.criteria?.chart !== false && report.grouping?.key && groupingCounts.length > 0 && <div className="mt-5"><ReportSummaryChart title={`Breakdown by ${report.columns.find((column) => column.key === report.grouping?.key)?.label ?? report.grouping.key}`} items={groupingCounts} noun="rows" chartType={report.criteria?.chartType ?? "bar"} valueFormat={report.grouping.aggregation === "sumAmount" ? "currency" : "number"} mode={report.criteria?.chartType === "line" ? "trend" : "distribution"} />{report.criteria?.chartOnly && <div className="mt-3"><ReportChartExportActions title={`Breakdown by ${report.columns.find((column) => column.key === report.grouping?.key)?.label ?? report.grouping.key}`} reportName={report.name} items={groupingCounts} chartType={report.criteria?.chartType} valueFormat={report.grouping.aggregation === "sumAmount" ? "currency" : "number"} /></div>}</div>}
-          {!report.criteria?.chartOnly && <ReportDataTable rows={rows} columns={report.columns} sort={report.columns[0]?.key ?? ""} direction="asc" layout={layout} reportName={report.name} generatedAt={report.generatedAt ?? new Date().toISOString()} generatedBy={report.generatedBy ?? ""} reportPeriod={{ from: report.criteria?.dateFrom, to: report.criteria?.dateTo }} summaryChart={report.criteria?.chart !== false && groupingCounts.length > 0 ? { title: "Giving breakdown", items: groupingCounts, chartType: report.criteria?.chartType, valueFormat: report.grouping?.aggregation === "sumAmount" ? "currency" : "number" } : undefined} onLayoutChange={(next) => {
+          {report.criteria?.chart === true && report.grouping?.key && groupingCounts.length > 0 && <div className="mt-5"><ReportSummaryChart title={`Breakdown by ${report.columns.find((column) => column.key === report.grouping?.key)?.label ?? report.grouping.key}`} items={groupingCounts} noun="rows" chartType={report.criteria?.chartType ?? "bar"} valueFormat={report.grouping.aggregation === "sumAmount" ? "currency" : "number"} mode={report.criteria?.chartType === "line" ? "trend" : "distribution"} />{report.criteria?.chartOnly && <div className="mt-3"><ReportChartExportActions title={`Breakdown by ${report.columns.find((column) => column.key === report.grouping?.key)?.label ?? report.grouping.key}`} reportName={report.name} items={groupingCounts} chartType={report.criteria?.chartType} valueFormat={report.grouping.aggregation === "sumAmount" ? "currency" : "number"} /></div>}</div>}
+          {!report.criteria?.chartOnly && <ReportDataTable rows={rows} columns={report.columns} sort={report.columns[0]?.key ?? ""} direction="asc" layout={layout} reportName={report.name} generatedAt={report.generatedAt ?? new Date().toISOString()} generatedBy={report.generatedBy ?? ""} reportPeriod={{ from: report.criteria?.dateFrom, to: report.criteria?.dateTo }} summaryChart={report.criteria?.chart === true && groupingCounts.length > 0 ? { title: "Giving breakdown", items: groupingCounts, chartType: report.criteria?.chartType, valueFormat: report.grouping?.aggregation === "sumAmount" ? "currency" : "number" } : undefined} onLayoutChange={(next) => {
             const merged = { ...layout, ...next, widths: { ...layout.widths, ...next.widths }, visibility: { ...layout.visibility, ...next.visibility } };
             setLayout(merged);
             if (report.id !== "preview") void fetch(`/api/giving/reports/${report.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ layout: merged }) });

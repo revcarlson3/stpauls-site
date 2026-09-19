@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
@@ -42,8 +43,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       actorId: user.id
     });
     return NextResponse.json({ note });
-  } catch {
-    return NextResponse.json({ error: "Unable to update membership note." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to update membership note.");
   }
 }
 
@@ -65,7 +66,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
       actorId: user.id
     });
     return NextResponse.json({ removed: true });
-  } catch {
-    return NextResponse.json({ error: "Unable to delete membership note." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to delete membership note.");
   }
 }

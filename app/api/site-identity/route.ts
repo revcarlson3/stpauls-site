@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
@@ -37,8 +38,8 @@ export async function PATCH(request: Request) {
       }
     });
     return NextResponse.json({ saved: true });
-  } catch {
-    return NextResponse.json({ error: "Unable to save site identity." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to save site identity.");
   }
 }
 
@@ -57,8 +58,8 @@ export async function POST(request: Request) {
     await mkdir(path.join(process.cwd(), "public", "uploads", "site-identity"), { recursive: true });
     await writeFile(path.join(process.cwd(), "public", relativePath), Buffer.from(await asset.arrayBuffer()));
     return NextResponse.json({ url: siteIdentityAssetUrl(relativePath) });
-  } catch {
-    return NextResponse.json({ error: "Unable to upload site identity asset." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to upload site identity asset.");
   }
 }
 
@@ -73,7 +74,7 @@ export async function DELETE(request: Request) {
     if (currentPath?.startsWith("/uploads/site-identity/")) await unlink(path.join(process.cwd(), "public", currentPath)).catch(() => undefined);
     await db.securitySettings.update({ where: { id: 1 }, data: { [field]: "", ...(input.kind === "logo-light" ? { siteLogoUrl: "" } : {}) } });
     return NextResponse.json({ removed: true });
-  } catch {
-    return NextResponse.json({ error: "Unable to remove site identity asset." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to remove site identity asset.");
   }
 }

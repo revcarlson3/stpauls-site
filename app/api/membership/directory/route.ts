@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -52,7 +53,7 @@ export async function GET() {
         address: [member.family.addressStreet, [member.family.addressCity, member.family.addressState].filter(Boolean).join(", "), member.family.addressZip].filter(Boolean).join(" ")
       }))
     });
-  } catch {
-    return NextResponse.json({ error: "Unable to load the member directory." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to load the member directory.");
   }
 }

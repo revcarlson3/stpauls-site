@@ -79,6 +79,8 @@ export function AttendanceManager() {
       if (missingRecords.length && selected.status !== "CANCELLED") void saveStatuses(missingRecords, false);
     }).catch((reason) => { if (reason instanceof Error && reason.name !== "AbortError") setError(reason.message); }).finally(() => setLoadingMembers(false));
     return () => controller.abort();
+  // The save helper is declared below and intentionally captures the selected event.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, reload]);
 
   useEffect(() => {

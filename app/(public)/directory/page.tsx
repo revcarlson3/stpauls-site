@@ -32,7 +32,7 @@ export default function MemberDirectoryPage() {
       if (!response.ok) throw new Error(value.error ?? "Unable to load the member directory.");
       setMembers(value.members ?? []);
     }).catch((reason: Error) => setError(reason.message));
-  }, []);
+  }, [router]);
 
   const visibleMembers = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();

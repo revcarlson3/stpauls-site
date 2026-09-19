@@ -1,9 +1,11 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { selectRotationAssignments } from "@/lib/event-scheduling";
+import { requireTenantScope } from "@/lib/tenant";
 
 async function authorize() {
   const user = await requirePermission("MANAGE_EVENTS");
@@ -14,6 +16,9 @@ async function authorize() {
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   try {
     await authorize();
+    const scope = await requireTenantScope();
+    const event = await db.membershipEvent.findFirst({ where: { id: params.id, churchId: scope.church.id }, select: { id: true } });
+    if (!event) return NextResponse.json({ error: "Event not found." }, { status: 404 });
     const assignments = await db.membershipEventVolunteerAssignment.findMany({
       where: { eventId: params.id },
       orderBy: [{ group: { position: "asc" } }, { individual: { lastName: "asc" } }],
@@ -25,17 +30,18 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       }
     });
     return NextResponse.json({ assignments });
-  } catch {
-    return NextResponse.json({ error: "Unable to load event rotation." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to load event rotation.");
   }
 }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await authorize();
+    const scope = await requireTenantScope();
     const input = await request.json();
-    const event = await db.membershipEvent.findUnique({
-      where: { id: params.id },
+    const event = await db.membershipEvent.findFirst({
+      where: { id: params.id, churchId: scope.church.id },
       select: { id: true, startsAt: true, volunteerGroups: { select: { groupId: true } } }
     });
     if (!event) return NextResponse.json({ error: "Event not found." }, { status: 404 });
@@ -44,7 +50,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const adjustment = input?.action === "add" || input?.action === "remove" ? input.action : null;
     if (adjustment) {
       const individualId = typeof input?.individualId === "string" ? input.individualId : "";
-      const member = await db.membershipVolunteerGroupMember.findUnique({ where: { groupId_individualId: { groupId, individualId } }, select: { individualId: true } });
+      const member = await db.membershipVolunteerGroupMember.findFirst({ where: { groupId, individualId, group: { churchId: scope.church.id }, individual: { churchId: scope.church.id } }, select: { individualId: true } });
       if (!member) return NextResponse.json({ error: "Choose a volunteer who belongs to this group." }, { status: 400 });
       const existing = await db.membershipEventVolunteerAssignment.findFirst({ where: { eventId: event.id, groupId, individualId } });
       if (adjustment === "remove") {
@@ -54,7 +60,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         return NextResponse.json({ action: adjustment, individualId });
       }
       if (existing) return NextResponse.json({ error: "That volunteer is already assigned to this event." }, { status: 400 });
-      const order = await db.membershipVolunteerRotationOrder.findFirst({ where: { groupId, isActive: true }, orderBy: { updatedAt: "desc" }, select: { id: true, notificationLeadDays: true, notifyEmail: true, notifySms: true, notifyDayBefore: true } });
+      const order = await db.membershipVolunteerRotationOrder.findFirst({ where: { groupId, isActive: true, group: { churchId: scope.church.id } }, orderBy: { updatedAt: "desc" }, select: { id: true, notificationLeadDays: true, notifyEmail: true, notifySms: true, notifyDayBefore: true } });
       if (!order) return NextResponse.json({ error: "Choose an active rotation order for this group before adding an event volunteer." }, { status: 400 });
       const assignment = await db.membershipEventVolunteerAssignment.create({
         data: { eventId: event.id, groupId, individualId, scheduledIndividualId: null, rotationOrderId: order.id, source: "OVERRIDE", notificationLeadMinutes: order.notificationLeadDays * 24 * 60 }
@@ -73,19 +79,19 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ action: adjustment, individualId });
     }
     const orderId = typeof input?.orderId === "string" ? input.orderId : "";
-    const order = await db.membershipVolunteerRotationOrder.findUnique({
-      where: { id: orderId },
+    const order = await db.membershipVolunteerRotationOrder.findFirst({
+      where: { id: orderId, group: { churchId: scope.church.id } },
       include: { entries: { orderBy: { position: "asc" }, select: { individualId: true } } }
     });
     if (!order || order.groupId !== groupId || !order.isActive || !order.entries.length) return NextResponse.json({ error: "Choose an active rotation order for this group." }, { status: 400 });
     const overrideIds: string[] = Array.isArray(input?.overrideIndividualIds) ? Array.from(new Set<string>(input.overrideIndividualIds.filter((id: unknown): id is string => typeof id === "string"))) : [];
-    const validMembers = await db.membershipVolunteerGroupMember.findMany({ where: { groupId, individualId: { in: overrideIds.length ? overrideIds : order.entries.map((entry) => entry.individualId) } }, select: { individualId: true } });
+    const validMembers = await db.membershipVolunteerGroupMember.findMany({ where: { groupId, individualId: { in: overrideIds.length ? overrideIds : order.entries.map((entry) => entry.individualId) }, group: { churchId: scope.church.id }, individual: { churchId: scope.church.id } }, select: { individualId: true } });
     const validIds = new Set(validMembers.map((member) => member.individualId));
     if (overrideIds.some((id) => !validIds.has(id))) return NextResponse.json({ error: "Every override volunteer must belong to the linked group." }, { status: 400 });
     const overrideAssignmentId = typeof input?.overrideAssignmentId === "string" ? input.overrideAssignmentId : "";
     const replacementIndividualId = typeof input?.replacementIndividualId === "string" ? input.replacementIndividualId : "";
     if (overrideAssignmentId || replacementIndividualId) {
-      const replacementMember = replacementIndividualId ? await db.membershipVolunteerGroupMember.findUnique({ where: { groupId_individualId: { groupId, individualId: replacementIndividualId } }, select: { individualId: true } }) : null;
+      const replacementMember = replacementIndividualId ? await db.membershipVolunteerGroupMember.findFirst({ where: { groupId, individualId: replacementIndividualId, group: { churchId: scope.church.id }, individual: { churchId: scope.church.id } }, select: { individualId: true } }) : null;
       if (!overrideAssignmentId || !replacementIndividualId || !replacementMember) return NextResponse.json({ error: "Choose a valid replacement volunteer." }, { status: 400 });
       const existing = await db.membershipEventVolunteerAssignment.findFirst({ where: { id: overrideAssignmentId, eventId: event.id, groupId } });
       if (!existing) return NextResponse.json({ error: "The event assignment was not found." }, { status: 404 });
@@ -127,7 +133,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       if (!overrideIds.length) await transaction.membershipVolunteerRotationOrder.update({ where: { id: order.id }, data: { nextPosition } });
     });
     return NextResponse.json({ assignedIndividualIds: selectedIds, source: overrideIds.length ? "OVERRIDE" : "ROTATION" });
-  } catch {
-    return NextResponse.json({ error: "Unable to apply the rotation to this event." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to apply the rotation to this event.");
   }
 }

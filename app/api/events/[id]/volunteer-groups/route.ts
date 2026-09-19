@@ -1,20 +1,25 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { requireEnabledModule } from "@/lib/modules";
 import { logAudit } from "@/lib/audit";
+import { requireTenantScope } from "@/lib/tenant";
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await requirePermission("MANAGE_EVENTS");
     await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
+    const scope = await requireTenantScope();
     const input = await request.json() as { groupIds?: unknown; applyToSeries?: unknown };
     if (!Array.isArray(input.groupIds) || input.groupIds.some((id) => typeof id !== "string")) return NextResponse.json({ error: "Select valid volunteer groups." }, { status: 400 });
     const groupIds = Array.from(new Set(input.groupIds as string[]));
-    const sourceEvent = await db.membershipEvent.findUnique({ where: { id: params.id }, select: { startsAt: true, recurrenceGroupId: true } });
+    const sourceEvent = await db.membershipEvent.findFirst({ where: { id: params.id, churchId: scope.church.id }, select: { startsAt: true, recurrenceGroupId: true } });
     if (!sourceEvent) return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    const groups = await db.membershipVolunteerGroup.findMany({ where: { id: { in: groupIds }, churchId: scope.church.id }, select: { id: true } });
+    if (groups.length !== groupIds.length) return NextResponse.json({ error: "Select volunteer groups from this church." }, { status: 400 });
     const targetEvents = input.applyToSeries === true && sourceEvent.recurrenceGroupId
-      ? await db.membershipEvent.findMany({ where: { recurrenceGroupId: sourceEvent.recurrenceGroupId }, select: { id: true, startsAt: true }, orderBy: { startsAt: "asc" } })
+      ? await db.membershipEvent.findMany({ where: { recurrenceGroupId: sourceEvent.recurrenceGroupId, churchId: scope.church.id }, select: { id: true, startsAt: true }, orderBy: { startsAt: "asc" } })
       : [{ id: params.id, startsAt: sourceEvent.startsAt }];
     await db.$transaction(targetEvents.flatMap((event) => [
       db.membershipEventVolunteerGroup.deleteMany({ where: { eventId: event.id } }),
@@ -24,7 +29,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       const event = targetEvent;
       for (const groupId of groupIds) {
         const order = await db.membershipVolunteerRotationOrder.findFirst({
-          where: { groupId, isActive: true },
+          where: { groupId, isActive: true, group: { churchId: scope.church.id } },
           orderBy: { updatedAt: "desc" },
           include: { entries: { orderBy: { position: "asc" }, select: { individualId: true } } }
         });
@@ -55,7 +60,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     }
     await logAudit({ activityType: "membership-event-volunteer-assignment-updated", summary: `Updated volunteer groups for ${targetEvents.length} event${targetEvents.length === 1 ? "" : "s"}.`, details: JSON.stringify({ eventId: params.id, eventCount: targetEvents.length, groupIds, applyToSeries: input.applyToSeries === true }), actorId: user.id });
     return NextResponse.json({ saved: groupIds.length });
-  } catch {
-    return NextResponse.json({ error: "Unable to save volunteer groups." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to save volunteer groups.");
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Button, Notification } from "@/components/ui";
 import { ReportSummaryChart } from "@/components/report-summary-chart";
@@ -28,15 +28,15 @@ function PivotMatrix({ report, rows }: { report: Report; rows: Row[] }) {
 
 export function AccountingReportResults() {
   const [open, setOpen] = useState(false); const [report, setReport] = useState<Report | null>(null); const [rows, setRows] = useState<Row[]>([]); const [error, setError] = useState(""); const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
+  const load = useCallback(async (id: string, definition = preview) => {
+    setError(""); setOpen(true); const query = id === "preview" && definition ? `?definition=${encodeURIComponent(JSON.stringify(definition))}` : ""; const response = await fetch(`/api/accounting/reports/${id}/results${query}`, { cache: "no-store" }); const value = await response.json(); if (!response.ok) { setError(value.error ?? "Unable to run report."); return; } setReport(value.report); const nextColumns = value.report?.columns ?? []; setRows((value.rows ?? []).map((row: Row) => ({ ...Object.fromEntries(nextColumns.map((column: { key: string }) => [column.key, row[column.key] ?? "—"])), ...(row.isGroup ? { isGroup: true } : {}), ...(row.isSubtotal ? { isSubtotal: true } : {}), ...(row.isTotal ? { isTotal: true } : {}) }) as Row));
+  }, [preview]);
   useEffect(() => {
     const run = (event: Event) => { const id = (event as CustomEvent<{ id: string }>).detail.id; void load(id); };
     const previewHandler = (event: Event) => { const definition = (event as CustomEvent<Record<string, unknown>>).detail; setPreview(definition); void load("preview", definition); };
     window.addEventListener("accounting-report-run", run); window.addEventListener("accounting-report-preview", previewHandler);
     return () => { window.removeEventListener("accounting-report-run", run); window.removeEventListener("accounting-report-preview", previewHandler); };
-  }, []);
-  async function load(id: string, definition = preview) {
-    setError(""); setOpen(true); const query = id === "preview" && definition ? `?definition=${encodeURIComponent(JSON.stringify(definition))}` : ""; const response = await fetch(`/api/accounting/reports/${id}/results${query}`, { cache: "no-store" }); const value = await response.json(); if (!response.ok) { setError(value.error ?? "Unable to run report."); return; } setReport(value.report); const nextColumns = value.report?.columns ?? []; setRows((value.rows ?? []).map((row: Row) => ({ ...Object.fromEntries(nextColumns.map((column: { key: string }) => [column.key, row[column.key] ?? "—"])), ...(row.isGroup ? { isGroup: true } : {}), ...(row.isSubtotal ? { isSubtotal: true } : {}), ...(row.isTotal ? { isTotal: true } : {}) }) as Row));
-  }
+  }, [load]);
   async function saveLayout(nextLayout: MembershipReportLayout) {
     if (!report) return;
     const merged = { ...(report.layout ?? {}), ...nextLayout, widths: { ...(report.layout?.widths ?? {}), ...(nextLayout.widths ?? {}) }, visibility: { ...(report.layout?.visibility ?? {}), ...(nextLayout.visibility ?? {}) } };

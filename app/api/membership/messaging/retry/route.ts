@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
     const deliveryNote = `${sent} retried successfully; ${remaining} failed recipient${remaining === 1 ? "" : "s"} remain${excluded ? `; ${excluded} excluded after a privacy preference or contact change` : ""}.`;
     await db.membershipMessage.update({ where: { id: messageId }, data: { status, deliveryNote } });
     return NextResponse.json({ retried, sent, remaining, excluded, status, deliveryNote });
-  } catch {
-    return NextResponse.json({ error: "Unable to retry failed recipients." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to retry failed recipients.");
   }
 }

@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
@@ -15,8 +16,8 @@ export async function POST(request: Request) {
     const filename = `${randomUUID()}${extension}`;
     const uploaded = await saveUploadedMediaFile({ asset, filename, uploader: user });
     return NextResponse.json({ url: uploaded.url, asset: uploaded }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Unable to upload image." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to upload image.");
   }
 }
 

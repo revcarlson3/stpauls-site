@@ -75,6 +75,22 @@ npm run lint
 npm run build
 ```
 
+## Current module status
+
+The Events and Scheduling module is functionally complete for the current release scope. It includes event CRUD, recurring events, attendance, reports, dashboards, volunteer groups, rotations, overrides, notifications, tenant-scoped data access, and permission enforcement. Public event registration is intentionally deferred until the public beta.
+
+The current production-hardening baseline includes tenant authorization checks, normalized API authentication/permission responses, private member-document lifecycle controls, media cleanup safeguards, a database-backed `/api/health` readiness endpoint, and a user-safe application error boundary. The full automated suite currently passes 19 test files and 91 tests.
+
+The following items are intentionally deferred:
+
+- Public event registration for the public beta.
+- Online giving completion until the provider API keys and webhook configuration are available.
+- Member-center scheduling and giving-history integrations until their shared module data is ready.
+- Scheduled report delivery until a persistent queue/worker system exists.
+- Broad code deduplication and remaining image-rendering lint cleanup until tenant administration is complete.
+
+The next planned implementation scope is tenant administration and tenant-level functionality. Do not commit, push, or deploy local changes unless explicitly requested.
+
 For a Node deployment such as 1Panel, install the supported Node 22 LTS runtime, copy `.env.example` to `.env`, set `DATABASE_URL`, `NEXTAUTH_URL`, and a unique `NEXTAUTH_SECRET` of at least 32 characters, then run `npm install`, `npm run deployment:check`, `npm run db:generate`, and `npm run db:push` when the database schema changes. Run `npm run build` followed by `npm start`. The start script binds Next.js to `0.0.0.0` and honors the `PORT` environment variable (use the same port in the reverse proxy). Configure HTTPS at the reverse proxy and schedule encrypted PostgreSQL backups before accepting production data. Node 25 is not the supported deployment baseline.
 
 Annual grade advancement is safe to run from a host scheduler:
@@ -117,6 +133,7 @@ Before accepting production data, verify that PostgreSQL backups can be restored
 
 ## Next steps
 
+- Complete tenant administration, tenant provisioning, module enablement, invitations, and tenant-level platform controls.
 - Connect a server-side identity provider so page CRUD and publishing can be used from the admin UI.
 - Replace native drag-and-drop with accessible pointer/keyboard interactions if the editor grows.
 - Add real preview/publish workflows, autosave, media uploads, and audit history.

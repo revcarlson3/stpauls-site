@@ -1,8 +1,10 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { authorizeVolunteerScheduling } from "@/lib/volunteer-scheduling-auth";
 import { logAudit } from "@/lib/audit";
 import { MembershipAttendanceInputError, normalizeAttendanceEntries } from "@/lib/membership-attendance";
+import { requireTenantScope } from "@/lib/tenant";
 
 async function authorize() {
   return authorizeVolunteerScheduling();
@@ -16,8 +18,9 @@ function positiveInteger(value: string | null, fallback: number, maximum: number
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     await authorize();
-    const event = await db.membershipEvent.findUnique({
-      where: { id: params.id },
+    const scope = await requireTenantScope();
+    const event = await db.membershipEvent.findFirst({
+      where: { id: params.id, churchId: scope.church.id },
       select: { id: true, title: true, startsAt: true, endsAt: true, status: true, eventType: true, location: true, visitorCount: true, attendanceAudienceType: true, attendanceAudienceId: true, volunteerGroups: { select: { groupId: true, group: { select: { name: true } } } } }
     });
     if (!event) return NextResponse.json({ error: "Membership event not found." }, { status: 404 });
@@ -98,7 +101,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await authorize();
-    const event = await db.membershipEvent.findUnique({ where: { id: params.id }, select: { id: true, title: true, status: true } });
+    const scope = await requireTenantScope();
+    const event = await db.membershipEvent.findFirst({ where: { id: params.id, churchId: scope.church.id }, select: { id: true, title: true, status: true } });
     if (!event) return NextResponse.json({ error: "Membership event not found." }, { status: 404 });
     if (event.status === "CANCELLED") return NextResponse.json({ error: "Attendance cannot be changed for a cancelled event." }, { status: 409 });
     const body = await request.json();
@@ -109,7 +113,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     const entries = Array.isArray(body?.records) && body.records.length ? normalizeAttendanceEntries(body.records) : [];
     const memberIds = entries.map((entry) => entry.individualId);
     const [members, existing] = await Promise.all([
-      db.membershipIndividual.findMany({ where: { id: { in: memberIds } }, select: { id: true } }),
+      db.membershipIndividual.findMany({ where: { id: { in: memberIds }, churchId: scope.church.id }, select: { id: true } }),
       db.membershipAttendanceRecord.findMany({ where: { eventId: params.id, individualId: { in: memberIds } }, select: { id: true, individualId: true, status: true, checkedInAt: true } })
     ]);
     if (members.length !== memberIds.length) return NextResponse.json({ error: "One or more membership records no longer exist." }, { status: 409 });
@@ -144,16 +148,17 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await authorize();
+    const scope = await requireTenantScope();
     const individualId = new URL(request.url).searchParams.get("individualId")?.trim();
     if (!individualId) return NextResponse.json({ error: "Member is required." }, { status: 400 });
-    const event = await db.membershipEvent.findUnique({ where: { id: params.id }, select: { id: true, title: true, status: true } });
+    const event = await db.membershipEvent.findFirst({ where: { id: params.id, churchId: scope.church.id }, select: { id: true, title: true, status: true } });
     if (!event) return NextResponse.json({ error: "Membership event not found." }, { status: 404 });
     if (event.status === "CANCELLED") return NextResponse.json({ error: "Attendance cannot be changed for a cancelled event." }, { status: 409 });
     const result = await db.membershipAttendanceRecord.deleteMany({ where: { eventId: params.id, individualId } });
     if (!result.count) return NextResponse.json({ error: "Attendance record not found." }, { status: 404 });
     await logAudit({ activityType: "membership-attendance-recorded", summary: `Removed an attendance record from “${event.title}”.`, details: JSON.stringify({ eventId: event.id, individualId }), actorId: user.id });
     return NextResponse.json({ deleted: true });
-  } catch {
-    return NextResponse.json({ error: "Unable to remove attendance record." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to remove attendance record.");
   }
 }

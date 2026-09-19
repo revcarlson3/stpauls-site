@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { MembershipStatus } from "@prisma/client";
 import { requirePermission } from "@/lib/auth";
@@ -231,7 +232,7 @@ export async function POST(request: Request) {
       actorId: user.id
     });
     return NextResponse.json({ message: { id: message.id, status: finalStatus, deliveryNote: finalNote, recipientCount: message.recipients.length }, excludedCount: members.length - eligible.length }, { status: finalStatus === "FAILED" ? 502 : 201 });
-  } catch {
-    return NextResponse.json({ error: "Unable to save the membership message." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to save the membership message.");
   }
 }

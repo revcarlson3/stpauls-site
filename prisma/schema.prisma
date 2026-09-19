@@ -135,6 +135,8 @@ model Church {
   membershipFamilies MembershipFamily[]
   membershipIndividuals MembershipIndividual[]
   membershipEvents MembershipEvent[]
+  membershipEventSettings MembershipEventSettings?
+  membershipEventNotificationTemplates MembershipEventNotificationTemplate[]
   membershipFamilyRoles MembershipFamilyRole[]
   membershipWorkflows MembershipWorkflow[]
   membershipMemberTypes MembershipMemberType[]
@@ -1027,6 +1029,8 @@ model MembershipEvent {
 
 model MembershipEventSettings {
   id         Int      @id @default(1)
+  churchId   String   @unique
+  church     Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
   eventTypes Json     @default("[\"Worship\",\"Class\",\"Fellowship\",\"Outreach\",\"Meeting\",\"Other\"]")
   categories Json     @default("[]")
   locations  Json     @default("[\"Church campus\",\"Sanctuary\",\"Fellowship hall\",\"Off-site\"]")
@@ -1371,6 +1375,8 @@ model MembershipVolunteerNotification {
 
 model MembershipEventNotificationTemplate {
   id                     Int                       @id @default(1)
+  churchId               String
+  church                  Church                    @relation(fields: [churchId], references: [id], onDelete: Cascade)
   groupId                String?                   @unique
   group                  MembershipVolunteerGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
   emailSubject           String
@@ -1380,6 +1386,8 @@ model MembershipEventNotificationTemplate {
   smsBody                String
   smsDayBeforeBody       String
   updatedAt              DateTime                  @updatedAt
+
+  @@index([churchId])
 }
 
 model MembershipCustomFieldDefinition {
@@ -1758,6 +1766,4 @@ model MenuItem {
 
   @@index([menuId, position])
 }
-
-
 

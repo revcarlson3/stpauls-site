@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type Automation = { id: string; name: string; enabled: boolean; inAppEnabled?: boolean; timezone?: string; lastRunAt?: string | null; nextRunAt?: string | null; failureCount?: number; scheduleKind: string; schedule?: { hour?: number; minute?: number; dayOfWeek?: number }; criteria?: { eventSelection?: string }; subject: string; format: string; recipients: string[]; report: { id: string; name: string; scope: string } };
 type AutomationRun = { id: string; status: string; error?: string | null; createdAt: string; startedAt?: string | null; completedAt?: string | null; attemptCount?: number; rowCount?: number | null; providerId?: string | null; durationMs?: number | null; isRetry?: boolean };
@@ -15,7 +15,7 @@ export default function ReportAutomationsPage() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [form, setForm] = useState({ name: "", reportId: "", recipients: [] as string[], subject: "", scheduleKind: "MANUAL", format: "CSV", hour: "8", minute: "0", dayOfWeek: "1", timezone: "America/Chicago", eventSelection: "ALL", inAppEnabled: false });
-  const load = async () => {
+  const load = useCallback(async () => {
     const response = await fetch("/api/report-automations");
     if (response.ok) setItems((await response.json()).automations);
     const [membership, events, recipients] = await Promise.all([fetch("/api/membership/reports"), fetch("/api/events/reports"), fetch("/api/report-automations/recipients")]);
@@ -28,8 +28,8 @@ export default function ReportAutomationsPage() {
     } else if (!form.reportId && values[0]) {
       setForm((current) => ({ ...current, reportId: values[0].id }));
     }
-  };
-  useEffect(() => { void load(); }, []);
+  }, [form.reportId]);
+  useEffect(() => { void load(); }, [load]);
   function payload() {
     return { name: form.name, reportId: form.reportId, recipients: form.recipients, subject: form.subject, scheduleKind: form.scheduleKind, format: form.format, enabled: form.scheduleKind !== "MANUAL", inAppEnabled: form.inAppEnabled, timezone: form.timezone, schedule: { hour: Number(form.hour), minute: Number(form.minute), dayOfWeek: Number(form.dayOfWeek) }, criteria: { eventSelection: form.eventSelection } };
   }

@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { authorizeVolunteerScheduling } from "@/lib/volunteer-scheduling-auth";
 import { logAudit } from "@/lib/audit";
 import { MembershipAttendanceInputError, normalizeMembershipEventInput } from "@/lib/membership-attendance";
+import { requireTenantScope } from "@/lib/tenant";
+import { apiErrorResponse } from "@/lib/api-errors";
 
 async function authorize() {
   return authorizeVolunteerScheduling();
@@ -16,20 +18,22 @@ const eventSelection = {
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   try {
     await authorize();
-    const event = await db.membershipEvent.findUnique({ where: { id: params.id }, select: eventSelection });
+    const scope = await requireTenantScope();
+    const event = await db.membershipEvent.findFirst({ where: { id: params.id, churchId: scope.church.id }, select: eventSelection });
     if (!event) return NextResponse.json({ error: "Membership event not found." }, { status: 404 });
     const grouped = await db.membershipAttendanceRecord.groupBy({ by: ["status"], where: { eventId: params.id }, _count: { _all: true } });
     const { _count, ...details } = event;
     return NextResponse.json({ event: { ...details, attendanceCount: _count.attendance, attendanceByStatus: Object.fromEntries(grouped.map((row) => [row.status, row._count._all])) } });
-  } catch {
-    return NextResponse.json({ error: "Unable to load membership event." }, { status: 403 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to load membership event.");
   }
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await authorize();
-    const current = await db.membershipEvent.findUnique({ where: { id: params.id }, select: { id: true, title: true, startsAt: true, endsAt: true } });
+    const scope = await requireTenantScope();
+    const current = await db.membershipEvent.findFirst({ where: { id: params.id, churchId: scope.church.id }, select: { id: true, title: true, startsAt: true, endsAt: true } });
     if (!current) return NextResponse.json({ error: "Membership event not found." }, { status: 404 });
     const input = await request.json();
     const visitorCount = input?.visitorCount === undefined ? undefined : Number(input.visitorCount);
@@ -61,7 +65,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
   try {
     const user = await authorize();
-    const event = await db.membershipEvent.findUnique({ where: { id: params.id }, select: { id: true, title: true, _count: { select: { attendance: true } } } });
+    const scope = await requireTenantScope();
+    const event = await db.membershipEvent.findFirst({ where: { id: params.id, churchId: scope.church.id }, select: { id: true, title: true, _count: { select: { attendance: true } } } });
     if (!event) return NextResponse.json({ error: "Membership event not found." }, { status: 404 });
     if (event._count.attendance) return NextResponse.json({ error: "This event has attendance history. Cancel it instead of deleting it." }, { status: 409 });
     await db.membershipEvent.delete({ where: { id: params.id } });

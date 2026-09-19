@@ -3,6 +3,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { requireEnabledModule } from "@/lib/modules";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const user = await getCurrentUser();
@@ -33,6 +35,7 @@ export async function GET() {
     });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Membership access is not enabled." }, { status: 403 });
+    if (error instanceof Error && (error.message === "Unknown module." || error.message === "Module is unavailable.")) return NextResponse.json({ error: "Membership access is not enabled." }, { status: 403 });
     return NextResponse.json({ error: "Unable to load member documents and forms." }, { status: 500 });
   }
 }

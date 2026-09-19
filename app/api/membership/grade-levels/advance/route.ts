@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
@@ -11,7 +12,7 @@ export async function POST() {
     const result = await advanceMembershipGrades();
     if (!result.alreadyRun) await logAudit({ activityType: "membership-individual-updated", summary: `Advanced ${result.updated} membership grade level${result.updated === 1 ? "" : "s"}.`, actorId: user.id });
     return NextResponse.json(result);
-  } catch {
-    return NextResponse.json({ error: "Unable to advance grade levels." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to advance grade levels.");
   }
 }

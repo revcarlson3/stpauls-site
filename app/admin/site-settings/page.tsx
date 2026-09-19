@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Container, Notification } from "@/components/ui";
 import { MODULES } from "@/lib/modules";
@@ -33,7 +33,7 @@ export default function SiteSettingsPage() {
     }).catch((error: Error) => { setMessageVariant("danger"); setMessage(error.message); });
   }, []);
 
-  async function saveSettings(field?: HTMLElement) {
+  const saveSettings = useCallback(async (field?: HTMLElement) => {
     setSaving(true);
     const payload = canManageModules ? settings : { ...settings, enabledModules: undefined };
     const response = await fetch("/api/site-settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -44,14 +44,14 @@ export default function SiteSettingsPage() {
       window.dispatchEvent(new Event("site-settings-updated"));
     }
     setSaving(false);
-  }
+  }, [canManageModules, settings]);
 
   useEffect(() => {
     const field = pendingSaveField.current;
     if (!field) return;
     pendingSaveField.current = null;
     void saveSettings(field);
-  }, [saveRevision, settings]);
+  }, [saveRevision, saveSettings, settings]);
 
   async function sendTest(channel: "EMAIL" | "SMS") {
     setMessage("");

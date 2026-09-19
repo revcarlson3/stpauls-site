@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { readFile, unlink } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
@@ -7,6 +8,7 @@ import { db } from "@/lib/db";
 import { documentDownloadDisposition, isSafeDocumentStorageKey, parseMembershipDocumentExpiry } from "@/lib/membership-documents";
 import { requireEnabledModule } from "@/lib/modules";
 import { membershipAuditDetails } from "@/lib/membership-timeline";
+import { requireTenantScope } from "@/lib/tenant";
 
 async function authorizeManager() {
   const user = await requirePermission("MANAGE_MEMBERSHIP");
@@ -31,9 +33,9 @@ async function authorizeDownload(familyId: string) {
   return user;
 }
 
-async function findDocument(familyId: string, documentId: string) {
+async function findDocument(familyId: string, documentId: string, churchId: string) {
   return db.membershipDocument.findFirst({
-    where: { id: documentId, familyId },
+    where: { id: documentId, familyId, family: { churchId } },
     select: {
       id: true,
       originalName: true,
@@ -53,11 +55,12 @@ async function findDocument(familyId: string, documentId: string) {
 export async function PATCH(request: Request, { params }: { params: { id: string; documentId: string } }) {
   try {
     const user = await authorizeManager();
+    const scope = await requireTenantScope();
     const body = await request.json();
     const parsed = parseMembershipDocumentExpiry(body.expiresAt);
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-    const existing = await findDocument(params.id, params.documentId);
+    const existing = await findDocument(params.id, params.documentId, scope.church.id);
     if (!existing) return NextResponse.json({ error: "Family document not found." }, { status: 404 });
 
     const document = await db.membershipDocument.update({
@@ -94,15 +97,16 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         downloadUrl: `/api/membership/families/${params.id}/documents/${document.id}`
       }
     });
-  } catch {
-    return NextResponse.json({ error: "Unable to update document retention." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to update document retention.");
   }
 }
 
 export async function GET(_request: Request, { params }: { params: { id: string; documentId: string } }) {
   try {
     const user = await authorizeDownload(params.id);
-    const document = await findDocument(params.id, params.documentId);
+    const scope = await requireTenantScope();
+    const document = await findDocument(params.id, params.documentId, scope.church.id);
     if (!document || !isSafeDocumentStorageKey(document.storageKey)) {
       return NextResponse.json({ error: "Family document not found." }, { status: 404 });
     }
@@ -137,7 +141,8 @@ export async function GET(_request: Request, { params }: { params: { id: string;
 export async function DELETE(_request: Request, { params }: { params: { id: string; documentId: string } }) {
   try {
     const user = await authorizeManager();
-    const document = await findDocument(params.id, params.documentId);
+    const scope = await requireTenantScope();
+    const document = await findDocument(params.id, params.documentId, scope.church.id);
     if (!document) return NextResponse.json({ error: "Family document not found." }, { status: 404 });
 
     await db.$transaction(async (transaction) => {
@@ -155,7 +160,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
       await unlink(path.join(process.cwd(), "storage", "membership-documents", document.storageKey)).catch(() => undefined);
     }
     return NextResponse.json({ removed: true });
-  } catch {
-    return NextResponse.json({ error: "Unable to delete family document." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to delete family document.");
   }
 }

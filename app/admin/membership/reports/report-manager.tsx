@@ -40,7 +40,7 @@ export function ReportManager() {
   const [volunteerGroups, setVolunteerGroups] = useState<{ id: string; name: string }[]>([]);
   const [sources, setSources] = useState<{ type: Exclude<SourceType, "">; id: string; name: string }[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", description: "", reportType: "custom" as MembershipReportType, visibility: "PRIVATE", sourceType: "" as SourceType, sourceId: "", match: "all" as "all" | "any", conditions: [] as Condition[], columns: DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: "birthMonthDay", sortDirection: "asc" as "asc" | "desc", groupingKey: "", groupingDirection: "asc" as "asc" | "desc", chart: true, chartOnly: false, chartType: "bar" as "bar" | "line" | "pie" });
+  const [form, setForm] = useState({ name: "", description: "", reportType: "custom" as MembershipReportType, visibility: "PRIVATE", sourceType: "" as SourceType, sourceId: "", match: "all" as "all" | "any", conditions: [] as Condition[], columns: DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: "birthMonthDay", sortDirection: "asc" as "asc" | "desc", groupingKey: "", groupingDirection: "asc" as "asc" | "desc", chart: false, chartOnly: false, chartType: "bar" as "bar" | "line" | "pie" });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -84,13 +84,13 @@ export function ReportManager() {
 
   function reset() {
     setEditing(null);
-    setForm({ name: "", description: "", reportType: "custom", visibility: "PRIVATE", sourceType: "", sourceId: "", match: "all", conditions: [], columns: DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: "birthMonthDay", sortDirection: "asc", groupingKey: "", groupingDirection: "asc", chart: true, chartOnly: false, chartType: "bar" });
+    setForm({ name: "", description: "", reportType: "custom", visibility: "PRIVATE", sourceType: "", sourceId: "", match: "all", conditions: [], columns: DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: "birthMonthDay", sortDirection: "asc", groupingKey: "", groupingDirection: "asc", chart: false, chartOnly: false, chartType: "bar" });
   }
 
   function edit(report: Report) {
     setEditing(report.id);
     const savedSort = report.sort?.[0];
-    setForm({ name: report.name, description: report.description ?? "", reportType: report.reportType as MembershipReportType, visibility: report.visibility, sourceType: report.criteria?.sourceType ?? "", sourceId: report.criteria?.sourceId ?? "", match: report.criteria?.match ?? "all", conditions: report.criteria?.conditions ?? [], columns: report.columns?.length ? report.columns : DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: savedSort?.key ?? "birthMonthDay", sortDirection: savedSort?.direction ?? "asc", groupingKey: report.grouping?.key ?? "", groupingDirection: report.grouping?.direction ?? "asc", chart: report.criteria?.chart !== false, chartOnly: report.criteria?.chartOnly === true, chartType: report.criteria?.chartType ?? "bar" });
+    setForm({ name: report.name, description: report.description ?? "", reportType: report.reportType as MembershipReportType, visibility: report.visibility, sourceType: report.criteria?.sourceType ?? "", sourceId: report.criteria?.sourceId ?? "", match: report.criteria?.match ?? "all", conditions: report.criteria?.conditions ?? [], columns: report.columns?.length ? report.columns : DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: savedSort?.key ?? "birthMonthDay", sortDirection: savedSort?.direction ?? "asc", groupingKey: report.grouping?.key ?? "", groupingDirection: report.grouping?.direction ?? "asc", chart: report.criteria?.chart === true, chartOnly: report.criteria?.chartOnly === true, chartType: report.criteria?.chartType ?? "bar" });
     setMessage("");
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Image from "next/image";
 import { getSession, signIn } from "next-auth/react";
 import { Button, Card, Container } from "@/components/ui";
 import Link from "next/link";
@@ -70,7 +71,7 @@ export default function AdminLoginPage() {
     <main className="grid min-h-screen place-items-center py-8 sm:py-12">
       <Container className="max-w-md" style={{ maxWidth: "28rem" }}>
         <Card>
-          <img src="/mychurch-one-logo.svg" alt="mychurch.one" className="mb-8 h-14 w-auto object-contain object-left" />
+          <Image src="/mychurch-one-logo.svg" alt="mychurch.one" width={168} height={56} className="mb-8 h-14 w-auto object-contain object-left" />
           <h1 className="font-serif text-4xl">Sign in</h1>
           <p className="mt-3 text-sm leading-6 text-ink/60">{mfaChallenge ? mfaChannel === "email" ? "Enter the six-digit code sent to your email address." : mfaChannel === "sms" ? "Enter the six-digit code sent by text message." : "Enter the six-digit code from your authenticator app, or use one of your recovery codes." : "Use an account provisioned by an administrator. Your sign-in can be remembered for 60 days unless you sign out or clear your browser data. Five failed attempts within 15 minutes temporarily lock the account."}</p>
           <form className="mt-8 grid gap-4" onSubmit={handleSubmit}>

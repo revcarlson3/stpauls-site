@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 
 type Item = { id: string; accountId: string; code: string; name: string; parentId: string | null; isEnabled: boolean; annualAmount: number; months: number[] };
@@ -21,7 +21,7 @@ export function Budget() {
   const [hideDisabledItems, setHideDisabledItems] = useState(false);
   const pendingSaves = useRef(new Set<Promise<void>>());
 
-  async function load(requestYear = year) {
+  const load = useCallback(async (requestYear = year) => {
     setLoading(true);
     try {
       const response = await fetch(`/api/accounting/budgets?year=${requestYear}`);
@@ -32,8 +32,8 @@ export function Budget() {
     } finally {
       setLoading(false);
     }
-  }
-  useEffect(() => { void load().catch((reason: Error) => setError(reason.message)); }, []);
+  }, [year]);
+  useEffect(() => { void load().catch((reason: Error) => setError(reason.message)); }, [load]);
 
   async function addBudget() {
     if (budget) return;

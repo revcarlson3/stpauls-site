@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
@@ -23,8 +24,8 @@ export async function GET() {
       }
     });
     return NextResponse.json({ orders });
-  } catch {
-    return NextResponse.json({ error: "Unable to load rotation orders." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to load rotation orders.");
   }
 }
 
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
       include: { group: { select: { id: true, name: true } }, entries: { orderBy: { position: "asc" }, include: { individual: { select: { id: true, firstName: true, lastName: true } } } } }
     });
     return NextResponse.json({ order }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Unable to create the rotation order." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to create the rotation order.");
   }
 }

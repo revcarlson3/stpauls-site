@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
@@ -28,8 +29,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     });
     if (!family) return NextResponse.json({ error: "Family not found." }, { status: 404 });
     return NextResponse.json({ family });
-  } catch {
-    return NextResponse.json({ error: "Unable to load family." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to load family.");
   }
 }
 
@@ -62,8 +63,8 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
       actorId: user.id
     });
     return NextResponse.json({ removed: true });
-  } catch {
-    return NextResponse.json({ error: "Unable to remove membership family." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to remove membership family.");
   }
 }
 
@@ -93,8 +94,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       actorId: user.id
     });
     return NextResponse.json({ family: updated });
-  } catch {
-    return NextResponse.json({ error: "Unable to upload family photograph." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to upload family photograph.");
   }
 
 }

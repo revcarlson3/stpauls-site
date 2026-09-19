@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
       return count;
     });
     return NextResponse.json({ restored });
-  } catch {
-    return NextResponse.json({ error: "Unable to undo the bulk membership action." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to undo the bulk membership action.");
   }
 }

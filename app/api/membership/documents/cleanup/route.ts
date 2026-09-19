@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { unlink } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
@@ -6,6 +7,7 @@ import { db } from "@/lib/db";
 import { isSafeDocumentStorageKey, parseMembershipDocumentCleanupRequest } from "@/lib/membership-documents";
 import { requireEnabledModule } from "@/lib/modules";
 import { membershipAuditDetails } from "@/lib/membership-timeline";
+import { requireTenantScope } from "@/lib/tenant";
 
 const previewSelect = {
   id: true,
@@ -22,8 +24,8 @@ async function authorize() {
   return user;
 }
 
-async function expiredSummary(cutoff: Date) {
-  const where = { expiresAt: { lte: cutoff } };
+async function expiredSummary(cutoff: Date, churchId: string) {
+  const where = { expiresAt: { lte: cutoff }, family: { churchId } };
   const [count, totals, documents] = await Promise.all([
     db.membershipDocument.count({ where }),
     db.membershipDocument.aggregate({ where, _sum: { sizeBytes: true } }),
@@ -45,8 +47,9 @@ async function expiredSummary(cutoff: Date) {
 export async function GET() {
   try {
     await authorize();
+    const scope = await requireTenantScope();
     const cutoff = new Date();
-    const summary = await expiredSummary(cutoff);
+    const summary = await expiredSummary(cutoff, scope.church.id);
     return NextResponse.json({
       asOf: cutoff.toISOString(),
       automaticCleanupEnabled: false,
@@ -55,21 +58,22 @@ export async function GET() {
       documents: summary.documents,
       truncated: summary.truncated
     });
-  } catch {
-    return NextResponse.json({ error: "Unable to preview expired membership documents." }, { status: 403 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to preview expired membership documents.");
   }
 }
 
 export async function DELETE(request: Request) {
   try {
     const user = await authorize();
+    const scope = await requireTenantScope();
     const body = await request.json();
     const parsed = parseMembershipDocumentCleanupRequest(body);
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
     const { cutoff } = parsed;
 
     const candidates = await db.membershipDocument.findMany({
-      where: { expiresAt: { lte: cutoff } },
+      where: { expiresAt: { lte: cutoff }, family: { churchId: scope.church.id } },
       orderBy: { expiresAt: "asc" },
       select: { ...previewSelect, storageKey: true }
     });
@@ -80,7 +84,7 @@ export async function DELETE(request: Request) {
     for (const document of candidates) {
       const deleted = await db.$transaction(async (transaction) => {
         const result = await transaction.membershipDocument.deleteMany({
-          where: { id: document.id, expiresAt: { lte: cutoff } }
+          where: { id: document.id, expiresAt: { lte: cutoff }, family: { churchId: scope.church.id } }
         });
         if (!result.count) return false;
         await transaction.auditLog.create({
@@ -112,7 +116,7 @@ export async function DELETE(request: Request) {
     }
 
     return NextResponse.json({ deletedCount, deletedSizeBytes, storageCleanupFailures });
-  } catch {
-    return NextResponse.json({ error: "Unable to clean up expired membership documents." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to clean up expired membership documents.");
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 
 type CalendarEvent = {
@@ -28,6 +28,7 @@ type AttendanceAudience = { id: string; name: string };
 type EventVolunteerAssignment = {
   id: string;
   groupId: string;
+  scheduledIndividualId: string | null;
   source: "ROTATION" | "OVERRIDE" | string;
   group: { name: string };
   individual: { id: string; firstName: string; lastName: string | null };
@@ -123,7 +124,7 @@ export function EventsCalendar() {
   const [adjustGroupId, setAdjustGroupId] = useState("");
   const [adjusting, setAdjusting] = useState(false);
 
-  async function loadEvents() {
+  const loadEvents = useCallback(async () => {
     const { start, end } = rangeFor(view, cursor);
     const requestStart = new Date(start);
     requestStart.setDate(requestStart.getDate() - 7);
@@ -133,11 +134,11 @@ export function EventsCalendar() {
     const value = await response.json();
     if (!response.ok) throw new Error(value.error ?? "Unable to load events.");
     setEvents(value.events ?? []);
-  }
+  }, [cursor, view]);
 
   useEffect(() => {
     void loadEvents().catch((reason: Error) => setError(reason.message));
-  }, [cursor, view]);
+  }, [loadEvents]);
   useEffect(() => {
     void fetch("/api/events/settings").then((response) => response.json()).then((value) => {
       if (value.settings) {
@@ -173,8 +174,6 @@ export function EventsCalendar() {
     setSaveChoiceOpen(false);
     setActiveTab("details");
     setEventVolunteers([]);
-    setEventVolunteerGroups([]);
-    setAdjustGroupId("");
     setEventVolunteerGroups([]);
     setAdjustGroupId("");
     setForm({ ...emptyEventForm(day), attendanceEnabled: false, attendanceAudienceType: "VOLUNTEER", attendanceAudienceId: "" });
@@ -330,8 +329,7 @@ export function EventsCalendar() {
         </div>
         {editingEvent && activeTab === "registrations" && <div className="rounded-xl border border-dashed border-ink/20 p-5 text-sm text-ink/60">Event registration options will be available here in a future update.</div>}
         {editingEvent && activeTab === "attendance" && <div className="grid gap-4 rounded-xl border border-ink/10 p-4"><Toggle checked={form.attendanceEnabled} onChange={(value) => setForm({ ...form, attendanceEnabled: value })} label="Enable attendance" />{form.attendanceEnabled && <><label className="grid gap-1 text-sm font-semibold">Attendance audience<select required value={form.attendanceAudienceType} onChange={(event) => setForm({ ...form, attendanceAudienceType: event.target.value as "VOLUNTEER" | "MANUAL" | "DYNAMIC", attendanceAudienceId: "" })} className="focus-ring rounded-lg border border-ink/15 bg-white px-3 py-2 font-normal"><option value="VOLUNTEER">Volunteer audience</option><option value="MANUAL">Manual audience</option><option value="DYNAMIC">Dynamic audience</option></select></label><label className="grid gap-1 text-sm font-semibold">Select audience<select required value={form.attendanceAudienceId} onChange={(event) => setForm({ ...form, attendanceAudienceId: event.target.value })} className="focus-ring rounded-lg border border-ink/15 bg-white px-3 py-2 font-normal"><option value="">Select an audience</option>{audiences[form.attendanceAudienceType].map((audience) => <option key={audience.id} value={audience.id}>{audience.name}</option>)}</select></label></>}<button disabled={saving} type="submit" className="focus-ring rounded-lg bg-coral px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">{saving ? "Saving..." : "Save attendance settings"}</button></div>}
-        {editingEvent && activeTab === "attendance" && <div className="grid gap-4 rounded-xl border border-ink/10 p-4"><Toggle checked={form.attendanceEnabled} onChange={(value) => setForm({ ...form, attendanceEnabled: value })} label="Enable attendance" />{form.attendanceEnabled && <><label className="grid gap-1 text-sm font-semibold">Attendance audience<select required value={form.attendanceAudienceType} onChange={(event) => setForm({ ...form, attendanceAudienceType: event.target.value as "VOLUNTEER" | "MANUAL" | "DYNAMIC", attendanceAudienceId: "" })} className="focus-ring rounded-lg border border-ink/15 bg-white px-3 py-2 font-normal"><option value="VOLUNTEER">Volunteer audience</option><option value="MANUAL">Manual audience</option><option value="DYNAMIC">Dynamic audience</option></select></label><label className="grid gap-1 text-sm font-semibold">Select audience<select required value={form.attendanceAudienceId} onChange={(event) => setForm({ ...form, attendanceAudienceId: event.target.value })} className="focus-ring rounded-lg border border-ink/15 bg-white px-3 py-2 font-normal"><option value="">Select an audience</option>{audiences[form.attendanceAudienceType].map((audience) => <option key={audience.id} value={audience.id}>{audience.name}</option>)}</select></label></>}<button disabled={saving} type="submit" className="focus-ring rounded-lg bg-coral px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">{saving ? "Saving..." : "Save attendance settings"}</button></div>}
-        {editingEvent && activeTab === "volunteers" && <div className="grid gap-4 rounded-xl border border-ink/10 p-4"><div><h3 className="font-serif text-xl">Scheduled volunteers</h3><p className="mt-1 text-sm text-ink/60">Adjust this event only. Changes here do not change the rotation order or future events.</p></div>{eventVolunteerGroups.length ? <div className="grid gap-4">{eventVolunteerGroups.map((group) => { const assignments = eventVolunteers.filter((assignment) => assignment.groupId === group.id); const assignedIds = new Set(assignments.map((assignment) => assignment.individual.id)); return <div key={group.id} className="rounded-xl border border-ink/10 p-3"><div className="flex items-center justify-between gap-3"><h4 className="text-sm font-semibold">{group.name}</h4><span className="text-xs text-ink/55">{assignments.length} assigned</span></div><ul className="mt-2 grid gap-2">{assignments.map((assignment) => { const replaced = assignment.source === "OVERRIDE"; return <li key={assignment.id} className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm ${replaced ? "bg-coral/15 ring-1 ring-coral/25" : "bg-mist/50"}`}><span>{assignment.individual.lastName ? `${assignment.individual.lastName}, ${assignment.individual.firstName}` : assignment.individual.firstName}{replaced && <span className="ml-2 rounded-full bg-coral px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">Manual</span>}</span><button type="button" disabled={adjusting} onClick={() => void adjustEventVolunteer(group.id, assignment.individual.id, "remove")} className="text-xs font-semibold text-coral">Remove</button></li>; })}</ul><div className="mt-3 border-t border-ink/10 pt-3"><p className="text-xs font-semibold uppercase tracking-wide text-ink/50">Add volunteer for this event</p><div className="mt-2 flex flex-wrap gap-2">{group.members.filter((member) => !assignedIds.has(member.id)).map((member) => <button key={member.id} type="button" disabled={adjusting} onClick={() => void adjustEventVolunteer(group.id, member.id, "add")} className="rounded-full border border-coral/40 px-3 py-1.5 text-xs font-semibold text-coral hover:bg-coral/10 disabled:opacity-50">{member.name}</button>)}{!group.members.some((member) => !assignedIds.has(member.id)) && <span className="text-xs text-ink/55">All group members are assigned.</span>}</div></div></div>; })}</div> : <p className="rounded-lg border border-dashed border-ink/20 p-4 text-sm text-ink/60">No volunteer groups are linked to this event.</p>}</div>}
+        {editingEvent && activeTab === "volunteers" && <div className="grid gap-4 rounded-xl border border-ink/10 p-4"><div><h3 className="font-serif text-xl">Scheduled volunteers</h3><p className="mt-1 text-sm text-ink/60">Adjust this event only. Changes here do not change the rotation order or future events.</p></div>{eventVolunteerGroups.length ? <div className="grid gap-4">{eventVolunteerGroups.map((group) => { const assignments = eventVolunteers.filter((assignment) => assignment.groupId === group.id); const assignedIds = new Set(assignments.map((assignment) => assignment.individual.id)); return <div key={group.id} className="rounded-xl border border-ink/10 p-3"><div className="flex items-center justify-between gap-3"><h4 className="text-sm font-semibold">{group.name}</h4><span className="text-xs text-ink/55">{assignments.length} assigned</span></div><ul className="mt-2 grid gap-2">{assignments.map((assignment) => { const replaced = assignment.source === "OVERRIDE"; return <li key={assignment.id} className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm ${replaced ? "bg-coral/15 ring-1 ring-coral/25" : "bg-mist/50"}`}><span>{assignment.individual.lastName ? `${assignment.individual.lastName}, ${assignment.individual.firstName}` : assignment.individual.firstName}{replaced && <span className="ml-2 rounded-full bg-coral px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">{assignment.scheduledIndividualId ? "Replaced" : "Manual"}</span>}</span><button type="button" disabled={adjusting} onClick={() => void adjustEventVolunteer(group.id, assignment.individual.id, "remove")} className="text-xs font-semibold text-coral">Remove</button></li>; })}</ul><div className="mt-3 border-t border-ink/10 pt-3"><p className="text-xs font-semibold uppercase tracking-wide text-ink/50">Add volunteer for this event</p><div className="mt-2 flex flex-wrap gap-2">{group.members.filter((member) => !assignedIds.has(member.id)).map((member) => <button key={member.id} type="button" disabled={adjusting} onClick={() => void adjustEventVolunteer(group.id, member.id, "add")} className="rounded-full border border-coral/40 px-3 py-1.5 text-xs font-semibold text-coral hover:bg-coral/10 disabled:opacity-50">{member.name}</button>)}{!group.members.some((member) => !assignedIds.has(member.id)) && <span className="text-xs text-ink/55">All group members are assigned.</span>}</div></div></div>; })}</div> : <p className="rounded-lg border border-dashed border-ink/20 p-4 text-sm text-ink/60">No volunteer groups are linked to this event.</p>}</div>}
       </form>
     </aside>}
     {deleteChoiceOpen && editingEvent && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-ink/40 p-5" role="dialog" aria-modal="true" aria-labelledby="delete-event-title">

@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
@@ -5,6 +6,7 @@ import { db } from "@/lib/db";
 import { sendMembershipEmail, sendSmsText } from "@/lib/membership-delivery";
 import { membershipMessageEligibility } from "@/lib/membership-privacy";
 import { htmlToText, sanitizeEmailHtml } from "@/lib/membership-messaging";
+import { requireTenantScope } from "@/lib/tenant";
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
@@ -18,8 +20,9 @@ export async function POST() {
   try {
     const user = await requirePermission("MANAGE_EVENTS");
     await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
+    const scope = await requireTenantScope();
     const due = await db.membershipVolunteerNotification.findMany({
-      where: { status: "SCHEDULED", scheduledFor: { lte: new Date() } },
+      where: { status: "SCHEDULED", scheduledFor: { lte: new Date() }, assignment: { event: { churchId: scope.church.id } } },
       take: 100,
       orderBy: { scheduledFor: "asc" },
       include: {
@@ -32,7 +35,7 @@ export async function POST() {
         }
       }
     });
-    const templates = await db.membershipEventNotificationTemplate.findMany();
+    const templates = await db.membershipEventNotificationTemplate.findMany({ where: { churchId: scope.church.id } });
     let sent = 0;
     let skipped = 0;
     let failed = 0;
@@ -82,7 +85,7 @@ export async function POST() {
       }
     }
     return NextResponse.json({ processed: due.length, sent, skipped, failed });
-  } catch {
-    return NextResponse.json({ error: "Unable to process volunteer notifications." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to process volunteer notifications.");
   }
 }

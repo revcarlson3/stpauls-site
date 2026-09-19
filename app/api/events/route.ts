@@ -5,6 +5,7 @@ import { requireEnabledModule } from "@/lib/modules";
 import { logAudit } from "@/lib/audit";
 import { buildRecurringDates } from "@/lib/event-scheduling";
 import { requireTenantScope } from "@/lib/tenant";
+import { apiErrorResponse } from "@/lib/api-errors";
 
 export async function GET(request: Request) {
   try {
@@ -25,8 +26,8 @@ export async function GET(request: Request) {
       select: { id: true, title: true, description: true, eventType: true, status: true, category: true, location: true, readingsUrl: true, startsAt: true, endsAt: true, allDay: true, published: true, recurrenceGroupId: true, attendanceEnabled: true, attendanceAudienceType: true, attendanceAudienceId: true, timeZone: true }
     });
     return NextResponse.json({ events });
-  } catch {
-    return NextResponse.json({ error: "Unable to load events." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to load events.");
   }
 }
 
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
       attendanceAudienceId?: unknown;
       recurrence?: { enabled?: unknown; frequency?: unknown; interval?: unknown; endMode?: unknown; endDate?: unknown; occurrences?: unknown };
     };
-    const eventSettings = await db.membershipEventSettings.findUnique({ where: { id: 1 }, select: { eventTypes: true } });
+    const eventSettings = await db.membershipEventSettings.findUnique({ where: { churchId: scope.church.id }, select: { eventTypes: true } });
     const eventTypes = Array.isArray(eventSettings?.eventTypes) ? eventSettings.eventTypes.filter((value): value is string => typeof value === "string") : ["Worship", "Class", "Fellowship", "Outreach", "Meeting", "Other"];
     if (
       typeof input.title !== "string" || !input.title.trim() ||
@@ -77,6 +78,14 @@ export async function POST(request: Request) {
     }
     const start = new Date(input.startsAt);
     const end = input.endsAt ? new Date(input.endsAt as string) : null;
+    if (input.attendanceEnabled === true && typeof input.attendanceAudienceId === "string" && input.attendanceAudienceId && typeof input.attendanceAudienceType === "string") {
+      const audienceExists = input.attendanceAudienceType === "VOLUNTEER"
+        ? await db.membershipVolunteerGroup.findFirst({ where: { id: input.attendanceAudienceId, churchId: scope.church.id }, select: { id: true } })
+        : input.attendanceAudienceType === "MANUAL"
+          ? await db.membershipManualList.findFirst({ where: { id: input.attendanceAudienceId, churchId: scope.church.id }, select: { id: true } })
+          : await db.membershipDynamicList.findFirst({ where: { id: input.attendanceAudienceId, churchId: scope.church.id }, select: { id: true } });
+      if (!audienceExists) return NextResponse.json({ error: "The attendance audience was not found in this church." }, { status: 400 });
+    }
     const recurrence = input.recurrence?.enabled === true ? input.recurrence : null;
     const dates: Date[] = recurrence ? buildRecurringDates(start, {
       frequency: recurrence.frequency as "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY",
@@ -115,8 +124,8 @@ export async function POST(request: Request) {
     });
     await logAudit({ activityType: "membership-event-created", summary: `Created ${dates.length} event${dates.length === 1 ? "" : "s"} for “${title.trim()}”.`, details: JSON.stringify({ recurrenceGroupId, eventCount: dates.length }), actorId: user.id });
     return NextResponse.json({ created: dates.length, recurrenceGroupId }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Unable to create event." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to create event.");
   }
 }
 
@@ -124,8 +133,9 @@ export async function PATCH(request: Request) {
   try {
     const user = await requirePermission("MANAGE_EVENTS");
     await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
+    const scope = await requireTenantScope();
     const input = await request.json() as { id?: unknown; applyToSeries?: unknown; title?: unknown; eventType?: unknown; category?: unknown; status?: unknown; timeZone?: unknown; description?: unknown; location?: unknown; readingsUrl?: unknown; startsAt?: unknown; endsAt?: unknown; allDay?: unknown; published?: unknown; attendanceEnabled?: unknown; attendanceAudienceType?: unknown; attendanceAudienceId?: unknown };
-    const eventSettings = await db.membershipEventSettings.findUnique({ where: { id: 1 }, select: { eventTypes: true } });
+    const eventSettings = await db.membershipEventSettings.findUnique({ where: { churchId: scope.church.id }, select: { eventTypes: true } });
     const eventTypes = Array.isArray(eventSettings?.eventTypes) ? eventSettings.eventTypes.filter((value): value is string => typeof value === "string") : ["Worship", "Class", "Fellowship", "Outreach", "Meeting", "Other"];
     if (
       typeof input.id !== "string" || !input.id ||
@@ -149,10 +159,18 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Enter a valid event name and date range." }, { status: 400 });
     }
 
-    const current = await db.membershipEvent.findUnique({ where: { id: input.id }, select: { id: true, title: true, startsAt: true, endsAt: true, recurrenceGroupId: true } });
+    const current = await db.membershipEvent.findFirst({ where: { id: input.id, churchId: scope.church.id }, select: { id: true, title: true, startsAt: true, endsAt: true, recurrenceGroupId: true } });
     if (!current) return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    if (input.attendanceEnabled && typeof input.attendanceAudienceId === "string" && input.attendanceAudienceId && typeof input.attendanceAudienceType === "string") {
+      const audienceExists = input.attendanceAudienceType === "VOLUNTEER"
+        ? await db.membershipVolunteerGroup.findFirst({ where: { id: input.attendanceAudienceId, churchId: scope.church.id }, select: { id: true } })
+        : input.attendanceAudienceType === "MANUAL"
+          ? await db.membershipManualList.findFirst({ where: { id: input.attendanceAudienceId, churchId: scope.church.id }, select: { id: true } })
+          : await db.membershipDynamicList.findFirst({ where: { id: input.attendanceAudienceId, churchId: scope.church.id }, select: { id: true } });
+      if (!audienceExists) return NextResponse.json({ error: "The attendance audience was not found in this church." }, { status: 400 });
+    }
     const targetEvents = input.applyToSeries === true && current.recurrenceGroupId
-      ? await db.membershipEvent.findMany({ where: { recurrenceGroupId: current.recurrenceGroupId }, select: { id: true, startsAt: true, endsAt: true } })
+      ? await db.membershipEvent.findMany({ where: { recurrenceGroupId: current.recurrenceGroupId, churchId: scope.church.id }, select: { id: true, startsAt: true, endsAt: true } })
       : [current];
     const requestedStart = new Date(input.startsAt);
     const requestedEnd = new Date(input.endsAt);
@@ -184,8 +202,8 @@ export async function PATCH(request: Request) {
     })));
     await logAudit({ activityType: "membership-event-updated", summary: `Updated ${targetEvents.length} event${targetEvents.length === 1 ? "" : "s"} for “${input.title.trim()}”.`, details: JSON.stringify({ eventId: input.id, recurrenceGroupId: current.recurrenceGroupId, series: targetEvents.length > 1, eventCount: targetEvents.length }), actorId: user.id });
     return NextResponse.json({ event: { id: input.id }, updated: targetEvents.length });
-  } catch {
-    return NextResponse.json({ error: "Unable to update event." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to update event.");
   }
 }
 
@@ -193,18 +211,19 @@ export async function DELETE(request: Request) {
   try {
     const user = await requirePermission("MANAGE_EVENTS");
     await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
+    const scope = await requireTenantScope();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     const series = searchParams.get("series") === "true";
     if (!id) return NextResponse.json({ error: "An event is required." }, { status: 400 });
-    const event = await db.membershipEvent.findUnique({ where: { id }, select: { recurrenceGroupId: true } });
+    const event = await db.membershipEvent.findFirst({ where: { id, churchId: scope.church.id }, select: { recurrenceGroupId: true } });
     if (!event) return NextResponse.json({ error: "Event not found." }, { status: 404 });
     const result = series && event.recurrenceGroupId
-      ? await db.membershipEvent.deleteMany({ where: { recurrenceGroupId: event.recurrenceGroupId } })
-      : await db.membershipEvent.deleteMany({ where: { id } });
+      ? await db.membershipEvent.deleteMany({ where: { recurrenceGroupId: event.recurrenceGroupId, churchId: scope.church.id } })
+      : await db.membershipEvent.deleteMany({ where: { id, churchId: scope.church.id } });
     await logAudit({ activityType: "membership-event-deleted", summary: `Deleted ${result.count} event${result.count === 1 ? "" : "s"} from the schedule.`, details: JSON.stringify({ eventId: id, recurrenceGroupId: event.recurrenceGroupId, series }), actorId: user.id });
     return NextResponse.json({ deleted: result.count });
-  } catch {
-    return NextResponse.json({ error: "Unable to delete event." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to delete event.");
   }
 }

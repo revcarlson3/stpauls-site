@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { requirePermission } from "@/lib/auth";
@@ -58,8 +59,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       });
     }
     return NextResponse.json({ appliedEventCount: events.length, nextPosition });
-  } catch {
-    return NextResponse.json({ error: "Unable to apply the rotation to linked events." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to apply the rotation to linked events.");
   }
 }
 
@@ -152,8 +153,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       include: { group: { select: { id: true, name: true } }, entries: { orderBy: { position: "asc" }, include: { individual: { select: { id: true, firstName: true, lastName: true } } } } }
     });
     return NextResponse.json({ order: updated, reassignedEventCount, skippedOverrideEventCount });
-  } catch {
-    return NextResponse.json({ error: "Unable to update the rotation order." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to update the rotation order.");
   }
 }
 
@@ -165,7 +166,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
       db.membershipVolunteerRotationOrder.delete({ where: { id: params.id } })
     ]);
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "Unable to delete the rotation order." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to delete the rotation order.");
   }
 }

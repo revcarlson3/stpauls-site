@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
@@ -22,8 +23,8 @@ export async function POST(request: Request) {
     });
     await logAudit({ activityType: "membership-message-template-created", summary: `Saved membership message template “${name}”.`, actorId: user.id });
     return NextResponse.json({ template }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Unable to save the message template." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to save the message template.");
   }
 }
 
@@ -45,9 +46,9 @@ export async function PATCH(request: Request) {
       });
       await logAudit({ activityType: "membership-message-template-updated", summary: `Updated membership message template “${template.name}”.`, actorId: user.id });
       return NextResponse.json({ template });
-    } catch {
-      return NextResponse.json({ error: "Unable to update the message template." }, { status: 500 });
-    }
+    } catch (error) {
+    return apiErrorResponse(error, "Unable to update the message template.");
+  }
   }
 
 export async function DELETE(request: Request) {
@@ -61,7 +62,7 @@ export async function DELETE(request: Request) {
       const template = await db.membershipMessageTemplate.delete({ where: { id }, select: { name: true } });
       await logAudit({ activityType: "membership-message-template-deleted", summary: `Deleted membership message template “${template.name}”.`, actorId: user.id });
       return NextResponse.json({ deleted: true });
-    } catch {
-      return NextResponse.json({ error: "Unable to delete the message template." }, { status: 500 });
-    }
+    } catch (error) {
+    return apiErrorResponse(error, "Unable to delete the message template.");
+  }
 }

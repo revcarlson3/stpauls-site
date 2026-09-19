@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Card, Container } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -25,7 +26,7 @@ export default async function MembershipLandingPage() {
     <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {availableFeatures.map((feature) => <Link key={feature.href} href={feature.href} className="focus-ring group">
         <Card className="relative min-h-72 overflow-hidden p-0 transition-transform duration-200 group-hover:-translate-y-1 group-hover:border-coral/40">
-          <img src={feature.image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+          <Image src={feature.image} alt="" aria-hidden="true" fill unoptimized className="object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/75 to-ink/10" />
           <div className="relative flex min-h-72 flex-col justify-between p-6 text-white"><div><p className="text-xl font-semibold">{feature.label}</p><p className="mt-3 text-sm leading-6 text-white/80">{feature.description}</p></div><span className="mt-6 text-sm font-semibold text-white">Open feature <span aria-hidden="true">→</span></span></div>
         </Card>

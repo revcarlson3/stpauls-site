@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
+import { requireTenantScope } from "@/lib/tenant";
 
 const defaults = { eventTypes: ["Worship", "Class", "Fellowship", "Outreach", "Meeting", "Other"], categories: [], locations: ["Church campus", "Sanctuary", "Fellowship hall", "Off-site"], timeZone: "America/Chicago" };
 async function authorize() {
@@ -15,8 +16,9 @@ function cleanList(value: unknown, fallback: string[]) {
 export async function GET() {
   try {
     await authorize();
-    const settings = await db.membershipEventSettings.findUnique({ where: { id: 1 } });
-    const usedTypes = await db.membershipEvent.findMany({ distinct: ["eventType"], select: { eventType: true } });
+    const scope = await requireTenantScope();
+    const settings = await db.membershipEventSettings.findUnique({ where: { churchId: scope.church.id } });
+    const usedTypes = await db.membershipEvent.findMany({ where: { churchId: scope.church.id }, distinct: ["eventType"], select: { eventType: true } });
     const eventTypes = cleanList(settings?.eventTypes, defaults.eventTypes);
     if (eventTypes.length === 0) eventTypes.push(...defaults.eventTypes);
     for (const event of usedTypes) if (!eventTypes.includes(event.eventType)) eventTypes.push(event.eventType);
@@ -26,15 +28,16 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     await authorize();
+    const scope = await requireTenantScope();
     const input = await request.json();
-    const currentTypes = await db.membershipEvent.findMany({ distinct: ["eventType"], select: { eventType: true } });
+    const currentTypes = await db.membershipEvent.findMany({ where: { churchId: scope.church.id }, distinct: ["eventType"], select: { eventType: true } });
     const eventTypes = cleanList(input?.eventTypes, defaults.eventTypes);
     if (eventTypes.length === 0) return NextResponse.json({ error: "Keep at least one event type." }, { status: 400 });
     const removedType = currentTypes.find((event) => !eventTypes.includes(event.eventType));
     if (removedType) return NextResponse.json({ error: `The event type "${removedType.eventType}" is still used by events and cannot be deleted.` }, { status: 409 });
     const timeZone = typeof input?.timeZone === "string" && input.timeZone.trim() ? input.timeZone.trim().slice(0, 100) : defaults.timeZone;
     Intl.DateTimeFormat("en-US", { timeZone }).format();
-    const settings = await db.membershipEventSettings.upsert({ where: { id: 1 }, update: { eventTypes, categories: cleanList(input?.categories, defaults.categories), locations: cleanList(input?.locations, defaults.locations), timeZone }, create: { id: 1, eventTypes, categories: cleanList(input?.categories, defaults.categories), locations: cleanList(input?.locations, defaults.locations), timeZone } });
+    const settings = await db.membershipEventSettings.upsert({ where: { churchId: scope.church.id }, update: { eventTypes, categories: cleanList(input?.categories, defaults.categories), locations: cleanList(input?.locations, defaults.locations), timeZone }, create: { churchId: scope.church.id, eventTypes, categories: cleanList(input?.categories, defaults.categories), locations: cleanList(input?.locations, defaults.locations), timeZone } });
     return NextResponse.json({ settings });
   } catch { return NextResponse.json({ error: "Unable to save event settings." }, { status: 400 }); }
 }

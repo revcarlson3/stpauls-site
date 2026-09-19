@@ -70,7 +70,7 @@ export function EventVolunteerScheduler() {
         setSelectedEventId(eventValue.events?.[0]?.id ?? "");
       }
     }).catch((reason: Error) => setError(reason.message));
-  }, [page]);
+  }, [page, selectedEventId]);
 
   useEffect(() => {
     if (!selectedEventId) { setAssignedGroups([]); return; }
@@ -114,7 +114,7 @@ export function EventVolunteerScheduler() {
       setNotifySms(true);
       setNotifyDayBefore(false);
     }
-  }, [selectedEventId, assignedGroups, rotationGroups, orders.length]);
+  }, [assignedGroups, rotationGroups, orders, rotationGroupId]);
 
   function toggle(eventId: string, groupId: string) {
     setSelected((current) => {

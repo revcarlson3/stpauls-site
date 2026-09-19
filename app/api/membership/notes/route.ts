@@ -1,3 +1,4 @@
+import { apiErrorResponse } from "@/lib/api-errors";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
       actorId: user.id
     });
     return NextResponse.json({ note }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Unable to create membership note." }, { status: 500 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to create membership note.");
   }
 }

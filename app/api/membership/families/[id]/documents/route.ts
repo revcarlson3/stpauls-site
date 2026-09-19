@@ -2,12 +2,14 @@ import { randomUUID } from "crypto";
 import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
+import { apiErrorResponse } from "@/lib/api-errors";
 import { logAudit } from "@/lib/audit";
 import { requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { MAX_MEMBERSHIP_DOCUMENT_SIZE, validateDocumentUpload } from "@/lib/membership-documents";
 import { requireEnabledModule } from "@/lib/modules";
 import { membershipAuditDetails } from "@/lib/membership-timeline";
+import { requireTenantScope } from "@/lib/tenant";
 
 const documentSelect = {
   id: true,
@@ -37,8 +39,9 @@ async function authorize() {
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   try {
     await authorize();
+    const scope = await requireTenantScope();
     const family = await db.membershipFamily.findUnique({
-      where: { id: params.id },
+      where: { id: params.id, churchId: scope.church.id },
       select: {
         id: true,
         documents: { orderBy: { createdAt: "desc" }, select: documentSelect }
@@ -46,8 +49,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     });
     if (!family) return NextResponse.json({ error: "Family not found." }, { status: 404 });
     return NextResponse.json({ documents: family.documents.map((document) => documentResponse(document, family.id)) });
-  } catch {
-    return NextResponse.json({ error: "Unable to load family documents." }, { status: 403 });
+  } catch (error) {
+    return apiErrorResponse(error, "Unable to load family documents.");
   }
 }
 
@@ -55,12 +58,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
   let writtenPath: string | null = null;
   try {
     const user = await authorize();
+    const scope = await requireTenantScope();
     const contentLength = Number(request.headers.get("content-length"));
     if (Number.isFinite(contentLength) && contentLength > MAX_MEMBERSHIP_DOCUMENT_SIZE + 1024 * 1024) {
       return NextResponse.json({ error: "Documents must be no larger than 10 MB." }, { status: 413 });
     }
 
-    const family = await db.membershipFamily.findUnique({ where: { id: params.id }, select: { id: true, lastName: true } });
+    const family = await db.membershipFamily.findFirst({ where: { id: params.id, churchId: scope.church.id }, select: { id: true, lastName: true } });
     if (!family) return NextResponse.json({ error: "Family not found." }, { status: 404 });
 
     const formData = await request.formData();
@@ -98,8 +102,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       actorId: user.id
     });
     return NextResponse.json({ document: documentResponse(document, family.id) }, { status: 201 });
-  } catch {
+  } catch (error) {
     if (writtenPath) await unlink(writtenPath).catch(() => undefined);
-    return NextResponse.json({ error: "Unable to upload family document." }, { status: 500 });
+    return apiErrorResponse(error, "Unable to upload family document.");
   }
 }

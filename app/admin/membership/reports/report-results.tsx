@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Button, Notification } from "@/components/ui";
 import type { MembershipReportLayout } from "@/lib/membership-reporting";
@@ -34,7 +34,7 @@ export function ReportResults() {
   const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
   const [open, setOpen] = useState(false);
 
-  async function loadReports(preferredId?: string) {
+  const loadReports = useCallback(async (preferredId?: string) => {
     const response = await fetch("/api/membership/reports", { cache: "no-store" });
     const value = await response.json();
     const nextReports = value.reports ?? [];
@@ -48,34 +48,9 @@ export function ReportResults() {
     } else {
       setReportId("");
     }
-  }
+  }, [reportId]);
 
-  useEffect(() => {
-    void loadReports();
-    const handleReportsUpdated = (event: Event) => {
-      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
-      void loadReports(id);
-    };
-    window.addEventListener("membership-reports-updated", handleReportsUpdated);
-    const handlePreview = (event: Event) => {
-      const definition = (event as CustomEvent<Record<string, unknown>>).detail;
-      setPreview(definition);
-      void run("preview", definition);
-    };
-    const handleRun = (event: Event) => {
-      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
-      if (id) void run(id);
-    };
-    window.addEventListener("membership-report-preview", handlePreview);
-    window.addEventListener("membership-report-run", handleRun);
-    return () => {
-      window.removeEventListener("membership-reports-updated", handleReportsUpdated);
-      window.removeEventListener("membership-report-preview", handlePreview);
-      window.removeEventListener("membership-report-run", handleRun);
-    };
-  }, []);
-
-  async function runPreview(definition: Record<string, unknown>) {
+  const runPreview = useCallback(async (definition: Record<string, unknown>) => {
     setError("");
     const response = await fetch(`/api/membership/reports/preview/results?definition=${encodeURIComponent(JSON.stringify(definition))}&page=1&pageSize=10000&sort=name&direction=asc&_=${Date.now()}`, { cache: "no-store" });
     const value = await response.json();
@@ -89,7 +64,7 @@ export function ReportResults() {
     setGrouping(value.report.grouping ?? "");
     setGroupingCounts(value.report.groupingCounts ?? []);
     setSummary(value.report.summary ?? null);
-  }
+  }, []);
 
   function selectReport(id: string) {
     const report = reports.find((item) => item.id === id);
@@ -99,7 +74,7 @@ export function ReportResults() {
     setLayout(report?.layout ?? {});
   }
 
-  async function run(targetId = reportId, previewDefinition = preview) {
+  const run = useCallback(async (targetId = reportId, previewDefinition = preview) => {
     if (!targetId) return;
     setReportId(targetId);
     setOpen(true);
@@ -128,7 +103,32 @@ export function ReportResults() {
     setGrouping(value.report.grouping ?? "");
     setGroupingCounts(value.report.groupingCounts ?? []);
     setSummary(value.report.summary ?? null);
-  }
+  }, [direction, preview, reportId, reports, runPreview, sort]);
+
+  useEffect(() => {
+    void loadReports();
+    const handleReportsUpdated = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      void loadReports(id);
+    };
+    window.addEventListener("membership-reports-updated", handleReportsUpdated);
+    const handlePreview = (event: Event) => {
+      const definition = (event as CustomEvent<Record<string, unknown>>).detail;
+      setPreview(definition);
+      void run("preview", definition);
+    };
+    const handleRun = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (id) void run(id);
+    };
+    window.addEventListener("membership-report-preview", handlePreview);
+    window.addEventListener("membership-report-run", handleRun);
+    return () => {
+      window.removeEventListener("membership-reports-updated", handleReportsUpdated);
+      window.removeEventListener("membership-report-preview", handlePreview);
+      window.removeEventListener("membership-report-run", handleRun);
+    };
+  }, [loadReports, run]);
 
   async function saveLayout(nextLayout: MembershipReportLayout) {
     if (!reportId) return;
@@ -148,8 +148,8 @@ export function ReportResults() {
     {error && <Notification variant="danger" className="mt-4">{error}</Notification>}
     {summary && <div className="mt-5 grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-ink/10 bg-mist/30 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-ink/55">{reportType === "family-overview" ? "Matching families" : reportType === "attendance-participation" ? "Attendance records" : reportType === "service-history" ? "Service records" : "Matching members"}</p><p className="mt-1 text-2xl font-semibold">{summary.total}</p></div><div className="rounded-xl border border-ink/10 bg-mist/30 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-ink/55">{reportType === "attendance-participation" ? "Present" : reportType === "service-history" ? "Completed" : "Active"}</p><p className="mt-1 text-2xl font-semibold">{summary.active}</p></div><div className="rounded-xl border border-ink/10 bg-mist/30 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-ink/55">{reportType === "attendance-participation" ? "Absent or excused" : reportType === "service-history" ? "No-show" : "Other statuses"}</p><p className="mt-1 text-2xl font-semibold">{summary.inactive}</p></div></div>}
     {grouping && groupingCounts.length > 0 && <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{groupingCounts.map((group) => <div key={group.label} className="rounded-xl border border-ink/10 bg-mist/30 p-3"><p className="truncate text-xs font-semibold uppercase tracking-wide text-ink/55">{group.label}</p><p className="mt-1 text-2xl font-semibold">{group.count}</p><p className="text-xs text-ink/55">{reportType === "family-overview" ? "families" : reportType === "attendance-participation" || reportType === "service-history" ? "records" : "members"}</p></div>)}</div>}
-    {activeCriteria?.chart !== false && grouping && groupingCounts.length > 0 && <div className="mt-5"><ReportSummaryChart title={`Breakdown by ${columns.find((column) => column.key === grouping)?.label ?? grouping}`} items={groupingCounts} noun={reportType === "family-overview" ? "families" : reportType === "attendance-participation" || reportType === "service-history" ? "records" : "members"} chartType={activeCriteria?.chartType ?? "bar"} mode={activeCriteria?.chartType === "line" ? "trend" : "distribution"} />{activeCriteria?.chartOnly && <div className="mt-3"><ReportChartExportActions title={`Breakdown by ${columns.find((column) => column.key === grouping)?.label ?? grouping}`} reportName={reports.find((report) => report.id === reportId)?.name ?? "Membership report"} items={groupingCounts} chartType={activeCriteria?.chartType} generatedLabel={generatedAt ? `Generated ${new Date(generatedAt).toLocaleString()}` : undefined} /></div>}</div>}
-    {rows.length > 0 && !activeCriteria?.chartOnly && <div className="mt-5 overflow-x-auto"><ReportDataTable key={`${reportId}-${columns.map((column) => column.key).join("-")}`} rows={rows} columns={columns} sort={sort} direction={direction} layout={layout} reportName={reports.find((report) => report.id === reportId)?.name ?? (reportId === "preview" ? "One-time report" : "Membership report")} generatedAt={generatedAt} generatedBy={generatedBy} summaryChart={activeCriteria?.chart !== false && grouping && groupingCounts.length > 0 ? { title: `Breakdown by ${columns.find((column) => column.key === grouping)?.label ?? grouping}`, items: groupingCounts, chartType: activeCriteria?.chartType } : undefined} onLayoutChange={(nextLayout) => void saveLayout({ ...layout, ...nextLayout, widths: { ...layout.widths, ...nextLayout.widths }, visibility: { ...layout.visibility, ...nextLayout.visibility } })} /></div>}
+    {activeCriteria?.chart === true && grouping && groupingCounts.length > 0 && <div className="mt-5"><ReportSummaryChart title={`Breakdown by ${columns.find((column) => column.key === grouping)?.label ?? grouping}`} items={groupingCounts} noun={reportType === "family-overview" ? "families" : reportType === "attendance-participation" || reportType === "service-history" ? "records" : "members"} chartType={activeCriteria?.chartType ?? "bar"} mode={activeCriteria?.chartType === "line" ? "trend" : "distribution"} />{activeCriteria?.chartOnly && <div className="mt-3"><ReportChartExportActions title={`Breakdown by ${columns.find((column) => column.key === grouping)?.label ?? grouping}`} reportName={reports.find((report) => report.id === reportId)?.name ?? "Membership report"} items={groupingCounts} chartType={activeCriteria?.chartType} generatedLabel={generatedAt ? `Generated ${new Date(generatedAt).toLocaleString()}` : undefined} /></div>}</div>}
+    {rows.length > 0 && !activeCriteria?.chartOnly && <div className="mt-5 overflow-x-auto"><ReportDataTable key={`${reportId}-${columns.map((column) => column.key).join("-")}`} rows={rows} columns={columns} sort={sort} direction={direction} layout={layout} reportName={reports.find((report) => report.id === reportId)?.name ?? (reportId === "preview" ? "One-time report" : "Membership report")} generatedAt={generatedAt} generatedBy={generatedBy} summaryChart={activeCriteria?.chart === true && grouping && groupingCounts.length > 0 ? { title: `Breakdown by ${columns.find((column) => column.key === grouping)?.label ?? grouping}`, items: groupingCounts, chartType: activeCriteria?.chartType } : undefined} onLayoutChange={(nextLayout) => void saveLayout({ ...layout, ...nextLayout, widths: { ...layout.widths, ...nextLayout.widths }, visibility: { ...layout.visibility, ...nextLayout.visibility } })} /></div>}
     {layoutMessage && <p className="mt-2 text-xs text-ink/55">{layoutMessage}</p>}</div></div>}
   </>;
 }
