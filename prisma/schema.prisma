@@ -204,6 +204,9 @@ model Church {
   taxId                                String                                @default("")
   enabledModules                       Json                                  @default("[]")
   status                               ChurchStatus                          @default(ACTIVE)
+  lifecycleStatus                      TenantLifecycleStatus                 @default(ACTIVE)
+  onboardingStatus                     OnboardingStatus                      @default(PENDING_VERIFICATION)
+  onboardingStep                       String?
   memberships                          ChurchUser[]
   accountingSettings                   AccountingSettings?
   fiscalYears                          AccountingFiscalYear[]
@@ -246,6 +249,7 @@ model Church {
   updatedAt                            DateTime                              @updatedAt
 
   @@index([status])
+  @@index([lifecycleStatus])
 }
 
 model AccountingSettings {

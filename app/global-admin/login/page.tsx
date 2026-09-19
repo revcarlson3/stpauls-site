@@ -36,8 +36,8 @@ export default function GlobalAdminLoginPage() {
         json: "true"
       })
     });
-    const callback = await callbackResponse.json();
-    if (!callbackResponse.ok || typeof callback.url !== "string" || callback.url.includes("error=")) {
+    const callback = await callbackResponse.json().catch(() => ({}));
+    if (!callbackResponse.ok || callback.error || (typeof callback.url === "string" && callback.url.includes("error="))) {
       const codeField = event.currentTarget.elements.namedItem("code");
       if (codeField instanceof HTMLInputElement) codeField.value = "";
       setCode("");

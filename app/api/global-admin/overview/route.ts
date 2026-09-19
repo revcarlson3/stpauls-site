@@ -23,6 +23,9 @@ export async function GET() {
         city: true,
         state: true,
         status: true,
+        lifecycleStatus: true,
+        onboardingStatus: true,
+        onboardingStep: true,
         createdAt: true,
         tenantAccount: { select: { lifecycleStatus: true, onboardingStatus: true } },
         onboarding: { select: { currentStep: true, siteIdentityDone: true, modulesDone: true, securityDone: true, completedAt: true } }
@@ -46,11 +49,12 @@ export async function GET() {
       createdAt: church.createdAt.toISOString()
     },
     lifecycle: {
-      status: church.tenantAccount?.lifecycleStatus ?? "PROVISIONING",
-      onboardingStatus: church.tenantAccount?.onboardingStatus ?? (church.onboarding?.completedAt ? "COMPLETE" : "SITE_SETUP"),
-      currentStep: church.onboarding?.currentStep ?? null
+      status: church.lifecycleStatus,
+      onboardingStatus: church.onboardingStatus,
+      currentStep: church.onboardingStep ?? church.onboarding?.currentStep ?? null
     },
     health: {
+      users: activeUsers,
       activeUsers,
       domains: {
         total: domains.length,
@@ -66,6 +70,7 @@ export async function GET() {
       siteIdentity: church.onboarding?.siteIdentityDone ?? false,
       modules: church.onboarding?.modulesDone ?? false,
       security: church.onboarding?.securityDone ?? false
-    }
+    },
+    recentActions: []
   });
 }

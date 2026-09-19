@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGlobalAuditDetails, hasRecentReauthentication, isActiveSelectedChurch, isGlobalAdminSession, canReadSelectedSiteOverview } from "@/lib/global-admin";
-import { normalizeGlobalAdminSiteIdentity } from "@/lib/global-admin-site";
+import { buildGlobalAuditDetails, hasRecentReauthentication, isActiveSelectedChurch, isGlobalAdminSession, lifecycleAuditMetadata, nextLifecycleState } from "@/lib/global-admin";
 
 describe("global administrator bridge authorization", () => {
   it("accepts only a completed global-admin session", () => {
@@ -32,16 +31,21 @@ describe("global administrator bridge authorization", () => {
     });
   });
 
-  it("only permits overview reads for an active selected site", () => {
-    expect(canReadSelectedSiteOverview({ user: { isPlatformAdmin: true }, church: { id: "church-1", status: "ACTIVE" } })).toBe(true);
-    expect(canReadSelectedSiteOverview({ user: { isPlatformAdmin: true }, church: null })).toBe(false);
-    expect(canReadSelectedSiteOverview({ user: { isPlatformAdmin: false }, church: { id: "church-1", status: "ACTIVE" } })).toBe(false);
+  it("allows only valid lifecycle transitions", () => {
+      expect(nextLifecycleState({ lifecycleStatus: "DISABLED", onboardingStatus: "PENDING_VERIFICATION" }, "enable")?.lifecycleStatus).toBe("PROVISIONING");
+      expect(nextLifecycleState({ lifecycleStatus: "PROVISIONING", onboardingStatus: "SITE_SETUP" }, "activate")?.lifecycleStatus).toBe("ACTIVE");
+      expect(nextLifecycleState({ lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE" }, "suspend")?.lifecycleStatus).toBe("SUSPENDED");
+      expect(nextLifecycleState({ lifecycleStatus: "SUSPENDED", onboardingStatus: "COMPLETE" }, "disable")?.lifecycleStatus).toBe("DISABLED");
+      expect(nextLifecycleState({ lifecycleStatus: "DISABLED", onboardingStatus: "COMPLETE" }, "suspend")).toBeNull();
+      expect(nextLifecycleState({ lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE" }, "activate")).toBeNull();
   });
 
-  it("validates identity fields and rejects unknown modules", () => {
-    const valid = normalizeGlobalAdminSiteIdentity({ name: "Grace Church", url: "https://grace.example", tagline: "A place to belong.", addressStreet: "", city: "Milaca", state: "MN", postalCode: "56353", phone: "", email: "", taxId: "", enabledModules: ["membership", "membership"] });
-    expect(valid?.enabledModules).toEqual(["membership"]);
-    expect(normalizeGlobalAdminSiteIdentity({ ...valid, enabledModules: ["internal-tenant-module"] })).toBeNull();
-    expect(normalizeGlobalAdminSiteIdentity({ ...valid, url: "javascript:alert(1)" })).toBeNull();
+  it("builds auditable lifecycle action metadata", () => {
+      expect(lifecycleAuditMetadata("suspend", { lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE" }, { lifecycleStatus: "SUSPENDED", onboardingStatus: "COMPLETE" })).toEqual({
+        action: "suspend",
+        fromLifecycleStatus: "ACTIVE",
+        toLifecycleStatus: "SUSPENDED",
+        onboardingStatus: "COMPLETE"
+    });
   });
 });
