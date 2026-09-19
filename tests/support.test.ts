@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ticketWhere, validateSupportFiles } from "@/lib/support";
+import { auditActivityTypes } from "@/lib/audit";
 
 describe("tenant support tickets", () => {
   it("rejects unsafe, oversized, and aggregate attachments", () => {
@@ -10,5 +11,9 @@ describe("tenant support tickets", () => {
   it("scopes ordinary users to their active church", () => {
     expect(ticketWhere({ churchId: "church-a", isPlatformAdmin: false } as never, "church-b")).toEqual({ churchId: "church-a" });
     expect(ticketWhere({ churchId: "church-a", isPlatformAdmin: true } as never, "church-b")).toEqual({ churchId: "church-b" });
+  });
+
+  it("keeps global support actions in the audit allowlist", () => {
+    expect(auditActivityTypes).toEqual(expect.arrayContaining(["support-ticket-viewed", "support-ticket-replied", "support-attachment-downloaded"]));
   });
 });
