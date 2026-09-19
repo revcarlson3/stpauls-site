@@ -88,6 +88,8 @@ export default function GlobalAdminControlPlane() {
               </div>
               <div className="mt-8 grid gap-4 sm:grid-cols-3"><Summary label="Onboarding" value={overview.lifecycle.onboardingStatus} /><Summary label="Current step" value={overview.lifecycle.currentStep ?? "Not set"} /><Summary label="Users" value={String(overview.health.users)} /></div>
               <Link href="/global-admin/site-identity" className="focus-ring mt-6 inline-block text-sm font-semibold text-coral hover:underline">Manage site identity and modules</Link>
+              <Link href="/global-admin/onboarding" className="focus-ring ml-5 mt-6 inline-block text-sm font-semibold text-coral hover:underline">Manage onboarding</Link>
+              <Link href="/global-admin/domains" className="focus-ring ml-5 mt-6 inline-block text-sm font-semibold text-coral hover:underline">Manage domains</Link>
               <Link href="/global-admin/users" className="focus-ring ml-5 mt-6 inline-block text-sm font-semibold text-coral hover:underline">Manage users and security</Link>
             </Card>
             <div className="grid gap-6 lg:grid-cols-2">
