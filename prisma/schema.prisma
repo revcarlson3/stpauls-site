@@ -196,6 +196,13 @@ model Church {
   city                                 String?
   state                                String?
   postalCode                           String?
+  siteUrl                              String                                @default("")
+  tagline                              String                                @default("A place to belong.")
+  addressStreet                        String                                @default("")
+  phone                                String                                @default("")
+  email                                String                                @default("")
+  taxId                                String                                @default("")
+  enabledModules                       Json                                  @default("[]")
   status                               ChurchStatus                          @default(ACTIVE)
   memberships                          ChurchUser[]
   accountingSettings                   AccountingSettings?

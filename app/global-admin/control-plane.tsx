@@ -20,7 +20,7 @@ type Overview = {
 
 const areas = [
   { title: "Site overview", description: "Health, lifecycle, domains, and onboarding readiness.", status: "Available", href: "#site-overview" },
-  { title: "Site identity and modules", description: "Manage branding, domains, and enabled product areas.", status: "Coming next" },
+  { title: "Site identity and modules", description: "Manage tenant identity and enabled product areas.", status: "Available", href: "/global-admin/site-identity" },
   { title: "Users and security", description: "Review access, roles, MFA, and security posture.", status: "Coming next" },
   { title: "Billing and promotions", description: "Inspect subscription status, plans, and promotions.", status: "Coming next" },
   { title: "Support", description: "Track tenant support requests and escalations.", status: "Coming next" },

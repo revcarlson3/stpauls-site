@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildGlobalAuditDetails, hasRecentReauthentication, isActiveSelectedChurch, isGlobalAdminSession, canReadSelectedSiteOverview } from "@/lib/global-admin";
+import { normalizeGlobalAdminSiteIdentity } from "@/lib/global-admin-site";
 
 describe("global administrator bridge authorization", () => {
   it("accepts only a completed global-admin session", () => {
@@ -35,5 +36,12 @@ describe("global administrator bridge authorization", () => {
     expect(canReadSelectedSiteOverview({ user: { isPlatformAdmin: true }, church: { id: "church-1", status: "ACTIVE" } })).toBe(true);
     expect(canReadSelectedSiteOverview({ user: { isPlatformAdmin: true }, church: null })).toBe(false);
     expect(canReadSelectedSiteOverview({ user: { isPlatformAdmin: false }, church: { id: "church-1", status: "ACTIVE" } })).toBe(false);
+  });
+
+  it("validates identity fields and rejects unknown modules", () => {
+    const valid = normalizeGlobalAdminSiteIdentity({ name: "Grace Church", url: "https://grace.example", tagline: "A place to belong.", addressStreet: "", city: "Milaca", state: "MN", postalCode: "56353", phone: "", email: "", taxId: "", enabledModules: ["membership", "membership"] });
+    expect(valid?.enabledModules).toEqual(["membership"]);
+    expect(normalizeGlobalAdminSiteIdentity({ ...valid, enabledModules: ["internal-tenant-module"] })).toBeNull();
+    expect(normalizeGlobalAdminSiteIdentity({ ...valid, url: "javascript:alert(1)" })).toBeNull();
   });
 });
