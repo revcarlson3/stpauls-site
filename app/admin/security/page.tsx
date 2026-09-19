@@ -20,7 +20,6 @@ const permissionOptions = [
 ] as const;
 
 type Group = { id: string; name: string; slug: string; permissions: { permission: string }[]; _count: { users: number } };
-type User = { id: string; email: string; name: string; role: string; groupId: string | null };
 
 function normalizeGroup(group: Omit<Group, "_count"> & { _count?: { users: number } }): Group {
   return { ...group, _count: group._count ?? { users: 0 } };
@@ -37,16 +36,14 @@ async function responseError(response: Response, fallback: string) {
 
 export default function SecurityPage() {
   const [groups, setGroups] = useState<Group[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState("");
   const [newName, setNewName] = useState("");
   const [newSlug, setNewSlug] = useState("");
 
   useEffect(() => {
-    Promise.all([fetch("/api/security-groups"), fetch("/api/users")]).then(async ([groupsResponse, usersResponse]) => {
-      if (!groupsResponse.ok || !usersResponse.ok) throw new Error("You do not have permission to manage security groups.");
+    fetch("/api/security-groups").then(async (groupsResponse) => {
+      if (!groupsResponse.ok) throw new Error("You do not have permission to manage security groups.");
       setGroups((await groupsResponse.json()).map(normalizeGroup));
-      setUsers(await usersResponse.json());
     }).catch((reason: Error) => setError(reason.message));
   }, []);
 
@@ -92,26 +89,12 @@ export default function SecurityPage() {
     setGroups((current) => current.filter((item) => item.id !== group.id));
   }
 
-  async function assignGroup(user: User, groupId: string) {
-    const response = await fetch(`/api/users/${user.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ groupId: groupId || null })
-    });
-    if (!response.ok) {
-      setError(await responseError(response, "Unable to assign this user."));
-      return;
-    }
-    const updated = await response.json();
-    setUsers((current) => current.map((item) => item.id === updated.id ? updated : item));
-  }
-
   return (
     <main>
       <Container className="py-10 sm:py-14">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Administration</p>
         <h1 className="mt-2 font-serif text-4xl">Security groups</h1>
-        <p className="mt-2 max-w-2xl text-ink/60">Assign permission switches to groups instead of configuring each user individually. User assignment will be managed from the member administration workflow.</p>
+        <p className="mt-2 max-w-2xl text-ink/60">Assign permission switches to groups instead of configuring each user individually. User access and group assignment are managed from the global administration user-security tools.</p>
         <form onSubmit={addGroup} className="mt-8 flex flex-col gap-3 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm sm:flex-row sm:items-end">
           <label className="flex-1 text-sm font-semibold">Group name<input required value={newName} onChange={(event) => setNewName(event.target.value)} className="focus-ring mt-2 block w-full rounded-lg border border-ink/15 px-3 py-2 font-normal" placeholder="Communications" /></label>
           <label className="flex-1 text-sm font-semibold">Slug<input required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={newSlug} onChange={(event) => setNewSlug(event.target.value)} className="focus-ring mt-2 block w-full rounded-lg border border-ink/15 px-3 py-2 font-normal" placeholder="communications" /></label>
@@ -140,19 +123,6 @@ export default function SecurityPage() {
               </Card>;
             })}
           </div>
-          <Card className="mt-8">
-            <h2 className="font-serif text-2xl">User assignments</h2>
-            <p className="mt-1 text-sm text-ink/60">Assign each account to the group that matches its responsibilities.</p>
-            <div className="mt-6 grid gap-3">
-              {users.map((user) => <div key={user.id} className="flex flex-col gap-2 border-t border-ink/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                <div><p className="font-semibold">{user.name}</p><p className="text-xs text-ink/55">{user.email} · {user.role}</p></div>
-                <select aria-label={`Security group for ${user.email}`} value={user.groupId ?? ""} onChange={(event) => void assignGroup(user, event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm">
-                  <option value="">No group assigned</option>
-                  {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                </select>
-              </div>)}
-            </div>
-          </Card>
           </div>
         )}
       </Container>
