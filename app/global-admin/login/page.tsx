@@ -14,6 +14,10 @@ export default function GlobalAdminLoginPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    const requestedCallback = new URLSearchParams(window.location.search).get("callbackUrl");
+    const callbackUrl = requestedCallback && requestedCallback.startsWith("/") && !requestedCallback.startsWith("//")
+      ? requestedCallback
+      : "/global-admin";
     const formData = new FormData(event.currentTarget);
     const submittedEmail = String(formData.get("email") ?? email);
     const submittedPassword = String(formData.get("password") ?? password);
@@ -32,7 +36,7 @@ export default function GlobalAdminLoginPage() {
         bridge: "true",
         mfaCode: challenge ? submittedCode : "",
         mfaChannel: "authenticator",
-        callbackUrl: "/global-admin",
+        callbackUrl,
         json: "true"
       })
     });
@@ -46,7 +50,7 @@ export default function GlobalAdminLoginPage() {
     }
     const session = await getSession();
     if (session?.user.mfaPending) setChallenge(true);
-    else window.location.href = "/global-admin";
+    else window.location.href = callbackUrl;
   }
 
   return <main className="grid min-h-screen place-items-center bg-sand py-8"><Container className="max-w-md" style={{ maxWidth: "28rem" }}><Card><p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Bridge administration</p><h1 className="mt-3 font-serif text-4xl">Global administrator sign in</h1><p className="mt-3 text-sm leading-6 text-ink/60">This separate administration boundary requires a fresh password and MFA verification. It is not the tenant administrator sign-in.</p><form className="mt-8 grid gap-4" onSubmit={submit}><label className="grid gap-1 text-sm font-semibold">Email<input name="email" required={!challenge} type="email" autoComplete="username" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" defaultValue={email} /></label>{!challenge && <label className="grid gap-1 text-sm font-semibold">Password<input name="password" required type="password" autoComplete="current-password" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" defaultValue={password} /></label>}{challenge && <label className="grid gap-1 text-sm font-semibold">MFA verification code<input name="code" required inputMode="numeric" autoComplete="one-time-code" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" defaultValue={code} /></label>}{error && <p role="alert" className="text-sm font-semibold text-coral">{error}</p>}<Button type="submit">{challenge ? "Verify and continue" : "Enter bridge"}</Button></form></Card></Container></main>;

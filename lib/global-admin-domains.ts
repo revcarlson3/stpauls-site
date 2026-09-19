@@ -132,7 +132,7 @@ export async function addSelectedChurchDomain(input: { hostname?: unknown; kind:
       activityType: "global-admin-domain-added",
       summary: `Added ${hostname} to the selected site.`,
       actorId: context.user.id,
-      ...JSON.parse(buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { hostname, kind: input.kind } }))
+      details: buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { hostname, kind: input.kind } })
     }
   });
   return serializeDomain(domain);
@@ -148,7 +148,7 @@ export async function disableSelectedChurchDomain(domainId: string) {
       activityType: "global-admin-domain-disabled",
       summary: `Disabled ${domain.hostname} for the selected site.`,
       actorId: context.user.id,
-      ...JSON.parse(buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { hostname: domain.hostname } }))
+      details: buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { hostname: domain.hostname } })
     }
   });
   return serializeDomain(updated);
@@ -166,7 +166,7 @@ export async function checkSelectedChurchDomain(domainId: string) {
       activityType: "global-admin-domain-status-checked",
       summary: `Checked status for ${domain.hostname}.`,
       actorId: context.user.id,
-      ...JSON.parse(buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { hostname: domain.hostname, result: "manual-verification-required" } }))
+      details: buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { hostname: domain.hostname, result: "manual-verification-required" } })
     }
   });
   return serializeDomain(updated);
@@ -189,7 +189,7 @@ export async function selectPrimarySelectedChurchDomain(domainId: string) {
       activityType: "global-admin-domain-primary-updated",
       summary: `Set ${domain.hostname} as the primary domain for the selected site.`,
       actorId: context.user.id,
-      ...JSON.parse(buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { hostname: domain.hostname, action: "set-primary" } }))
+      details: buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { hostname: domain.hostname, action: "set-primary" } })
     }
   });
   return serializeDomain(updated);

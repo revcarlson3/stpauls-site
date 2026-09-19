@@ -41,7 +41,11 @@ export default function GlobalAdminDomainsPage() {
     });
     const value = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setError(response.status === 428 ? "Recent bridge reauthentication is required." : value.error ?? "Unable to add domain.");
+      if (response.status === 428) {
+        window.location.href = `/global-admin/login?callbackUrl=${encodeURIComponent("/global-admin/domains")}&reauth=1`;
+        return;
+      }
+      setError(value.error ?? "Unable to add domain.");
       return;
     }
     setHostname("");
@@ -56,7 +60,11 @@ export default function GlobalAdminDomainsPage() {
     const response = await fetch(path, { method: actionName === "disable" ? "DELETE" : "POST" });
     const value = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setError(response.status === 428 ? "Recent bridge reauthentication is required." : value.error ?? "Unable to update domain.");
+      if (response.status === 428) {
+        window.location.href = `/global-admin/login?callbackUrl=${encodeURIComponent("/global-admin/domains")}&reauth=1`;
+        return;
+      }
+      setError(value.error ?? "Unable to update domain.");
       return;
     }
     setMessage(actionName === "primary" ? "Primary domain updated." : actionName === "check" ? "Status checked; external verification is still manual." : "Domain disabled.");
@@ -77,7 +85,7 @@ export default function GlobalAdminDomainsPage() {
         <div className="flex flex-wrap gap-2">
           {domain.status === "ACTIVE" && !domain.isPrimary && <Button type="button" onClick={() => void action(domain.id, "primary")} variant="secondary">Make primary</Button>}
           {domain.kind === "CUSTOM_DOMAIN" && <Button type="button" onClick={() => void action(domain.id, "check")} variant="secondary">Check status</Button>}
-          <Button type="button" onClick={() => void action(domain.id, "disable")} variant="secondary" disabled={domain.status === "DISABLED"}>Disable</Button>
+          <Button type="button" onClick={() => void action(domain.id, "disable")} variant="secondary" disabled={domain.status === "DISABLED"}>{domain.status === "DISABLED" ? "Disabled" : "Disable"}</Button>
         </div>
       </div>
     </Card>
