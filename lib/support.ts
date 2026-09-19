@@ -72,12 +72,16 @@ export function ticketWhere(user: Awaited<ReturnType<typeof requireSupportUser>>
   return user.isPlatformAdmin ? {} : { churchId: user.churchId as string };
 }
 
+export function supportMessageWhere(user: Awaited<ReturnType<typeof requireSupportUser>>) {
+  return user.isPlatformAdmin ? undefined : { isInternal: false };
+}
+
 export async function serializeTicket(id: string, user: Awaited<ReturnType<typeof requireSupportUser>>) {
   const ticket = await db.supportTicket.findFirst({
     where: { id, ...ticketWhere(user) },
     include: {
       createdBy: { select: { id: true, name: true, email: true } },
-      messages: { orderBy: { createdAt: "asc" }, include: { author: { select: { id: true, name: true } }, attachments: true } },
+      messages: { where: supportMessageWhere(user), orderBy: { createdAt: "asc" }, include: { author: { select: { id: true, name: true } }, attachments: true } },
       attachments: true,
     },
   });

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { buildGlobalAuditDetails, requireGlobalAdmin } from "@/lib/global-admin";
+import { readSupportFile, removeSupportFiles, saveSupportFiles, validateSupportFiles } from "@/lib/support";
 import type { SupportTicketPriority, SupportTicketStatus } from "@prisma/client";
 
 export const supportTicketStatuses = ["OPEN", "IN_PROGRESS", "WAITING_ON_TENANT", "RESOLVED", "CLOSED"] as const;
@@ -34,7 +35,7 @@ export function serializeSupportTicket(ticket: {
   closedAt?: Date | string | null;
   assignedTo: { id: string; name: string; email: string } | null;
   createdBy?: { id: string; name: string; email: string } | null;
-  messages?: Array<{ id: string; body: string; isInternal: boolean; createdAt: Date | string; author: { id: string; name: string; email: string } }>;
+  messages?: Array<{ id: string; body: string; isInternal: boolean; createdAt: Date | string; author: { id: string; name: string; email: string }; attachments?: Array<{ id: string; originalName: string; mimeType: string; sizeBytes: number }> }>;
 }) {
   return {
     id: ticket.id,
@@ -53,7 +54,8 @@ export function serializeSupportTicket(ticket: {
         body: message.body,
         isInternal: message.isInternal,
         createdAt: message.createdAt instanceof Date ? message.createdAt.toISOString() : message.createdAt,
-        author: serializeAssignee(message.author)
+        author: serializeAssignee(message.author),
+        ...(message.attachments ? { attachments: message.attachments.map((attachment) => ({ id: attachment.id, originalName: attachment.originalName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes })) } : {})
       }))
     } : {})
   };
@@ -91,10 +93,75 @@ export async function getSelectedSiteSupportTicket(ticketId: string) {
       ...ticketListSelect,
       description: true,
       createdBy: { select: { id: true, name: true, email: true } },
-      messages: { orderBy: { createdAt: "asc" }, select: { id: true, body: true, isInternal: true, createdAt: true, author: { select: { id: true, name: true, email: true } } } }
+      messages: { orderBy: { createdAt: "asc" }, select: { id: true, body: true, isInternal: true, createdAt: true, author: { select: { id: true, name: true, email: true } }, attachments: { select: { id: true, originalName: true, mimeType: true, sizeBytes: true } } } }
     }
+
   });
   return ticket ? serializeSupportTicket(ticket) : null;
+}
+
+export async function addSelectedSiteSupportReply(ticketId: string, body: string, files: File[]) {
+  const context = await requireActiveSupportContext();
+  const trimmedBody = body.trim();
+  if (!trimmedBody || trimmedBody.length > 10_000) throw new Error("Support reply is invalid.");
+  validateSupportFiles(files);
+  const existing = await db.supportTicket.findFirst({
+    where: { id: ticketId, churchId: context.church!.id },
+    select: { id: true, churchId: true, status: true }
+  });
+  if (!existing) return null;
+  const saved = await saveSupportFiles(files);
+  try {
+    const message = await db.supportTicketMessage.create({
+      data: { ticketId: existing.id, authorId: context.user.id, body: trimmedBody, isInternal: false },
+      select: { id: true }
+    });
+    if (saved.length) {
+      await db.supportTicketAttachment.createMany({
+        data: saved.map((attachment) => ({ ...attachment, ticketId: existing.id, messageId: message.id }))
+      });
+    }
+    await db.supportTicket.update({
+      where: { id: existing.id },
+      data: { status: existing.status === "CLOSED" ? "OPEN" : "IN_PROGRESS" }
+    });
+    await logAudit({
+      activityType: "global-admin-support-reply-added",
+      summary: `Added a public reply to support ticket ${existing.id}.`,
+      actorId: context.user.id,
+      details: buildGlobalAuditDetails({
+        churchId: existing.churchId,
+        targetType: "support-ticket-public-reply",
+        targetId: existing.id,
+        metadata: { attachmentCount: saved.length }
+      })
+    });
+    return message.id;
+  } catch (error) {
+    await removeSupportFiles(saved);
+    throw error;
+  }
+}
+
+export async function getSelectedSiteSupportAttachment(attachmentId: string) {
+  const context = await requireGlobalAdmin({ selectedChurch: true });
+  const attachment = await db.supportTicketAttachment.findFirst({
+    where: { id: attachmentId, ticket: { churchId: context.church!.id } },
+    select: { id: true, storedName: true, mimeType: true, originalName: true, ticketId: true }
+  });
+  if (!attachment) return null;
+  const data = await readSupportFile(attachment.storedName);
+  await logAudit({
+    activityType: "support-attachment-downloaded",
+    summary: `Downloaded a support attachment for ticket ${attachment.ticketId}.`,
+    actorId: context.user.id,
+    details: buildGlobalAuditDetails({
+      churchId: context.church!.id,
+      targetType: "support-ticket-attachment",
+      targetId: attachment.id
+    })
+  });
+  return { ...attachment, data };
 }
 
 export async function listSupportAssignees() {
