@@ -76,7 +76,7 @@ export async function updateSelectedChurchUser(input: { userId: string; name?: s
     if (passwordError) throw new Error(passwordError);
   }
   if (input.groupId) {
-    const group = await db.securityGroup.findUnique({ where: { id: input.groupId }, select: { id: true } });
+    const group = await db.securityGroup.findFirst({ where: { id: input.groupId, churchId: context.church!.id }, select: { id: true } });
     if (!group) throw new Error("Security group not found.");
   }
   const changedActive = typeof input.isActive === "boolean" && input.isActive !== user.isActive;

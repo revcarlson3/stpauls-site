@@ -87,7 +87,7 @@ export async function reviewMemberLinkRequest(requestId: string, action: "approv
   const individual = await db.membershipIndividual.findUnique({ where: { id: individualId }, include: { family: true } });
   if (!individual) throw new Error("Member record not found.");
   await db.$transaction(async (tx) => {
-    const churchMemberGroup = await tx.securityGroup.findUnique({ where: { slug: "church-member" }, select: { id: true } });
+    const churchMemberGroup = await tx.securityGroup.findFirst({ where: { churchId: individual.churchId, slug: "church-member" }, select: { id: true } });
     if (!churchMemberGroup) throw new Error("The Church Member security group has not been initialized.");
     const existing = await tx.membershipUserMemberLink.findUnique({ where: { individualId }, include: { user: true } });
     if (existing && !override) throw new Error("This member record is already linked to another user.");

@@ -24,8 +24,9 @@ export function getCurrentUser() {
     if (!session?.user?.id || !isRole(role)) return null;
     return db.user.findUnique({ where: { id: session.user.id }, select: { isActive: true, role: true, isPlatformAdmin: true, groupId: true, group: { select: { permissions: { select: { permission: true } } } }, churchMemberships: { where: { church: { status: "ACTIVE" } }, orderBy: { createdAt: "asc" }, take: 1, select: { churchId: true, role: true } } } }).then(async (membership) => {
       if (!membership?.isActive) return null;
-      if (!membership.groupId && (membership.role === "admin" || membership.role === "editor")) {
-        const group = await db.securityGroup.findUnique({ where: { slug: membership.role === "admin" ? "administrator" : "editor" }, select: { id: true, permissions: { where: { permission: "ACCESS_ADMIN" }, select: { permission: true } } } });
+      const churchId = membership.churchMemberships[0]?.churchId ?? null;
+      if (!membership.groupId && churchId && (membership.role === "admin" || membership.role === "editor")) {
+        const group = await db.securityGroup.findFirst({ where: { churchId, slug: membership.role === "admin" ? "administrator" : "editor" }, select: { id: true, permissions: { where: { permission: "ACCESS_ADMIN" }, select: { permission: true } } } });
         if (group) {
           await db.user.update({ where: { id: session.user.id }, data: { groupId: group.id } });
           membership.group = group;
@@ -35,7 +36,7 @@ export function getCurrentUser() {
       let effectivePermissions = membership.group?.permissions ?? [];
       const viewAsGroupId = cookies().get("viewAsGroupId")?.value;
       if (role === "admin" && session.user.authBoundary === "global-admin" && viewAsGroupId) {
-        const viewAsGroup = await db.securityGroup.findUnique({ where: { id: viewAsGroupId }, select: { id: true, permissions: { select: { permission: true } } } });
+        const viewAsGroup = churchId ? await db.securityGroup.findFirst({ where: { id: viewAsGroupId, churchId }, select: { id: true, permissions: { select: { permission: true } } } }) : null;
         if (viewAsGroup) {
           effectiveGroupId = viewAsGroup.id;
           effectivePermissions = viewAsGroup.permissions;
@@ -45,7 +46,7 @@ export function getCurrentUser() {
         id: session.user.id,
         name: session.user.name ?? session.user.email ?? "User",
         role,
-        churchId: membership.churchMemberships[0]?.churchId ?? null,
+        churchId,
         churchRole: membership.churchMemberships[0]?.role ?? null,
         isPlatformAdmin: membership.isPlatformAdmin,
         effectiveGroupId,
@@ -58,8 +59,8 @@ export function getCurrentUser() {
 
 export async function requirePermission(permission: Permission): Promise<User> {
   const user = await requireAuthenticatedUser();
-  const group = user.effectiveGroupId ? await db.securityGroup.findUnique({
-    where: { id: user.effectiveGroupId },
+  const group = user.effectiveGroupId ? await db.securityGroup.findFirst({
+    where: { id: user.effectiveGroupId, ...(user.churchId ? { churchId: user.churchId } : {}) },
     select: { permissions: { where: { permission }, select: { permission: true } } }
   }) : null;
   if (!group?.permissions.length) throw new Error("Unauthorized: required permission is missing.");

@@ -4,8 +4,8 @@ import { requireGlobalAdmin } from "@/lib/global-admin";
 
 export async function GET() {
   try {
-    await requireGlobalAdmin({ selectedChurch: true });
-    return NextResponse.json(await db.securityGroup.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }));
+    const context = await requireGlobalAdmin({ selectedChurch: true });
+    return NextResponse.json(await db.securityGroup.findMany({ where: { churchId: context.church!.id }, orderBy: { name: "asc" }, select: { id: true, name: true } }));
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Bridge access is required." }, { status: 403 });
     if (error instanceof Error && error.message.includes("site must be selected")) return NextResponse.json({ error: error.message }, { status: 409 });

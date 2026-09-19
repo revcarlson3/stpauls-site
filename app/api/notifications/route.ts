@@ -4,9 +4,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { canSendToGroup, canSendToUser, MAX_NOTIFICATION_RECIPIENTS } from "@/lib/notifications";
 
-async function isAdminGroup(groupId: string | null) {
+async function isAdminGroup(groupId: string | null, churchId: string | null) {
   if (!groupId) return false;
-  const group = await db.securityGroup.findUnique({ where: { id: groupId }, select: { permissions: { where: { permission: "ACCESS_ADMIN" }, select: { permission: true } } } });
+  const group = await db.securityGroup.findFirst({ where: { id: groupId, ...(churchId ? { churchId } : {}) }, select: { permissions: { where: { permission: "ACCESS_ADMIN" }, select: { permission: true } } } });
   return Boolean(group?.permissions.length);
 }
 
@@ -26,10 +26,10 @@ export async function GET(request: Request) {
   const page = notifications.slice(0, limit);
   const canSend = user.permissions.includes("ACCESS_ADMIN") || Boolean(user.effectiveGroupId);
   const groups = user.permissions.includes("ACCESS_ADMIN")
-    ? await db.securityGroup.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
+    ? await db.securityGroup.findMany({ where: user.churchId ? { churchId: user.churchId } : undefined, orderBy: { name: "asc" }, select: { id: true, name: true } })
     : [];
   const users = canSend
-    ? await db.user.findMany({ where: { isActive: true, ...(user.permissions.includes("ACCESS_ADMIN") ? {} : { OR: [{ groupId: user.effectiveGroupId }, { group: { permissions: { some: { permission: "ACCESS_ADMIN" } } } }] }) }, orderBy: [{ name: "asc" }, { email: "asc" }], select: { id: true, name: true, email: true, groupId: true } })
+    ? await db.user.findMany({ where: { isActive: true, ...(user.churchId ? { churchMemberships: { some: { churchId: user.churchId } }, isPlatformAdmin: false } : {}), ...(user.permissions.includes("ACCESS_ADMIN") ? {} : { OR: [{ groupId: user.effectiveGroupId }, { group: { permissions: { some: { permission: "ACCESS_ADMIN" } } } }] }) }, orderBy: [{ name: "asc" }, { email: "asc" }], select: { id: true, name: true, email: true, groupId: true } })
     : [];
   const unreadCount = await db.reportAutomationNotification.count({ where: { userId: user.id, readAt: null } });
   return NextResponse.json({ notifications: page, unreadCount, hasMore, nextBefore: hasMore ? page[page.length - 1]?.createdAt.toISOString() : null, canSend, groups, users, currentGroupId: user.effectiveGroupId });
@@ -82,16 +82,19 @@ export async function POST(request: Request) {
     if (body?.confirmGlobal !== true) return NextResponse.json({ error: "Global delivery requires explicit confirmation." }, { status: 400 });
     recipientIds = (await db.user.findMany({ where: { isActive: true }, select: { id: true } })).map((item) => item.id);
   } else if (targetType === "ADMINS") {
-    recipientIds = (await db.user.findMany({ where: { isActive: true, group: { permissions: { some: { permission: "ACCESS_ADMIN" } } } }, select: { id: true } })).map((item) => item.id);
+    recipientIds = (await db.user.findMany({ where: { isActive: true, ...(user.churchId ? { churchMemberships: { some: { churchId: user.churchId } }, isPlatformAdmin: false } : {}), group: { ...(user.churchId ? { churchId: user.churchId } : {}), permissions: { some: { permission: "ACCESS_ADMIN" } } } }, select: { id: true } })).map((item) => item.id);
   } else if (targetType === "GROUP") {
     const groupId = typeof body?.targetId === "string" ? body.targetId : "";
     if (!canSendToGroup({ senderIsAdmin: admin, senderGroupId: user.effectiveGroupId, targetGroupId: groupId })) return NextResponse.json({ error: "You can only send to your own security group." }, { status: 403 });
-    recipientIds = (await db.user.findMany({ where: { isActive: true, groupId }, select: { id: true } })).map((item) => item.id);
+    const group = await db.securityGroup.findFirst({ where: { id: groupId, ...(user.churchId ? { churchId: user.churchId } : {}) }, select: { id: true } });
+    if (!group) return NextResponse.json({ error: "Security group not found." }, { status: 404 });
+    recipientIds = (await db.user.findMany({ where: { isActive: true, groupId, ...(user.churchId ? { churchMemberships: { some: { churchId: user.churchId } }, isPlatformAdmin: false } : {}) }, select: { id: true } })).map((item) => item.id);
   } else {
     const targetId = typeof body?.targetId === "string" ? body.targetId : "";
     const target = await db.user.findUnique({ where: { id: targetId }, select: { id: true, groupId: true } });
     if (!target) return NextResponse.json({ error: "Recipient not found." }, { status: 404 });
-    if (!canSendToUser({ senderIsAdmin: admin, senderGroupId: user.effectiveGroupId, recipientGroupId: target.groupId, recipientIsAdmin: await isAdminGroup(target.groupId) })) return NextResponse.json({ error: "You can only send to users in your group or administrators." }, { status: 403 });
+    if (user.churchId && !(await db.churchUser.findUnique({ where: { churchId_userId: { churchId: user.churchId, userId: target.id } }, select: { userId: true } }))) return NextResponse.json({ error: "Recipient not found." }, { status: 404 });
+    if (!canSendToUser({ senderIsAdmin: admin, senderGroupId: user.effectiveGroupId, recipientGroupId: target.groupId, recipientIsAdmin: await isAdminGroup(target.groupId, user.churchId) })) return NextResponse.json({ error: "You can only send to users in your group or administrators." }, { status: 403 });
     recipientIds = [target.id];
   }
   recipientIds = recipientIds.filter((id, index, list) => list.indexOf(id) === index);

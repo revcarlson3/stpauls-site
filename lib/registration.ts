@@ -18,7 +18,11 @@ export async function registerUser(input: RegistrationInput) {
   const token = randomBytes(32).toString("hex");
   const tokenHash = hashToken(token);
   const memberRequested = input.memberRequested === true;
-  const visitorGroup = await db.securityGroup.findUnique({ where: { slug: "visitor" }, select: { id: true } });
+  const church = input.churchCode
+    ? await db.church.findFirst({ where: { slug: input.churchCode, status: "ACTIVE" }, select: { id: true } })
+    : await db.church.findFirst({ where: { status: "ACTIVE" }, orderBy: { createdAt: "asc" }, select: { id: true } });
+  if (!church) throw new Error("No active church is available for registration.");
+  const visitorGroup = await db.securityGroup.findFirst({ where: { churchId: church.id, slug: "visitor" }, select: { id: true } });
   const user = await db.$transaction(async (tx) => {
     const created = await tx.user.create({
       data: {
@@ -26,6 +30,7 @@ export async function registerUser(input: RegistrationInput) {
         name: `${firstName} ${lastName}`,
         role: "viewer",
         groupId: visitorGroup?.id ?? null,
+        churchMemberships: { create: { churchId: church.id, role: "MEMBER" } },
         emailVerifiedAt: null,
         membershipLinkRequests: memberRequested ? {
           create: {
