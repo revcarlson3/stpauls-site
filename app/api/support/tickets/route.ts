@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireSupportUser, removeSupportFiles, saveSupportFiles, ticketWhere, validateSupportFiles } from "@/lib/support";
+import { notifySupportAdminsOfNewTicket } from "@/lib/support-notifications";
 
 export async function GET(request: Request) {
   try {
@@ -44,6 +45,9 @@ export async function POST(request: Request) {
           attachments: { create: saved },
         },
         select: { id: true, status: true },
+      });
+      await notifySupportAdminsOfNewTicket({ ticketId: ticket.id }).catch((error) => {
+        console.error("Support ticket administrator notification failed.", error);
       });
       return NextResponse.json(ticket, { status: 201 });
     } catch (error) {

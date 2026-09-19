@@ -9,6 +9,7 @@ const db = vi.hoisted(() => ({
 }));
 const requireGlobalAdmin = vi.hoisted(() => vi.fn());
 const logAudit = vi.hoisted(() => vi.fn());
+const notifySupportCreatorOfPublicReply = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/db", () => ({ db }));
 vi.mock("@/lib/global-admin", () => ({
@@ -16,12 +17,28 @@ vi.mock("@/lib/global-admin", () => ({
   buildGlobalAuditDetails: (input: { churchId: string; targetType: string; targetId?: string; metadata?: Record<string, unknown> }) => JSON.stringify({ boundary: "global-admin", selectedChurchId: input.churchId, targetType: input.targetType, targetId: input.targetId ?? null, metadata: input.metadata ?? {} })
 }));
 vi.mock("@/lib/audit", () => ({ logAudit }));
+vi.mock("@/lib/support-notifications", () => ({ notifySupportCreatorOfPublicReply }));
 
 describe("global-admin support management", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    notifySupportCreatorOfPublicReply.mockResolvedValue(undefined);
     requireGlobalAdmin.mockResolvedValue({ user: { id: "admin-1" }, church: { id: "church-1" } });
     db.church.findUnique.mockResolvedValue({ id: "church-1", name: "Selected", status: "ACTIVE", lifecycleStatus: "ACTIVE" });
+  });
+
+  it("does not notify the creator for an internal note", async () => {
+    db.user.findFirst.mockResolvedValue({ id: "platform-admin-2" });
+    db.supportTicket.findFirst
+      .mockResolvedValueOnce({ id: "ticket-1", subject: "Help", status: "OPEN", priority: "NORMAL", assignedToId: null })
+      .mockResolvedValueOnce({ id: "ticket-1", subject: "Help", status: "OPEN", priority: "NORMAL", assignedToId: null });
+    db.supportTicket.update.mockResolvedValue({
+      id: "ticket-1", subject: "Help", description: "Description", status: "OPEN", priority: "NORMAL",
+      createdAt: new Date(), updatedAt: new Date(), closedAt: null, assignedTo: null, createdBy: { id: "user-1", name: "Tenant", email: "tenant@example.com" }, messages: []
+    });
+    const { updateSelectedSiteSupportTicket } = await import("@/lib/global-admin-support");
+    await updateSelectedSiteSupportTicket("ticket-1", { internalNote: "Private investigation." });
+    expect(notifySupportCreatorOfPublicReply).not.toHaveBeenCalled();
   });
 
   it("serializes ticket details without dropping internal note privacy", async () => {
@@ -36,9 +53,11 @@ describe("global-admin support management", () => {
       updatedAt: new Date("2026-01-02T00:00:00.000Z"),
       closedAt: null,
       assignedTo: null,
+      church: { id: "church-1", name: "Selected Church", slug: "selected" },
+      createdBy: { id: "user-1", name: "Tenant", email: "tenant@example.com" },
       messages: [{ id: "message-1", body: "Internal", isInternal: true, createdAt: new Date("2026-01-03T00:00:00.000Z"), author: { id: "admin-1", name: "Admin", email: "admin@example.com" }, attachments: [{ id: "attachment-1", originalName: "evidence.txt", mimeType: "text/plain", sizeBytes: 12 }] }]
     });
-    expect(result).toMatchObject({ id: "ticket-1", description: "Private description", messages: [{ body: "Internal", isInternal: true, createdAt: "2026-01-03T00:00:00.000Z", attachments: [{ id: "attachment-1", originalName: "evidence.txt", mimeType: "text/plain", sizeBytes: 12 }] }] });
+    expect(result).toMatchObject({ id: "ticket-1", description: "Private description", originatingTenant: { id: "church-1", name: "Selected Church", slug: "selected" }, createdBy: { id: "user-1", name: "Tenant", email: "tenant@example.com" }, messages: [{ body: "Internal", isInternal: true, createdAt: "2026-01-03T00:00:00.000Z", attachments: [{ id: "attachment-1", originalName: "evidence.txt", mimeType: "text/plain", sizeBytes: 12 }] }] });
   });
 
   it("lists only the selected site and rejects invalid filters", async () => {

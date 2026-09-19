@@ -69,7 +69,7 @@ export async function readSupportFile(storedName: string) {
 
 export function ticketWhere(user: Awaited<ReturnType<typeof requireSupportUser>>, requestedChurchId?: string) {
   if (user.isPlatformAdmin && requestedChurchId) return { churchId: requestedChurchId };
-  return user.isPlatformAdmin ? {} : { churchId: user.churchId as string };
+  return user.isPlatformAdmin ? {} : { churchId: user.churchId as string, createdById: user.id };
 }
 
 export function supportMessageWhere(user: Awaited<ReturnType<typeof requireSupportUser>>) {

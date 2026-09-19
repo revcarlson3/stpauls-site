@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { buildGlobalAuditDetails, requireGlobalAdmin } from "@/lib/global-admin";
 import { readSupportFile, removeSupportFiles, saveSupportFiles, validateSupportFiles } from "@/lib/support";
+import { notifySupportCreatorOfPublicReply } from "@/lib/support-notifications";
 import type { SupportTicketPriority, SupportTicketStatus } from "@prisma/client";
 
 export const supportTicketStatuses = ["OPEN", "IN_PROGRESS", "WAITING_ON_TENANT", "RESOLVED", "CLOSED"] as const;
@@ -17,7 +18,9 @@ const ticketListSelect = {
   createdAt: true,
   updatedAt: true,
   closedAt: true,
-  assignedTo: { select: { id: true, name: true, email: true } }
+  assignedTo: { select: { id: true, name: true, email: true } },
+  createdBy: { select: { id: true, name: true, email: true } },
+  church: { select: { id: true, name: true, slug: true } }
 } as const;
 
 function serializeAssignee(assignedTo: { id: string; name: string; email: string } | null) {
@@ -35,6 +38,7 @@ export function serializeSupportTicket(ticket: {
   closedAt?: Date | string | null;
   assignedTo: { id: string; name: string; email: string } | null;
   createdBy?: { id: string; name: string; email: string } | null;
+  church?: { id: string; name: string; slug?: string } | null;
   messages?: Array<{ id: string; body: string; isInternal: boolean; createdAt: Date | string; author: { id: string; name: string; email: string }; attachments?: Array<{ id: string; originalName: string; mimeType: string; sizeBytes: number }> }>;
 }) {
   return {
@@ -48,6 +52,7 @@ export function serializeSupportTicket(ticket: {
     closedAt: ticket.closedAt instanceof Date ? ticket.closedAt.toISOString() : (ticket.closedAt ?? null),
     assignedTo: serializeAssignee(ticket.assignedTo),
     ...(ticket.createdBy ? { createdBy: serializeAssignee(ticket.createdBy) } : {}),
+    ...(ticket.church ? { originatingTenant: { id: ticket.church.id, name: ticket.church.name, ...(ticket.church.slug ? { slug: ticket.church.slug } : {}) } } : {}),
     ...(ticket.messages ? {
       messages: ticket.messages.map((message) => ({
         id: message.id,
@@ -124,6 +129,9 @@ export async function addSelectedSiteSupportReply(ticketId: string, body: string
     await db.supportTicket.update({
       where: { id: existing.id },
       data: { status: existing.status === "CLOSED" ? "OPEN" : "IN_PROGRESS" }
+    });
+    await notifySupportCreatorOfPublicReply({ ticketId: existing.id, body: trimmedBody, senderId: context.user.id }).catch((error) => {
+      console.error("Support creator notification failed.", error);
     });
     await logAudit({
       activityType: "global-admin-support-reply-added",

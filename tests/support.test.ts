@@ -9,8 +9,16 @@ describe("tenant support tickets", () => {
   });
 
   it("scopes ordinary users to their active church", () => {
-    expect(ticketWhere({ churchId: "church-a", isPlatformAdmin: false } as never, "church-b")).toEqual({ churchId: "church-a" });
+    expect(ticketWhere({ id: "user-a", churchId: "church-a", isPlatformAdmin: false } as never, "church-b")).toEqual({ churchId: "church-a", createdById: "user-a" });
     expect(ticketWhere({ churchId: "church-a", isPlatformAdmin: true } as never, "church-b")).toEqual({ churchId: "church-b" });
+  });
+
+  it("isolates same-church users by ticket creator", () => {
+    const firstUserWhere = ticketWhere({ id: "user-a", churchId: "church-a", isPlatformAdmin: false } as never);
+    const secondUserWhere = ticketWhere({ id: "user-b", churchId: "church-a", isPlatformAdmin: false } as never);
+    expect(firstUserWhere).not.toEqual(secondUserWhere);
+    expect(firstUserWhere).toEqual({ churchId: "church-a", createdById: "user-a" });
+    expect(secondUserWhere).toEqual({ churchId: "church-a", createdById: "user-b" });
   });
 
   it("hides internal notes from tenant ticket conversations", () => {

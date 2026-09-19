@@ -32,7 +32,7 @@ export default function SupportPage() {
   return <main className="py-12 sm:py-16"><Container className="max-w-5xl">
     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Support</p>
     <h1 className="mt-2 font-serif text-4xl">How can we help?</h1>
-    <p className="mt-3 max-w-2xl text-ink/60">Send a question to the support team. Your church’s support conversations are visible only to authorized church accounts and platform support staff.</p>
+    <p className="mt-3 max-w-2xl text-ink/60">Send a question to the support team. Your support conversations are visible only to you and platform support staff.</p>
     {error && <Notification variant="danger" className="mt-6">{error}</Notification>}
     {sent && <Notification variant="success" className="mt-6">Your support ticket was created.</Notification>}
     <Card className="mt-8 p-6"><h2 className="font-serif text-2xl">Create a support ticket</h2><form onSubmit={createTicket} className="mt-5 grid gap-4">
@@ -41,6 +41,6 @@ export default function SupportPage() {
       <label className="text-sm font-semibold">Attachments <span className="font-normal text-ink/55">(PDF, text, CSV, PNG, JPG, or WebP; 10 MB each, 20 MB total)</span><input type="file" multiple accept=".pdf,.txt,.csv,.png,.jpg,.jpeg,.webp" onChange={(event) => setFiles(event.target.files)} className="focus-ring mt-2 block w-full text-sm font-normal" /></label>
       <Button type="submit" className="w-fit">Submit ticket</Button>
     </form></Card>
-    <section className="mt-10"><h2 className="font-serif text-2xl">Your church’s support tickets</h2><div className="mt-4 grid gap-3">{tickets.map((ticket) => <Link key={ticket.id} href={`/account/support/${ticket.id}`} className="focus-ring rounded-xl border border-ink/10 bg-white p-5 hover:border-coral"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">{ticket.subject}</h3><span className="rounded-full bg-mist px-3 py-1 text-xs font-semibold">{ticket.status.replace("_", " ")}</span></div><p className="mt-2 line-clamp-2 text-sm text-ink/60">{ticket.description}</p><p className="mt-3 text-xs text-ink/45">Updated {new Date(ticket.updatedAt).toLocaleString()} · {ticket._count.messages} replies</p></Link>)}</div></section>
+    <section className="mt-10"><h2 className="font-serif text-2xl">Your support tickets</h2><div className="mt-4 grid gap-3">{tickets.map((ticket) => <Link key={ticket.id} href={`/account/support/${ticket.id}`} className="focus-ring rounded-xl border border-ink/10 bg-white p-5 hover:border-coral"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">{ticket.subject}</h3><span className="rounded-full bg-mist px-3 py-1 text-xs font-semibold">{ticket.status.replace("_", " ")}</span></div><p className="mt-2 line-clamp-2 text-sm text-ink/60">{ticket.description}</p><p className="mt-3 text-xs text-ink/45">Updated {new Date(ticket.updatedAt).toLocaleString()} · {ticket._count.messages} replies</p></Link>)}</div></section>
   </Container></main>;
 }
