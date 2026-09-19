@@ -49,8 +49,14 @@ BEGIN
     ON "SecurityGroup" ("churchId", "slug");
   CREATE INDEX IF NOT EXISTS "SecurityGroup_churchId_idx"
     ON "SecurityGroup" ("churchId");
-  ALTER TABLE "SecurityGroup" ADD CONSTRAINT "SecurityGroup_churchId_fkey"
-    FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'SecurityGroup_churchId_fkey'
+      AND conrelid = '"SecurityGroup"'::regclass
+  ) THEN
+    ALTER TABLE "SecurityGroup" ADD CONSTRAINT "SecurityGroup_churchId_fkey"
+      FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
 
   ALTER TABLE "UserInvitation" ADD COLUMN IF NOT EXISTS "churchId" text;
   IF EXISTS (
@@ -76,6 +82,12 @@ BEGIN
   ALTER TABLE "UserInvitation" ALTER COLUMN "churchId" SET NOT NULL;
   CREATE INDEX IF NOT EXISTS "UserInvitation_churchId_acceptedAt_idx"
     ON "UserInvitation" ("churchId", "acceptedAt");
-  ALTER TABLE "UserInvitation" ADD CONSTRAINT "UserInvitation_churchId_fkey"
-    FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'UserInvitation_churchId_fkey'
+      AND conrelid = '"UserInvitation"'::regclass
+  ) THEN
+    ALTER TABLE "UserInvitation" ADD CONSTRAINT "UserInvitation_churchId_fkey"
+      FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
 END $$;
