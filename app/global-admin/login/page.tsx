@@ -13,12 +13,13 @@ export default function GlobalAdminLoginPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     setError("");
     const requestedCallback = new URLSearchParams(window.location.search).get("callbackUrl");
     const callbackUrl = requestedCallback && requestedCallback.startsWith("/") && !requestedCallback.startsWith("//")
       ? requestedCallback
       : "/global-admin";
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
     const submittedEmail = String(formData.get("email") ?? email);
     const submittedPassword = String(formData.get("password") ?? password);
     const submittedCode = String(formData.get("code") ?? code);
@@ -42,10 +43,11 @@ export default function GlobalAdminLoginPage() {
     });
     const callback = await callbackResponse.json().catch(() => ({}));
     if (!callbackResponse.ok || callback.error || (typeof callback.url === "string" && callback.url.includes("error="))) {
-      const codeField = event.currentTarget.elements.namedItem("code");
+      const codeField = form.elements.namedItem("code");
       if (codeField instanceof HTMLInputElement) codeField.value = "";
       setCode("");
-      setError(challenge ? "That verification code was not accepted." : "Bridge credentials were not accepted.");
+      const callbackError = typeof callback.error === "string" ? callback.error : "";
+      setError(challenge ? "That verification code was not accepted." : callbackError === "CredentialsSignin" ? "The global-admin email or password was not accepted." : "Global-admin sign-in failed. Verify the account exists on the VPS.");
       return;
     }
     const session = await getSession();
