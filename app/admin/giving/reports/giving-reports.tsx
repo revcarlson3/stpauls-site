@@ -223,7 +223,7 @@ export function GivingReports() {
           </div>
           <fieldset className="rounded-xl border border-ink/10 p-4">
             <legend className="px-1 text-sm font-semibold">Chart</legend>
-            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={form.chart} onChange={(event) => setForm({ ...form, chart: event.target.checked, chartOnly: event.target.checked ? form.chartOnly : false })} />Show chart in results</label>
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={form.chart} onChange={(event) => setForm({ ...form, chart: event.target.checked, chartOnly: event.target.checked ? form.chartOnly : false })} />            Enable chart in results</label>
             {form.chart && <><label className="mt-3 flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={form.chartOnly} onChange={(event) => setForm({ ...form, chartOnly: event.target.checked })} />Show chart only (hide table)</label><label className="mt-3 grid gap-1 text-sm font-semibold">Chart type<select value={form.chartType} onChange={(event) => setForm({ ...form, chartType: event.target.value as "bar" | "line" | "pie" })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="bar">Bar</option><option value="line">Line</option><option value="pie">Pie</option></select></label></>}
           </fieldset>
           {form.reportType === "custom" && (
