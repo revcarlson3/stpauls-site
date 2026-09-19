@@ -47,6 +47,91 @@
 }
 
 @media print {
+  @page {
+    margin: 0.5in;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .deposit-report-print,
+  .deposit-report-print *,
+  .contribution-statement,
+  .contribution-statement * {
+    visibility: visible !important;
+  }
+
+  .contribution-statements-overlay {
+    background: transparent !important;
+    inset: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    position: static !important;
+  }
+
+  .contribution-statements-dialog {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .contribution-statements-list {
+    display: block !important;
+    margin-top: 0 !important;
+  }
+
+  .deposit-report-overlay {
+    background: transparent !important;
+    inset: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    position: absolute !important;
+  }
+
+  .deposit-report-print {
+    box-shadow: none !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  .contribution-statement {
+    break-after: page;
+    break-inside: avoid;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page-break-after: always;
+    width: 100% !important;
+  }
+
+  .contribution-statement:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .contribution-statement .statement-footer {
+    display: block !important;
+    margin-top: 24px !important;
+    position: static;
+  }
+
+  .deposit-report-page {
+    break-after: page;
+    min-height: 100vh !important;
+  }
+
+  .deposit-report-page:last-of-type {
+    break-after: auto;
+  }
+
+  .deposit-report-actions {
+    display: none !important;
+  }
+
   .treasurer-statement {
     box-shadow: none;
   }

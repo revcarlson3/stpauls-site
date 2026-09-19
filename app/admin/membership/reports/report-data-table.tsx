@@ -15,6 +15,7 @@ import JSZip from "jszip";
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import type { MembershipReportLayout } from "@/lib/membership-reporting";
+import { reportChartSvg } from "@/lib/report-chart-export";
 
 DataTable.use(DT);
 DT.Buttons.jszip(JSZip);
@@ -24,12 +25,12 @@ pdfMake.vfs = pdfFonts.vfs;
 type Result = { id: string; [key: string]: string | number | boolean | undefined };
 type Column = { key: string; label: string };
 type PdfDocument = {
-  content: Array<{ text?: string; style?: string; table?: { widths?: Array<string>; body?: unknown[][] } }>;
+  content: Array<{ text?: string; style?: string; svg?: string; table?: { widths?: Array<string>; body?: unknown[][] } }>;
   pageOrientation?: "portrait" | "landscape";
   pageMargins?: [number, number, number, number];
 };
 
-function getInitialOrder(columns: Column[], layout: MembershipReportLayout) {
+function getInitialOrder(columns: Column[], layout: MembershipReportLayout = {}) {
   const saved = (layout.order ?? []).map((key) => columns.findIndex((column) => column.key === key)).filter((index) => index >= 0);
   return [...saved, ...columns.map((_, index) => index).filter((index) => !saved.includes(index))];
 }
@@ -61,7 +62,7 @@ function addResizeHandles(api: DTApi<any>, columns: Column[], onLayoutChange: (l
           const column = columns[order[index] ?? index];
           if (column) widths[column.key] = Math.round(item.getBoundingClientRect().width);
         });
-        onLayoutChange({ widths });
+        onLayoutChange?.({ widths });
       };
       document.addEventListener("pointermove", move);
       document.addEventListener("pointerup", stop, { once: true });
@@ -70,23 +71,25 @@ function addResizeHandles(api: DTApi<any>, columns: Column[], onLayoutChange: (l
   });
 }
 
-export function ReportDataTable({ rows, columns, sort, direction, layout, reportName, generatedAt, generatedBy, reportPeriod, serverUrl, onLayoutChange }: { rows: Result[]; columns: Column[]; sort: string; direction: "asc" | "desc"; layout: MembershipReportLayout; reportName: string; generatedAt: string; generatedBy: string; reportPeriod?: { from?: string; to?: string }; serverUrl?: string; onLayoutChange: (layout: MembershipReportLayout) => void }) {
+export function ReportDataTable({ rows, columns, sort, direction, layout, reportName, generatedAt, generatedBy, reportPeriod, serverUrl, summaryChart, onLayoutChange }: { rows: Result[]; columns: Column[]; sort: string; direction: "asc" | "desc"; layout?: MembershipReportLayout; reportName: string; generatedAt: string; generatedBy?: string; reportPeriod?: { from?: string; to?: string }; serverUrl?: string; summaryChart?: { title: string; items: { label: string; count: number }[]; chartType?: "bar" | "line" | "pie"; valueFormat?: "number" | "currency" }; onLayoutChange?: (layout: MembershipReportLayout) => void }) {
   const tableRef = useRef<DataTableRef>(null);
-  const initialOrder = getInitialOrder(columns, layout);
+  const currentLayout = layout ?? {};
+  const initialOrder = getInitialOrder(columns, currentLayout);
   const saveCurrentLayout = () => {
     const api = tableRef.current?.dt();
     if (!api) return;
     const order = api.colReorder.order() as number[];
     const orderKeys = order.map((index) => columns[index]?.key).filter((key): key is string => Boolean(key));
     const visibility = Object.fromEntries(columns.map((column, index) => [column.key, api.column(index).visible()]));
-    onLayoutChange({ order: orderKeys, visibility });
+    onLayoutChange?.({ order: orderKeys, visibility });
   };
 
   const generatedLabel = `Generated ${new Date(generatedAt).toLocaleString()}${generatedBy ? ` by ${generatedBy}` : ""} · Date from: ${reportPeriod?.from || "—"} · Date to: ${reportPeriod?.to || "—"}`;
+  const chartSvg = summaryChart ? reportChartSvg(summaryChart.title, summaryChart.items, summaryChart.chartType, {}, summaryChart.valueFormat) : "";
   return <DataTable
     ref={tableRef}
     data={serverUrl ? undefined : rows}
-    columns={columns.map((column) => ({ data: column.key, name: column.key, title: column.label, visible: layout.visibility?.[column.key] !== false, width: layout.widths?.[column.key] ? `${layout.widths[column.key]}px` : undefined }))}
+    columns={columns.map((column) => ({ data: column.key, name: column.key, title: column.label, visible: currentLayout.visibility?.[column.key] !== false, width: currentLayout.widths?.[column.key] ? `${currentLayout.widths[column.key]}px` : undefined }))}
     className="display compact w-full"
     onColumnReorder={saveCurrentLayout}
     onColumnVisibility={saveCurrentLayout}
@@ -122,22 +125,22 @@ export function ReportDataTable({ rows, columns, sort, direction, layout, report
         if (record.isTotal) row.classList.add("accounting-report-total-row");
       },
       initComplete: function (settings) {
-        addResizeHandles(new DT.Api(settings), columns, onLayoutChange);
+        addResizeHandles(new DT.Api(settings), columns, onLayoutChange ?? (() => undefined));
       },
       layout: {
         topStart: { buttons: [
           "copy",
           { extend: "csv", title: reportName },
           { extend: "excel", title: reportName },
-          { extend: "pdfHtml5", title: reportName, customize: (document: PdfDocument) => { document.pageOrientation = "landscape"; document.pageMargins = [20, 30, 20, 30]; const table = document.content.find((item) => item.table)?.table; if (table) table.widths = columns.map(() => "*"); document.content.unshift({ text: generatedLabel, style: "small" }); document.content.unshift({ text: reportName, style: "header" }); } },
-          { extend: "print", title: reportName, messageTop: `<div class="report-print-meta">${generatedLabel}</div>` },
+          { extend: "pdfHtml5", title: reportName, customize: (document: PdfDocument) => { document.pageOrientation = "landscape"; document.pageMargins = [20, 30, 20, 30]; const table = document.content.find((item) => item.table)?.table; if (table) table.widths = columns.map(() => "*"); if (chartSvg) document.content.unshift({ svg: chartSvg, style: "chart" }); document.content.unshift({ text: generatedLabel, style: "small" }); document.content.unshift({ text: reportName, style: "header" }); } },
+          { extend: "print", title: reportName, messageTop: `<div class="report-print-meta">${generatedLabel}</div>${chartSvg ? `<div class="report-print-chart">${chartSvg}</div>` : ""}` },
           "colvis"
         ] },
         topEnd: "search",
         bottomStart: "pageLength",
         bottomEnd: "paging"
       },
-      language: { emptyTable: "No members match this report." }
+      language: { emptyTable: "No rows match this report." }
     }}
   />;
 }

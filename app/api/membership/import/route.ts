@@ -165,6 +165,7 @@ export async function POST(request: Request) {
           const family = await transaction.membershipFamily.create({
             data: {
               ...familyData(row),
+              churchId: user.churchId!,
               externalSource: sourceSystem,
               externalKey: row.familyGroupKey.startsWith("key:") ? row.familyGroupKey.slice(4) : null,
               status: row.member.status === "INACTIVE" ? "INACTIVE" : "ACTIVE"
@@ -197,6 +198,7 @@ export async function POST(request: Request) {
           const individual = await transaction.membershipIndividual.create({
             data: {
               ...memberData(row, familyId),
+              churchId: user.churchId!,
               externalSource: sourceSystem,
               externalId: row.memberExternalId,
               memberNumber: nextMemberNumber,

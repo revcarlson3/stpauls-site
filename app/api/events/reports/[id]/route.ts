@@ -1,20 +1,15 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { EVENT_REPORT_TYPES, EVENT_REPORT_COLUMNS } from "@/lib/event-reporting";
+import { authorizeReportModule } from "@/lib/reporting";
 
-async function authorize() {
-  const user = await requirePermission("MANAGE_EVENTS");
-  await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
-  return user;
-}
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   try {
-    const user = await authorize();
-    const existing = await db.membershipReport.findFirst({ where: { id: params.id, scope: "EVENT", createdById: user.id } });
-    if (!existing) return NextResponse.json({ error: "Report not found." }, { status: 404 });
     const input = await request.json();
+    const scope = await authorizeReportModule({ module: "events", churchId: typeof input?.churchId === "string" ? input.churchId : undefined });
+    const { user } = scope;
+    const existing = await db.membershipReport.findFirst({ where: { id: params.id, churchId: scope.churchId, scope: "EVENT", createdById: user.id } });
+    if (!existing) return NextResponse.json({ error: "Report not found." }, { status: 404 });
     if (Object.prototype.hasOwnProperty.call(input, "layout") && !Object.prototype.hasOwnProperty.call(input, "name")) {
       const report = await db.membershipReport.update({ where: { id: existing.id }, data: { layout: input.layout && typeof input.layout === "object" ? input.layout : {} } });
       return NextResponse.json({ report });
@@ -28,8 +23,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
   try {
-    const user = await authorize();
-    const existing = await db.membershipReport.findFirst({ where: { id: params.id, scope: "EVENT", createdById: user.id } });
+    const scope = await authorizeReportModule({ module: "events", churchId: new URL(_.url).searchParams.get("churchId") || undefined });
+    const { user } = scope;
+    const existing = await db.membershipReport.findFirst({ where: { id: params.id, churchId: scope.churchId, scope: "EVENT", createdById: user.id } });
     if (!existing) return NextResponse.json({ error: "Report not found." }, { status: 404 });
     await db.membershipReport.delete({ where: { id: existing.id } });
     return NextResponse.json({ ok: true });

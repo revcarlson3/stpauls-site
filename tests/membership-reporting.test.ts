@@ -23,6 +23,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth", () => ({ requirePermission: mocks.requirePermission }));
 vi.mock("@/lib/modules", () => ({ requireEnabledModule: mocks.requireEnabledModule }));
+vi.mock("@/lib/tenant", () => ({
+  requireTenantScope: vi.fn().mockResolvedValue({
+    user: { id: "user-1", name: "Report Manager", isPlatformAdmin: false, churchId: "church-1" },
+    church: { id: "church-1", status: "ACTIVE" },
+    isCrossTenant: false
+  })
+}));
 vi.mock("@/lib/membership-audiences", () => ({
   databaseDynamicWhere: mocks.databaseDynamicWhere,
   dynamicMemberIds: mocks.dynamicMemberIds
@@ -184,6 +191,7 @@ describe("membership report results route", () => {
       take: 25,
       orderBy: [{ memberNumber: "desc" }, { firstName: "desc" }],
       where: {
+        churchId: "church-1",
         status: { not: "REMOVED" },
         OR: [
           { firstName: { contains: "smith", mode: "insensitive" } },
@@ -214,7 +222,7 @@ describe("membership report results route", () => {
     expect(mocks.individualFindMany).toHaveBeenCalledWith(expect.objectContaining({
       skip: 10,
       take: 10,
-      where: { id: { in: ["member-1", "member-2", "member-3", "member-4"] } }
+      where: { churchId: "church-1", id: { in: ["member-1", "member-2", "member-3", "member-4"] } }
     }));
   });
 });

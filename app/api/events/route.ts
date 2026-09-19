@@ -4,11 +4,13 @@ import { db } from "@/lib/db";
 import { requireEnabledModule } from "@/lib/modules";
 import { logAudit } from "@/lib/audit";
 import { buildRecurringDates } from "@/lib/event-scheduling";
+import { requireTenantScope } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   try {
     const user = await requirePermission("MANAGE_EVENTS");
     await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
+    const scope = await requireTenantScope(new URL(request.url).searchParams.get("churchId") || undefined);
     const { searchParams } = new URL(request.url);
     const from = searchParams.get("from");
     const to = searchParams.get("to");
@@ -18,7 +20,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Invalid calendar range." }, { status: 400 });
     }
     const events = await db.membershipEvent.findMany({
-      where: { startsAt: { lt: endsAt }, OR: [{ endsAt: { gt: startsAt } }, { endsAt: null }] },
+      where: { churchId: scope.church.id, startsAt: { lt: endsAt }, OR: [{ endsAt: { gt: startsAt } }, { endsAt: null }] },
       orderBy: { startsAt: "asc" },
       select: { id: true, title: true, description: true, eventType: true, status: true, category: true, location: true, readingsUrl: true, startsAt: true, endsAt: true, allDay: true, published: true, recurrenceGroupId: true, attendanceEnabled: true, attendanceAudienceType: true, attendanceAudienceId: true, timeZone: true }
     });
@@ -32,6 +34,7 @@ export async function POST(request: Request) {
   try {
     const user = await requirePermission("MANAGE_EVENTS");
     await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
+    const scope = await requireTenantScope();
     const input = await request.json() as {
       title?: unknown;
       eventType?: unknown;
@@ -89,6 +92,7 @@ export async function POST(request: Request) {
     const published = input.published as boolean;
     await db.membershipEvent.createMany({
       data: dates.map((date) => ({
+        churchId: scope.church.id,
         title: title.trim(),
         eventType: typeof input.eventType === "string" ? input.eventType : "Other",
         status: typeof input.status === "string" ? input.status as "SCHEDULED" | "COMPLETED" | "CANCELLED" : "SCHEDULED",

@@ -4,13 +4,14 @@ import { db } from "@/lib/db";
 import { audienceSlug } from "@/lib/membership-audiences";
 
 async function authorize() {
-  await authorizeVolunteerScheduling();
+  return authorizeVolunteerScheduling();
 }
 
 export async function GET() {
   try {
-    await authorize();
+    const user = await authorize();
     const groups = await db.membershipVolunteerGroup.findMany({
+      where: { churchId: user.churchId! },
       orderBy: [{ position: "asc" }, { name: "asc" }],
       select: { id: true, name: true, singularName: true, description: true, slug: true, position: true, members: { where: { isLeader: true }, select: { individualId: true } }, _count: { select: { members: true } } }
     });
@@ -22,18 +23,18 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await authorize();
+    const user = await authorize();
     const input = await request.json();
     const name = typeof input?.name === "string" ? input.name.trim().replace(/\s+/g, " ") : "";
     const singularName = typeof input?.singularName === "string" ? input.singularName.trim().replace(/\s+/g, " ").slice(0, 100) : null;
     const description = typeof input?.description === "string" ? input.description.trim().slice(0, 500) : null;
     if (!name || name.length > 100) return NextResponse.json({ error: "Enter a volunteer group name." }, { status: 400 });
-    const last = await db.membershipVolunteerGroup.aggregate({ _max: { position: true } });
+    const last = await db.membershipVolunteerGroup.aggregate({ where: { churchId: user.churchId! }, _max: { position: true } });
     const copyOfId = typeof input?.copyOfId === "string" ? input.copyOfId.trim() : "";
-    const source = copyOfId ? await db.membershipVolunteerGroup.findUnique({ where: { id: copyOfId }, select: { members: { select: { individualId: true, role: true, isLeader: true, availability: true, skills: true } } } }) : null;
+    const source = copyOfId ? await db.membershipVolunteerGroup.findFirst({ where: { id: copyOfId, churchId: user.churchId! }, select: { members: { select: { individualId: true, role: true, isLeader: true, availability: true, skills: true } } } }) : null;
     if (copyOfId && !source) return NextResponse.json({ error: "Volunteer group to duplicate was not found." }, { status: 404 });
     const group = await db.membershipVolunteerGroup.create({
-      data: { name, singularName: singularName || null, description, slug: `${audienceSlug(name)}-${Date.now().toString(36)}`, position: (last._max.position ?? -1) + 1, ...(source ? { members: { create: source.members.map((member) => ({ role: member.role, isLeader: member.isLeader, availability: member.availability ?? undefined, skills: member.skills, individual: { connect: { id: member.individualId } } })) } } : {}) },
+      data: { churchId: user.churchId!, name, singularName: singularName || null, description, slug: `${audienceSlug(name)}-${Date.now().toString(36)}`, position: (last._max.position ?? -1) + 1, ...(source ? { members: { create: source.members.map((member) => ({ role: member.role, isLeader: member.isLeader, availability: member.availability ?? undefined, skills: member.skills, individual: { connect: { id: member.individualId } } })) } } : {}) },
       select: { id: true, name: true, singularName: true, description: true, slug: true, position: true, members: { where: { isLeader: true }, select: { individualId: true } }, _count: { select: { members: true } } }
     });
     const { members, ...groupData } = group;

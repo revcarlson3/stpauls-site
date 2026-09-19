@@ -23,13 +23,20 @@ export const DEFAULT_SITE_IDENTITY = {
 export async function getSiteIdentity() {
   const settings = await db.securitySettings.findUnique({
     where: { id: 1 },
-    select: { siteName: true, siteUrl: true, siteTagline: true, siteLogoUrl: true, siteLogoLightUrl: true, siteLogoDarkUrl: true, siteFaviconUrl: true, siteShowTitle: true, siteShowTagline: true, siteShowLogo: true }
+    select: { siteName: true, siteUrl: true, siteTagline: true, siteAddressStreet: true, siteAddressCity: true, siteAddressState: true, siteAddressZip: true, sitePhone: true, siteEmail: true, siteTaxId: true, siteLogoUrl: true, siteLogoLightUrl: true, siteLogoDarkUrl: true, siteFaviconUrl: true, siteShowTitle: true, siteShowTagline: true, siteShowLogo: true }
   });
 
   return {
     name: settings?.siteName?.trim() || DEFAULT_SITE_IDENTITY.name,
     url: settings?.siteUrl?.trim() || DEFAULT_SITE_IDENTITY.url,
     tagline: settings?.siteTagline?.trim() || DEFAULT_SITE_IDENTITY.tagline,
+    addressStreet: settings?.siteAddressStreet?.trim() || "",
+    addressCity: settings?.siteAddressCity?.trim() || "",
+    addressState: settings?.siteAddressState?.trim() || "",
+    addressZip: settings?.siteAddressZip?.trim() || "",
+    phone: settings?.sitePhone?.trim() || "",
+    email: settings?.siteEmail?.trim() || "",
+    taxId: settings?.siteTaxId?.trim() || "",
     logoUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl) || DEFAULT_SITE_IDENTITY.logoUrl,
     logoLightUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl) || DEFAULT_SITE_IDENTITY.logoLightUrl,
     logoDarkUrl: siteIdentityAssetUrl(settings?.siteLogoDarkUrl) || DEFAULT_SITE_IDENTITY.logoDarkUrl,

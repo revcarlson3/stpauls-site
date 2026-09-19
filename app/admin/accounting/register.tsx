@@ -52,6 +52,7 @@ type RegisterFilters = {
 
 const inputClass =
   "focus-ring rounded-lg border border-ink/15 bg-white px-3 py-2";
+const modalButtonClass = "h-10 min-h-0 shrink-0 self-center py-2 leading-5";
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -361,11 +362,11 @@ export function RegisterFilters() {
                   </label>
                 </div>
               </fieldset>
-              <div className="mt-3 flex justify-between gap-3">
+              <div className="mt-3 flex items-center justify-between gap-3">
                 <Button type="button" variant="secondary" onClick={clear}>
                   Clear
                 </Button>
-                <div className="flex gap-3">
+                <div className="flex items-center gap-3">
                   <Button
                     type="button"
                     variant="secondary"
@@ -582,10 +583,43 @@ export function Register() {
     await load();
   }
 
+  async function denyTransaction(transaction: Transaction) {
+    const note = window.prompt(
+      "Why are you denying this contribution batch deposit? This note will be included in the notification to Giving managers.",
+      "",
+    );
+    if (note === null) return;
+    if (
+      !window.confirm(
+        "Deny this contribution batch deposit? The transaction will not be recorded and the batch will return to Giving as unposted.",
+      )
+    )
+      return;
+    setError("");
+    const response = await fetch(`/api/accounting/register/${transaction.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "deny", note: note.trim().slice(0, 500) }),
+    });
+    const value = await response.json();
+    if (!response.ok) {
+      setError(value.error ?? "Unable to deny the transaction.");
+      return;
+    }
+    setIsModalOpen(false);
+    setSelectedId(null);
+    setNotice("Deposit denied and returned to Giving as unposted.");
+    await load();
+  }
+
   const isStandard = form.entryType === "STANDARD";
   const isBankTransfer = form.entryType === "BANK_TRANSFER";
   const isFundTransfer = form.entryType === "FUND_TRANSFER";
   const isAccountTransfer = form.entryType === "ACCOUNT_TRANSFER";
+  const selectedTransaction = selectedId
+    ? transactions.find((transaction) => transaction.id === selectedId)
+    : null;
+  const isPendingTransaction = selectedTransaction?.status === "PENDING";
   const filteredTransactions = transactions.filter((transaction) => {
     const date = transaction.date.slice(0, 10);
     const amount = Math.round(Math.abs(transaction.amount) * 100);
@@ -675,14 +709,10 @@ export function Register() {
                     key={transaction.id}
                     tabIndex={0}
                     role="button"
-                    onClick={() => {
-                      if (transaction.status !== "PENDING")
-                        openEdit(transaction);
-                    }}
+                    onClick={() => openEdit(transaction)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ")
-                        if (transaction.status !== "PENDING")
-                          openEdit(transaction);
+                        openEdit(transaction);
                     }}
                     className={`cursor-pointer border-t border-ink/10 hover:bg-mist/35 focus:bg-mist/35 focus:outline-none ${transaction.status === "PENDING" ? "bg-amber-50/70" : ""}`}
                   >
@@ -815,7 +845,18 @@ export function Register() {
                 {error}
               </p>
             )}
-            <form onSubmit={saveTransaction} className="mt-5 grid gap-3">
+            <form
+              onSubmit={(event) => {
+                if (isPendingTransaction) {
+                  event.preventDefault();
+                  if (selectedTransaction) void approveTransaction(selectedTransaction);
+                  return;
+                }
+                void saveTransaction(event);
+              }}
+              className="mt-5 grid gap-3"
+            >
+              <fieldset disabled={isPendingTransaction} className="contents">
               <label className="grid gap-1 text-sm font-semibold">
                 Entry type
                 <select
@@ -1315,11 +1356,20 @@ export function Register() {
                   placeholder="Check number or approval"
                 />
               </label>
+              </fieldset>
               <div className="mt-3 flex justify-between gap-3">
-                {selectedId ? (
+                {isPendingTransaction && selectedTransaction ? (
                   <Button
                     type="button"
-                    className="bg-coral text-white"
+                    className={`${modalButtonClass} bg-coral text-white`}
+                    onClick={() => void denyTransaction(selectedTransaction)}
+                  >
+                    Deny
+                  </Button>
+                ) : selectedId ? (
+                  <Button
+                    type="button"
+                    className={`${modalButtonClass} bg-coral text-white`}
                     onClick={deleteTransaction}
                   >
                     Delete transaction
@@ -1331,12 +1381,17 @@ export function Register() {
                   <Button
                     type="button"
                     variant="secondary"
+                    className={modalButtonClass}
                     onClick={() => setIsModalOpen(false)}
                   >
                     Cancel
                   </Button>
-                  <Button type="submit">
-                    {selectedId ? "Save changes" : "Post transaction"}
+                  <Button type="submit" className={modalButtonClass}>
+                    {isPendingTransaction && selectedTransaction
+                      ? "Approve"
+                      : selectedId
+                        ? "Save changes"
+                        : "Post transaction"}
                   </Button>
                 </div>
               </div>

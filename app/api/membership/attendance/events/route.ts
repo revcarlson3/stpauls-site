@@ -29,6 +29,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Choose a valid event status." }, { status: 400 });
     }
     const where = {
+      churchId: (await authorize()).churchId!,
       ...(status !== "all" ? { status: status as (typeof MEMBERSHIP_EVENT_STATUSES)[number] } : {}),
       ...(search ? { OR: [{ title: { contains: search, mode: "insensitive" as const } }, { category: { contains: search, mode: "insensitive" as const } }, { location: { contains: search, mode: "insensitive" as const } }] } : {})
     };
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
     const user = await authorize();
     const data = normalizeMembershipEventInput(await request.json());
     const event = await db.membershipEvent.create({
-      data: { ...data, title: data.title!, startsAt: data.startsAt!, createdById: user.id },
+      data: { ...data, churchId: user.churchId!, title: data.title!, startsAt: data.startsAt!, createdById: user.id },
       select: { id: true, title: true, description: true, eventType: true, status: true, category: true, location: true, startsAt: true, endsAt: true, timeZone: true, visitorCount: true, createdAt: true, updatedAt: true }
     });
     await logAudit({ activityType: "membership-event-created", summary: `Created membership event “${event.title}”.`, details: JSON.stringify({ eventId: event.id }), actorId: user.id });

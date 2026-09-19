@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { requirePermission } from "@/lib/auth";
-import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { databaseDynamicWhere, dynamicMemberIds } from "@/lib/membership-audiences";
 import {
@@ -19,6 +17,7 @@ import { formatPhoneNumber } from "@/lib/phone-numbers";
 import { membershipAttendanceReportRow } from "@/lib/membership-attendance";
 import { membershipServiceReportRow } from "@/lib/membership-volunteers";
 import { formatReportDate } from "@/lib/report-date-format";
+import { authorizeReportExecution, authorizeReportModule } from "@/lib/reporting";
 
 async function databaseGroupingCounts(
   where: Prisma.MembershipIndividualWhereInput,
@@ -70,9 +69,10 @@ async function databaseGroupingCounts(
 
 export async function GET(request: Request, context: { params: { id: string } }) {
   try {
-    const user = await requirePermission("MANAGE_MEMBERSHIP");
-    await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
-    const savedReport = await db.membershipReport.findFirst({ where: { id: context.params.id, scope: "MEMBERSHIP", OR: [{ createdById: user.id }, { visibility: "MEMBERSHIP_MANAGERS" }] } });
+    const requestedChurchId = new URL(request.url).searchParams.get("churchId") || undefined;
+    const preliminaryScope = await authorizeReportModule({ module: "membership", churchId: requestedChurchId });
+    const currentUser = preliminaryScope.user;
+    const savedReport = await db.membershipReport.findFirst({ where: { id: context.params.id, churchId: preliminaryScope.churchId, scope: "MEMBERSHIP", OR: [{ createdById: currentUser.id }, { visibility: "MEMBERSHIP_MANAGERS" }] } });
     let report = savedReport;
     if (context.params.id === "preview") {
       const definition = new URL(request.url).searchParams.get("definition");
@@ -90,13 +90,14 @@ export async function GET(request: Request, context: { params: { id: string } })
           grouping: parsed.grouping ?? {},
           layout: {},
           visibility: "PRIVATE",
-          createdById: user.id
+          createdById: currentUser.id
         } as typeof savedReport;
       } catch {
         return NextResponse.json({ error: "Invalid report definition." }, { status: 400 });
       }
     }
     if (!report) return NextResponse.json({ error: "Report not found." }, { status: 404 });
+    const { user } = await authorizeReportExecution({ module: "membership", reportType: report.reportType, churchId: requestedChurchId });
     const url = new URL(request.url);
     const reportRequest = parseMembershipReportRequest(url.searchParams);
     const { draw, start: serverStart, length: serverLength, page, pageSize, search, sortKey, sortDirection } = reportRequest;
@@ -120,7 +121,7 @@ export async function GET(request: Request, context: { params: { id: string } })
       const summary = { total: rows.length, active: rows.filter((row) => row.deliveryStatus === "DELIVERED").length, inactive: rows.filter((row) => row.deliveryStatus !== "DELIVERED").length };
       const start = draw !== null ? serverStart : (page - 1) * pageSize;
       const resultRows = rows.slice(start, start + (draw !== null ? serverLength : pageSize));
-      const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, columns: safeColumns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, generatedAt: new Date().toISOString(), generatedBy: user.name };
+      const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, criteria: report.criteria, columns: safeColumns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, generatedAt: new Date().toISOString(), generatedBy: user.name };
       if (draw !== null) return NextResponse.json({ draw, recordsTotal: rows.length, recordsFiltered: rows.length, data: resultRows, report: reportMeta });
       return NextResponse.json({ report: reportMeta, rows: resultRows, total: rows.length, page, pageSize, pageCount: Math.max(1, Math.ceil(rows.length / pageSize)) });
     }
@@ -167,7 +168,7 @@ export async function GET(request: Request, context: { params: { id: string } })
       const summary = { total: rows.length, active: rows.filter((row) => row.attendanceStatus === "PRESENT").length, inactive: rows.filter((row) => row.attendanceStatus !== "PRESENT").length };
       const start = draw !== null ? serverStart : (page - 1) * pageSize;
       const resultRows = rows.slice(start, start + (draw !== null ? serverLength : pageSize));
-      const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, columns: safeColumns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, generatedAt: new Date().toISOString(), generatedBy: user.name };
+      const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, criteria: report.criteria, columns: safeColumns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, generatedAt: new Date().toISOString(), generatedBy: user.name };
       if (draw !== null) return NextResponse.json({ draw, recordsTotal: rows.length, recordsFiltered: rows.length, data: resultRows, report: reportMeta });
       return NextResponse.json({ report: reportMeta, rows: resultRows, total: rows.length, page, pageSize, pageCount: Math.max(1, Math.ceil(rows.length / pageSize)) });
     }
@@ -213,7 +214,7 @@ export async function GET(request: Request, context: { params: { id: string } })
       const summary = { total: rows.length, active: rows.filter((row) => row.serviceOutcome === "COMPLETED").length, inactive: rows.filter((row) => row.serviceOutcome === "NO_SHOW").length };
       const start = draw !== null ? serverStart : (page - 1) * pageSize;
       const resultRows = rows.slice(start, start + (draw !== null ? serverLength : pageSize));
-      const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, columns: safeColumns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, generatedAt: new Date().toISOString(), generatedBy: user.name };
+      const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, criteria: report.criteria, columns: safeColumns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, generatedAt: new Date().toISOString(), generatedBy: user.name };
       if (draw !== null) return NextResponse.json({ draw, recordsTotal: rows.length, recordsFiltered: rows.length, data: resultRows, report: reportMeta });
       return NextResponse.json({ report: reportMeta, rows: resultRows, total: rows.length, page, pageSize, pageCount: Math.max(1, Math.ceil(rows.length / pageSize)) });
     }
@@ -226,8 +227,8 @@ export async function GET(request: Request, context: { params: { id: string } })
     const grouping = report.grouping && typeof report.grouping === "object" ? report.grouping as { key?: unknown; direction?: unknown } : {};
     const groupingKey = typeof grouping.key === "string" && availableColumnKeys.has(grouping.key) ? grouping.key : "";
     const databaseExecution = canRunStandardMemberReportInDatabase(report.reportType, sortKey, groupingKey);
-    const audienceWhere: Prisma.MembershipIndividualWhereInput = databaseAudienceWhere ?? { id: { in: memberIds } };
-    const filteredWhere: Prisma.MembershipIndividualWhereInput = { ...audienceWhere, ...membershipReportSearchWhere(search) };
+    const audienceWhere: Prisma.MembershipIndividualWhereInput = { churchId: preliminaryScope.churchId, ...(databaseAudienceWhere ?? { id: { in: memberIds } }) };
+    const filteredWhere: Prisma.MembershipIndividualWhereInput = { churchId: preliminaryScope.churchId, ...audienceWhere, ...membershipReportSearchWhere(search) };
     const resultStart = draw !== null ? serverStart : (page - 1) * pageSize;
     const resultLength = draw !== null ? serverLength : pageSize;
     const databaseCounts = databaseExecution
@@ -298,7 +299,7 @@ export async function GET(request: Request, context: { params: { id: string } })
       const groupingCounts = await databaseGroupingCounts(filteredWhere, groupingKey, grouping.direction, statusGroups);
       const active = statusGroups.find((group) => group.status === "ACTIVE")?._count._all ?? 0;
       const summary = { total: recordsFiltered, active, inactive: recordsFiltered - active };
-      const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, columns: safeColumns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, striped: report.striped, generatedAt: new Date().toISOString(), generatedBy: user.name };
+      const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, criteria: report.criteria, columns: safeColumns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, striped: report.striped, generatedAt: new Date().toISOString(), generatedBy: user.name };
       return NextResponse.json(membershipReportResultPayload({
         request: reportRequest,
         report: reportMeta,
@@ -386,7 +387,7 @@ export async function GET(request: Request, context: { params: { id: string } })
     };
     const start = draw !== null ? serverStart : (page - 1) * pageSize;
     const resultRows = rows.slice(start, start + (draw !== null ? serverLength : pageSize));
-    const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, columns: safeColumns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, striped: report.striped, generatedAt: new Date().toISOString(), generatedBy: user.name };
+    const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, criteria: report.criteria, columns: safeColumns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, striped: report.striped, generatedAt: new Date().toISOString(), generatedBy: user.name };
     if (draw !== null) return NextResponse.json({ draw, recordsTotal: rows.length, recordsFiltered: rows.length, data: resultRows, report: reportMeta });
     return NextResponse.json({ report: reportMeta, rows: resultRows, total: rows.length, page, pageSize, pageCount: Math.max(1, Math.ceil(rows.length / pageSize)) });
   } catch {

@@ -1,16 +1,9 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { EVENT_REPORT_COLUMNS, EVENT_TYPE_LABELS, eventReportSummary } from "@/lib/event-reporting";
 import { formatReportDate } from "@/lib/report-date-format";
 import { dynamicMemberIds } from "@/lib/membership-audiences";
-
-async function authorize() {
-  const user = await requirePermission("MANAGE_EVENTS");
-  await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
-  return user;
-}
+import { authorizeReportExecution, authorizeReportModule } from "@/lib/reporting";
 const date = (value: Date | null, timeZone?: string | null) => value ? formatReportDate(value, timeZone || "America/Chicago") : "";
 function matches(row: Record<string, unknown>, criteria: unknown) {
   const conditions = criteria && typeof criteria === "object" && Array.isArray((criteria as Record<string, unknown>).conditions)
@@ -40,25 +33,29 @@ function matches(row: Record<string, unknown>, criteria: unknown) {
 }
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const user = await authorize();
     const url = new URL(request.url);
-    let report = await db.membershipReport.findFirst({ where: { id: params.id, scope: "EVENT", OR: [{ createdById: user.id }, { visibility: "EVENT_MANAGERS" }] } });
+    const requestedChurchId = url.searchParams.get("churchId") || undefined;
+    const preliminaryScope = await authorizeReportModule({ module: "events", churchId: requestedChurchId });
+    const currentUser = preliminaryScope.user;
+    let report = await db.membershipReport.findFirst({ where: { id: params.id, churchId: preliminaryScope.churchId, scope: "EVENT", OR: [{ createdById: currentUser.id }, { visibility: "EVENT_MANAGERS" }] } });
     if (params.id === "preview") {
       const definition = url.searchParams.get("definition");
       if (!definition) return NextResponse.json({ error: "Report definition is required." }, { status: 400 });
       const parsed = JSON.parse(definition) as Record<string, unknown>;
-      report = { id: "preview", name: typeof parsed.name === "string" ? parsed.name : "One-time event report", reportType: String(parsed.reportType || "event-list"), criteria: parsed.criteria ?? {}, columns: parsed.columns ?? EVENT_REPORT_COLUMNS, sort: parsed.sort ?? [], grouping: parsed.grouping ?? {}, layout: {}, visibility: "PRIVATE", createdById: user.id } as typeof report;
+      report = { id: "preview", name: typeof parsed.name === "string" ? parsed.name : "One-time event report", reportType: String(parsed.reportType || "event-list"), criteria: parsed.criteria ?? {}, columns: parsed.columns ?? EVENT_REPORT_COLUMNS, sort: parsed.sort ?? [], grouping: parsed.grouping ?? {}, layout: {}, visibility: "PRIVATE", createdById: currentUser.id } as typeof report;
     }
     if (!report) return NextResponse.json({ error: "Report not found." }, { status: 404 });
+    const { user } = await authorizeReportExecution({ module: "events", reportType: report.reportType, churchId: requestedChurchId });
     const type = report.reportType;
     const scheduleCriteria = report.criteria && typeof report.criteria === "object" ? report.criteria as { dateFrom?: unknown; dateTo?: unknown; eventLimit?: unknown; volunteerGroupIds?: unknown[] } : {};
     const selectedGroupIds = type === "volunteer-schedule" && Array.isArray(scheduleCriteria.volunteerGroupIds)
       ? scheduleCriteria.volunteerGroupIds.filter((value): value is string => typeof value === "string")
       : [];
     const selectedGroups = selectedGroupIds.length
-      ? await db.membershipVolunteerGroup.findMany({ where: { id: { in: selectedGroupIds } }, select: { id: true, name: true } })
+      ? await db.membershipVolunteerGroup.findMany({ where: { id: { in: selectedGroupIds }, churchId: preliminaryScope.churchId }, select: { id: true, name: true } })
       : [];
     const events = await db.membershipEvent.findMany({
+      where: { churchId: preliminaryScope.churchId },
       orderBy: { startsAt: "desc" },
       include: {
         attendance: { include: { individual: true } },
@@ -92,14 +89,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
           const list = await db.membershipManualList.findUnique({ where: { id: manualListId }, select: { members: { select: { individualId: true } } } });
           rosterIds = list?.members.map((member) => member.individualId) ?? [];
         } else if (eventGroupIds.length) {
-          const members = await db.membershipIndividual.findMany({ where: { status: { not: "REMOVED" }, volunteerGroups: { some: { groupId: { in: eventGroupIds } } } }, select: { id: true } });
+          const members = await db.membershipIndividual.findMany({ where: { churchId: preliminaryScope.churchId, status: { not: "REMOVED" }, volunteerGroups: { some: { groupId: { in: eventGroupIds } } } }, select: { id: true } });
           rosterIds = members.map((member) => member.id);
         }
         const presentIds = new Set(event.attendance.map((record) => record.individualId));
         const missingIds = rosterIds.filter((id) => !presentIds.has(id));
         rosterAbsentCount += missingIds.length;
         if (type === "absentee" && missingIds.length) {
-          const missingMembers = await db.membershipIndividual.findMany({ where: { id: { in: missingIds } }, select: { id: true, memberNumber: true, firstName: true, lastName: true } });
+          const missingMembers = await db.membershipIndividual.findMany({ where: { id: { in: missingIds }, churchId: preliminaryScope.churchId }, select: { id: true, memberNumber: true, firstName: true, lastName: true } });
           missingRosterMembers = missingMembers.map((member) => ({ id: member.id, memberNumber: String(member.memberNumber), memberName: `${member.lastName || ""}, ${member.firstName}`.trim() }));
         }
       }
@@ -149,7 +146,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const groupingKey = report.grouping && typeof report.grouping === "object" ? String((report.grouping as { key?: unknown }).key || "") : "";
     const groupingCounts = groupingKey ? Object.entries(filtered.reduce<Record<string, number>>((counts, row) => { const value = String(row[groupingKey] ?? "—"); counts[value] = (counts[value] || 0) + 1; return counts; }, {})).map(([label, count]) => ({ label, count })) : [];
     const summary = eventReportSummary(type as "event-list" | "attendance" | "absentee" | "volunteers" | "volunteer-schedule" | "custom", filtered);
-    const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, columns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, generatedAt: new Date().toISOString(), generatedBy: user.name };
+    const reportMeta = { id: report.id, name: report.name, reportType: report.reportType, criteria: report.criteria, columns, grouping: groupingKey, groupingCounts, summary, layout: report.layout, generatedAt: new Date().toISOString(), generatedBy: user.name };
     if (draw) return NextResponse.json({ draw, recordsTotal: rows.length, recordsFiltered: filtered.length, data: resultRows, report: reportMeta });
     return NextResponse.json({ report: reportMeta, columns, rows: resultRows, total: filtered.length });
   } catch { return NextResponse.json({ error: "Unable to generate event report." }, { status: 400 }); }

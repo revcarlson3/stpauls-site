@@ -8,8 +8,8 @@ import { siteIdentityAssetUrl } from "@/lib/site-identity";
 
 export async function GET() {
   try {
-    const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { siteName: true, siteUrl: true, siteTagline: true, siteLogoUrl: true, siteLogoLightUrl: true, siteLogoDarkUrl: true, siteFaviconUrl: true, siteShowTitle: true, siteShowTagline: true, siteShowLogo: true } });
-    return NextResponse.json({ siteName: settings?.siteName ?? "St. Paul's", siteUrl: settings?.siteUrl ?? "", siteTagline: settings?.siteTagline ?? "A place to belong.", siteLogoUrl: siteIdentityAssetUrl(settings?.siteLogoUrl), siteLogoLightUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl), siteLogoDarkUrl: siteIdentityAssetUrl(settings?.siteLogoDarkUrl), siteFaviconUrl: siteIdentityAssetUrl(settings?.siteFaviconUrl), siteShowTitle: settings?.siteShowTitle ?? true, siteShowTagline: settings?.siteShowTagline ?? true, siteShowLogo: settings?.siteShowLogo ?? false });
+    const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { siteName: true, siteUrl: true, siteTagline: true, siteAddressStreet: true, siteAddressCity: true, siteAddressState: true, siteAddressZip: true, sitePhone: true, siteEmail: true, siteTaxId: true, siteLogoUrl: true, siteLogoLightUrl: true, siteLogoDarkUrl: true, siteFaviconUrl: true, siteShowTitle: true, siteShowTagline: true, siteShowLogo: true } });
+    return NextResponse.json({ siteName: settings?.siteName ?? "St. Paul's", siteUrl: settings?.siteUrl ?? "", siteTagline: settings?.siteTagline ?? "A place to belong.", siteAddressStreet: settings?.siteAddressStreet ?? "", siteAddressCity: settings?.siteAddressCity ?? "", siteAddressState: settings?.siteAddressState ?? "", siteAddressZip: settings?.siteAddressZip ?? "", sitePhone: settings?.sitePhone ?? "", siteEmail: settings?.siteEmail ?? "", siteTaxId: settings?.siteTaxId ?? "", siteLogoUrl: siteIdentityAssetUrl(settings?.siteLogoUrl), siteLogoLightUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl), siteLogoDarkUrl: siteIdentityAssetUrl(settings?.siteLogoDarkUrl), siteFaviconUrl: siteIdentityAssetUrl(settings?.siteFaviconUrl), siteShowTitle: settings?.siteShowTitle ?? true, siteShowTagline: settings?.siteShowTagline ?? true, siteShowLogo: settings?.siteShowLogo ?? false });
   } catch {
     return NextResponse.json({ error: "Unable to load site identity." }, { status: 403 });
   }
@@ -24,8 +24,17 @@ export async function PATCH(request: Request) {
     await requirePermission("MANAGE_SETTINGS");
     await db.securitySettings.upsert({
       where: { id: 1 },
-      update: { siteUrl: input.siteUrl.trim() },
-      create: { id: 1, siteUrl: input.siteUrl.trim() }
+      update: Object.fromEntries([
+        ["siteName", typeof input.siteName === "string" ? input.siteName.trim() : "St. Paul's"],
+        ["siteUrl", input.siteUrl.trim()],
+        ...["siteAddressStreet", "siteAddressCity", "siteAddressState", "siteAddressZip", "sitePhone", "siteEmail", "siteTaxId"].map((field) => [field, typeof input[field] === "string" ? input[field].trim() : ""])
+      ]),
+      create: {
+        id: 1,
+        siteName: typeof input.siteName === "string" ? input.siteName.trim() : "St. Paul's",
+        siteUrl: input.siteUrl.trim(),
+        ...Object.fromEntries(["siteAddressStreet", "siteAddressCity", "siteAddressState", "siteAddressZip", "sitePhone", "siteEmail", "siteTaxId"].map((field) => [field, typeof input[field] === "string" ? input[field].trim() : ""]))
+      }
     });
     return NextResponse.json({ saved: true });
   } catch {

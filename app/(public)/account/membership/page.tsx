@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, Container } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getOnlineGivingEnabled } from "@/lib/online-giving";
 
 const features = [
   { href: "/account/membership/profile", label: "Member profile", description: "View and update the membership information your church has enabled.", image: "/member-center/profile.svg", imageAlt: "Abstract portrait representing a member profile" },
@@ -15,7 +16,8 @@ const features = [
 export default async function MembershipLandingPage() {
   const user = await getCurrentUser();
   const memberLink = user ? await db.membershipUserMemberLink.findUnique({ where: { userId: user.id }, select: { id: true } }) : null;
-  const availableFeatures = memberLink ? [{ href: "/directory", label: "Member directory", description: "Find contact information for members and families who have chosen to be listed.", image: "/member-center/directory.svg", imageAlt: "Illustrated group of people representing the member directory" }, ...features] : features;
+  const onlineGivingEnabled = await getOnlineGivingEnabled();
+  const availableFeatures = (memberLink ? [{ href: "/directory", label: "Member directory", description: "Find contact information for members and families who have chosen to be listed.", image: "/member-center/directory.svg", imageAlt: "Illustrated group of people representing the member directory" }, ...features] : features).filter((feature) => feature.href !== "/account/membership/giving" || onlineGivingEnabled);
   return <main className="py-12 sm:py-16"><Container className="max-w-5xl">
     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Member center</p>
     <h1 className="mt-2 font-serif text-4xl sm:text-5xl">Welcome to your member center</h1>

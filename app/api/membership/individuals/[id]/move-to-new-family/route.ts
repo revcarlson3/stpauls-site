@@ -24,6 +24,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const result = await db.$transaction(async (transaction) => {
       const family = await transaction.membershipFamily.create({
         data: {
+          churchId: user.churchId!,
           lastName: input.lastName.trim(),
           phone: typeof input.phone === "string" ? input.phone.trim() || null : null,
           email: typeof input.email === "string" ? input.email.trim().toLowerCase() || null : null,

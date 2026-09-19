@@ -16,6 +16,60 @@ const PAYMENT_TYPES = [
   "OTHER",
 ] as const;
 
+async function validatePledgeDesignations(
+  rows: Array<Record<string, unknown>>,
+  churchId: string,
+  batchDate: Date,
+) {
+  const designatedRows = rows.filter((row) => row.pledgeCampaignId);
+  if (
+    rows.some(
+      (row) =>
+        row.pledgeCampaignId !== undefined &&
+        row.pledgeCampaignId !== null &&
+        typeof row.pledgeCampaignId !== "string",
+    )
+  ) {
+    return "One or more pledge campaign selections are invalid.";
+  }
+  if (!designatedRows.length) return null;
+  const campaignIds = designatedRows.map((row) => String(row.pledgeCampaignId));
+  const memberIds = designatedRows.map((row) =>
+    typeof row.memberId === "string" ? row.memberId : "",
+  );
+  const campaigns = await db.pledgeCampaign.findMany({
+    where: { churchId, id: { in: campaignIds } },
+    select: {
+      id: true,
+      categoryId: true,
+      startDate: true,
+      endDate: true,
+      assignments: {
+        where: { memberId: { in: memberIds.filter(Boolean) } },
+        select: { memberId: true },
+      },
+    },
+  });
+  const campaignMap = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
+  for (const row of designatedRows) {
+    const campaign = campaignMap.get(String(row.pledgeCampaignId));
+    const memberId = typeof row.memberId === "string" ? row.memberId : "";
+    const categoryId = typeof row.categoryId === "string" ? row.categoryId : "";
+    if (
+      !campaign ||
+      !memberId ||
+      campaign.categoryId !== categoryId ||
+      !campaign.assignments.some((assignment) => assignment.memberId === memberId) ||
+      (campaign.startDate && batchDate < campaign.startDate) ||
+      (campaign.endDate &&
+        batchDate > new Date(campaign.endDate.getTime() + 24 * 60 * 60 * 1000))
+    ) {
+      return "Each pledge designation must match the member, category, and dates of an assigned pledge campaign.";
+    }
+  }
+  return null;
+}
+
 export async function GET(request: Request) {
   try {
     const user = await requirePermission("MANAGE_GIVING");
@@ -25,7 +79,7 @@ export async function GET(request: Request) {
       new URL(request.url).searchParams.get("search")?.trim() ?? "";
     const batchId =
       new URL(request.url).searchParams.get("batchId")?.trim() ?? "";
-    const [batches, categories, bankAccounts, members, selectedBatch] =
+    const [batches, categories, bankAccounts, members, pledgeCampaigns, selectedBatch] =
       await Promise.all([
         db.givingContributionBatch.findMany({
           where: { churchId: church.id },
@@ -37,6 +91,7 @@ export async function GET(request: Request) {
             description: true,
             isPosted: true,
             depositStatus: true,
+            isLocked: true,
           },
         }),
         db.accountingAccount.findMany({
@@ -55,7 +110,7 @@ export async function GET(request: Request) {
         db.accountingBankAccount.findMany({
           where: { churchId: church.id, isActive: true },
           orderBy: { name: "asc" },
-          select: { id: true, name: true },
+          select: { id: true, name: true, lastFour: true },
         }),
         search.length >= 3 || /^\d+$/.test(search)
           ? db.membershipIndividual.findMany({
@@ -100,13 +155,29 @@ export async function GET(request: Request) {
               },
             })
           : [],
+        db.pledgeCampaign.findMany({
+          where: { churchId: church.id },
+          orderBy: { name: "asc" },
+          select: {
+            id: true,
+            name: true,
+            categoryId: true,
+            startDate: true,
+            endDate: true,
+            assignments: { select: { memberId: true } },
+          },
+        }),
         batchId
           ? db.givingContributionBatch.findFirst({
               where: { id: batchId, churchId: church.id },
               select: {
                 id: true,
                 batchDate: true,
+                description: true,
                 isPosted: true,
+                isLocked: true,
+                depositBankAccountId: true,
+                depositStatus: true,
                 contributions: {
                   orderBy: { createdAt: "asc" },
                   select: {
@@ -125,6 +196,8 @@ export async function GET(request: Request) {
                     paymentType: true,
                     checkNumber: true,
                     memo: true,
+                    pledgeCampaignId: true,
+                    category: { select: { code: true, name: true } },
                   },
                 },
               },
@@ -132,12 +205,19 @@ export async function GET(request: Request) {
           : null,
       ]);
     return NextResponse.json({
+      church: {
+        name: church.name,
+        city: church.city,
+        state: church.state,
+        postalCode: church.postalCode,
+      },
       batches: batches.map((batch) => ({
         id: batch.id,
         date: batch.batchDate.toISOString(),
         description: batch.description,
         isPosted: batch.isPosted,
         depositStatus: batch.depositStatus,
+        isLocked: batch.isLocked,
       })),
       categories,
       bankAccounts,
@@ -146,22 +226,38 @@ export async function GET(request: Request) {
         name: `${member.lastName ?? member.family.lastName}, ${member.firstName}`,
         envelopeNumber: member.envelopeNumber,
       })),
+      pledgeCampaigns: pledgeCampaigns.map((campaign) => ({
+        id: campaign.id,
+        name: campaign.name,
+        categoryId: campaign.categoryId,
+        startDate: campaign.startDate?.toISOString() ?? null,
+        endDate: campaign.endDate?.toISOString() ?? null,
+        memberIds: campaign.assignments.map((assignment) => assignment.memberId),
+      })),
       selectedBatch: selectedBatch
         ? {
             id: selectedBatch.id,
             date: selectedBatch.batchDate.toISOString(),
+            description: selectedBatch.description,
             isPosted: selectedBatch.isPosted,
+            isLocked: selectedBatch.isLocked,
+            depositBankAccountId: selectedBatch.depositBankAccountId,
+            depositStatus: selectedBatch.depositStatus,
             contributions: selectedBatch.contributions.map((row) => ({
               memberId: row.memberId ?? "",
               memberName: row.member
                 ? `${row.member.lastName ?? row.member.family.lastName}, ${row.member.firstName}`
                 : "",
+              envelopeNumber: row.member?.envelopeNumber ?? "",
               amount: String(row.amount),
               categoryId: row.categoryId,
               deductible: row.deductible,
               paymentType: row.paymentType,
               checkNumber: row.checkNumber ?? "",
               memo: row.memo ?? "",
+              pledgeCampaignId: row.pledgeCampaignId ?? "",
+              categoryCode: row.category.code,
+              categoryName: row.category.name,
             })),
           }
         : null,
@@ -180,6 +276,21 @@ export async function PATCH(request: Request) {
     await requireEnabledModule("giving", user.id, "MANAGE_GIVING");
     const { church } = await requireCurrentChurch();
     const input = await request.json();
+    if (input?.action === "toggle-lock") {
+      if (typeof input.batchId !== "string")
+        return NextResponse.json({ error: "A contribution batch is required." }, { status: 400 });
+      const batch = await db.givingContributionBatch.findFirst({
+        where: { id: input.batchId, churchId: church.id },
+        select: { id: true, isLocked: true },
+      });
+      if (!batch) return NextResponse.json({ error: "Contribution batch not found." }, { status: 404 });
+      const updated = await db.givingContributionBatch.update({
+        where: { id: batch.id },
+        data: { isLocked: !batch.isLocked, lockedAt: batch.isLocked ? null : new Date() },
+        select: { isLocked: true },
+      });
+      return NextResponse.json({ isLocked: updated.isLocked });
+    }
     if (input?.action === "post") {
       if (
         typeof input.batchId !== "string" ||
@@ -202,6 +313,9 @@ export async function PATCH(request: Request) {
           contributions: {
             select: {
               amount: true,
+              paymentType: true,
+              checkNumber: true,
+              member: { select: { envelopeNumber: true } },
               categoryId: true,
               category: { select: { givingFundId: true } },
             },
@@ -306,7 +420,44 @@ export async function PATCH(request: Request) {
         message: `${batch.description || "Contribution batch"} was posted and is awaiting review and approval in the Accounting register.`,
         link: "/admin/accounting/register",
       });
-      return NextResponse.json({ posted: true });
+      const bankAccount = await db.accountingBankAccount.findFirst({
+        where: { id: input.bankAccountId, churchId: church.id },
+        select: { name: true, lastFour: true },
+      });
+      const electronic = batch.contributions.filter((row) =>
+        ["CARD", "ACH", "TEXT", "OTHER"].includes(row.paymentType),
+      );
+      const checks = batch.contributions.filter((row) => row.paymentType === "CHECK");
+      const cashTotal = batch.contributions
+        .filter((row) => row.paymentType === "CASH")
+        .reduce((total, row) => total + Number(row.amount), 0);
+      return NextResponse.json({
+        posted: true,
+        report: {
+          church: {
+            name: church.name,
+            city: church.city,
+            state: church.state,
+            postalCode: church.postalCode,
+          },
+          batchDate: batch.batchDate.toISOString(),
+          bankAccountName: bankAccount?.name ?? "Selected bank account",
+          bankAccountLastFour: bankAccount?.lastFour ?? null,
+          electronic: electronic.map((row) => ({
+            envelopeNumber: row.member?.envelopeNumber ?? "—",
+            giftType: row.paymentType,
+            amount: Number(row.amount),
+          })),
+          cashTotal,
+          checks: checks.map((row) => ({
+            envelopeNumber: row.member?.envelopeNumber ?? "—",
+            checkNumber: row.checkNumber ?? "—",
+            amount: Number(row.amount),
+          })),
+          electronicTotal: electronic.reduce((total, row) => total + Number(row.amount), 0),
+          bankDepositTotal: cashTotal + checks.reduce((total, row) => total + Number(row.amount), 0),
+        },
+      });
     }
     if (
       !input ||
@@ -423,6 +574,13 @@ export async function PATCH(request: Request) {
         { error: "One or more selected members are invalid." },
         { status: 400 },
       );
+    const pledgeError = await validatePledgeDesignations(
+      rows,
+      church.id,
+      batchDate,
+    );
+    if (pledgeError)
+      return NextResponse.json({ error: pledgeError }, { status: 400 });
     await db.$transaction(async (transaction) => {
       await transaction.givingContribution.deleteMany({
         where: { batchId: batch.id },
@@ -435,6 +593,11 @@ export async function PATCH(request: Request) {
             create: rows.map((row) => ({
               memberId: typeof row.memberId === "string" ? row.memberId : null,
               categoryId: String(row.categoryId),
+              pledgeCampaignId:
+                typeof row.pledgeCampaignId === "string" &&
+                row.pledgeCampaignId.trim()
+                  ? row.pledgeCampaignId.trim()
+                  : null,
               amount: row.amount as number,
               deductible: row.deductible !== false,
               paymentType: String(row.paymentType),
@@ -474,7 +637,7 @@ export async function DELETE(request: Request) {
     }
     const batch = await db.givingContributionBatch.findFirst({
       where: { id: input.batchId, churchId: church.id },
-      select: { id: true, batchDate: true, description: true, depositJournalEntryId: true },
+      select: { id: true, batchDate: true, description: true, depositJournalEntryId: true, isLocked: true },
     });
     if (!batch) {
       return NextResponse.json(
@@ -482,6 +645,11 @@ export async function DELETE(request: Request) {
         { status: 404 },
       );
     }
+    if (batch.isLocked)
+      return NextResponse.json(
+        { error: "Locked contribution batches cannot be deleted." },
+        { status: 409 },
+      );
     const journalEntry = batch.depositJournalEntryId
       ? await db.accountingJournalEntry.findFirst({
           where: { id: batch.depositJournalEntryId, churchId: church.id },
@@ -606,6 +774,13 @@ export async function POST(request: Request) {
         { error: "One or more selected members are invalid." },
         { status: 400 },
       );
+    const pledgeError = await validatePledgeDesignations(
+      rows,
+      church.id,
+      batchDate,
+    );
+    if (pledgeError)
+      return NextResponse.json({ error: pledgeError }, { status: 400 });
     const batch = await db.givingContributionBatch.create({
       data: {
         churchId: church.id,
@@ -614,6 +789,11 @@ export async function POST(request: Request) {
           create: rows.map((row) => ({
             memberId: typeof row.memberId === "string" ? row.memberId : null,
             categoryId: String(row.categoryId),
+            pledgeCampaignId:
+              typeof row.pledgeCampaignId === "string" &&
+              row.pledgeCampaignId.trim()
+                ? row.pledgeCampaignId.trim()
+                : null,
             amount: row.amount as number,
             deductible: row.deductible !== false,
             paymentType: String(row.paymentType),

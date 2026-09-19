@@ -7,7 +7,7 @@ import { DEFAULT_MEMBERSHIP_REPORT_COLUMNS, MEMBERSHIP_REPORT_TYPES, type Member
 type Condition = { field: string; operator: string; value: string };
 type SourceType = "" | "dynamic-list" | "volunteer-group" | "manual-list";
 type CustomFieldMeta = MembershipReportColumn & { type?: string; options?: string[] };
-type Report = { id: string; name: string; description: string | null; reportType: string; criteria: { conditions?: Condition[]; match?: "all" | "any"; sourceType?: SourceType; sourceId?: string }; columns: MembershipReportColumn[]; sort?: { key: string; direction: "asc" | "desc" }[]; grouping?: { key?: string; direction?: "asc" | "desc" }; striped?: boolean; visibility: string; updatedAt: string };
+type Report = { id: string; name: string; description: string | null; reportType: string; criteria: { conditions?: Condition[]; match?: "all" | "any"; sourceType?: SourceType; sourceId?: string; chart?: boolean; chartType?: "bar" | "line" | "pie"; chartOnly?: boolean }; columns: MembershipReportColumn[]; sort?: { key: string; direction: "asc" | "desc" }[]; grouping?: { key?: string; direction?: "asc" | "desc" }; striped?: boolean; visibility: string; updatedAt: string };
 
 const fields = [
   ["status", "Status"], ["memberType", "Member type"], ["familyRole", "Family role"], ["city", "City"], ["firstName", "First name"], ["lastName", "Last name"], ["email", "Email"], ["emailConsent", "Email consent"], ["smsConsent", "SMS consent"], ["birthdayMonth", "Birthday month"], ["birthdayYear", "Birthday year"], ["weddingDate", "Has wedding date"], ["deceasedDate", "Has deceased date"], ["gradeLevel", "Grade level"]
@@ -40,7 +40,7 @@ export function ReportManager() {
   const [volunteerGroups, setVolunteerGroups] = useState<{ id: string; name: string }[]>([]);
   const [sources, setSources] = useState<{ type: Exclude<SourceType, "">; id: string; name: string }[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", description: "", reportType: "custom" as MembershipReportType, visibility: "PRIVATE", sourceType: "" as SourceType, sourceId: "", match: "all" as "all" | "any", conditions: [] as Condition[], columns: DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: "birthMonthDay", sortDirection: "asc" as "asc" | "desc", groupingKey: "", groupingDirection: "asc" as "asc" | "desc" });
+  const [form, setForm] = useState({ name: "", description: "", reportType: "custom" as MembershipReportType, visibility: "PRIVATE", sourceType: "" as SourceType, sourceId: "", match: "all" as "all" | "any", conditions: [] as Condition[], columns: DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: "birthMonthDay", sortDirection: "asc" as "asc" | "desc", groupingKey: "", groupingDirection: "asc" as "asc" | "desc", chart: true, chartOnly: false, chartType: "bar" as "bar" | "line" | "pie" });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -84,13 +84,13 @@ export function ReportManager() {
 
   function reset() {
     setEditing(null);
-    setForm({ name: "", description: "", reportType: "custom", visibility: "PRIVATE", sourceType: "", sourceId: "", match: "all", conditions: [], columns: DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: "birthMonthDay", sortDirection: "asc", groupingKey: "", groupingDirection: "asc" });
+    setForm({ name: "", description: "", reportType: "custom", visibility: "PRIVATE", sourceType: "", sourceId: "", match: "all", conditions: [], columns: DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: "birthMonthDay", sortDirection: "asc", groupingKey: "", groupingDirection: "asc", chart: true, chartOnly: false, chartType: "bar" });
   }
 
   function edit(report: Report) {
     setEditing(report.id);
     const savedSort = report.sort?.[0];
-    setForm({ name: report.name, description: report.description ?? "", reportType: report.reportType as MembershipReportType, visibility: report.visibility, sourceType: report.criteria?.sourceType ?? "", sourceId: report.criteria?.sourceId ?? "", match: report.criteria?.match ?? "all", conditions: report.criteria?.conditions ?? [], columns: report.columns?.length ? report.columns : DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: savedSort?.key ?? "birthMonthDay", sortDirection: savedSort?.direction ?? "asc", groupingKey: report.grouping?.key ?? "", groupingDirection: report.grouping?.direction ?? "asc" });
+    setForm({ name: report.name, description: report.description ?? "", reportType: report.reportType as MembershipReportType, visibility: report.visibility, sourceType: report.criteria?.sourceType ?? "", sourceId: report.criteria?.sourceId ?? "", match: report.criteria?.match ?? "all", conditions: report.criteria?.conditions ?? [], columns: report.columns?.length ? report.columns : DEFAULT_MEMBERSHIP_REPORT_COLUMNS, sortKey: savedSort?.key ?? "birthMonthDay", sortDirection: savedSort?.direction ?? "asc", groupingKey: report.grouping?.key ?? "", groupingDirection: report.grouping?.direction ?? "asc", chart: report.criteria?.chart !== false, chartOnly: report.criteria?.chartOnly === true, chartType: report.criteria?.chartType ?? "bar" });
     setMessage("");
   }
 
@@ -118,7 +118,7 @@ export function ReportManager() {
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(""); setError("");
-    const response = await fetch(editing ? `/api/membership/reports/${editing}` : "/api/membership/reports", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.name, description: form.description, reportType: form.reportType, visibility: form.visibility, criteria: { conditions: form.conditions, match: form.match, sourceType: form.sourceType || undefined, sourceId: form.sourceId || undefined }, columns: form.columns, sort: [{ key: form.sortKey, direction: form.sortDirection }], grouping: form.groupingKey ? { key: form.groupingKey, direction: form.groupingDirection } : {} }) });
+    const response = await fetch(editing ? `/api/membership/reports/${editing}` : "/api/membership/reports", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.name, description: form.description, reportType: form.reportType, visibility: form.visibility, criteria: { conditions: form.conditions, match: form.match, sourceType: form.sourceType || undefined, sourceId: form.sourceId || undefined, chart: form.chart, chartOnly: form.chartOnly, chartType: form.chartType }, columns: form.columns, sort: [{ key: form.sortKey, direction: form.sortDirection }], grouping: form.groupingKey ? { key: form.groupingKey, direction: form.groupingDirection } : {} }) });
     const value = await response.json();
     if (!response.ok) { setError(value.error ?? "Unable to save report."); return; }
     setMessage(editing ? "Report updated." : "Report saved.");
@@ -134,10 +134,10 @@ export function ReportManager() {
       detail: {
         name: form.name.trim() || "One-time report",
         reportType: form.reportType,
-        criteria: { conditions: form.conditions, match: form.match, sourceType: form.sourceType || undefined, sourceId: form.sourceId || undefined },
         columns: form.columns,
         sort: [{ key: form.sortKey, direction: form.sortDirection }],
-        grouping: form.groupingKey ? { key: form.groupingKey, direction: form.groupingDirection } : {}
+        grouping: form.groupingKey ? { key: form.groupingKey, direction: form.groupingDirection } : {},
+        criteria: { conditions: form.conditions, match: form.match, sourceType: form.sourceType || undefined, sourceId: form.sourceId || undefined, chart: form.chart, chartOnly: form.chartOnly, chartType: form.chartType }
       }
     }));
   }
@@ -189,6 +189,7 @@ export function ReportManager() {
         <fieldset className="rounded-xl border border-ink/10 p-4"><legend className="px-1 text-sm font-semibold">Columns</legend><div className="grid gap-2 sm:grid-cols-2">{availableColumns.map((column) => <label key={column.key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.columns.some((item) => item.key === column.key)} onChange={(event) => setForm({ ...form, columns: event.target.checked ? [...form.columns, column] : form.columns.filter((item) => item.key !== column.key) })} />{column.label}</label>)}</div></fieldset>
         <div className="grid gap-4 rounded-xl border border-ink/10 p-4 sm:grid-cols-2"><label className="grid gap-1 text-sm font-semibold">Default sort<select value={form.sortKey} onChange={(event) => setForm({ ...form, sortKey: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal">{DEFAULT_MEMBERSHIP_REPORT_COLUMNS.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}</select></label><label className="grid gap-1 text-sm font-semibold">Direction<select value={form.sortDirection} onChange={(event) => setForm({ ...form, sortDirection: event.target.value as "asc" | "desc" })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="asc">Ascending</option><option value="desc">Descending</option></select></label></div>
         <div className="grid gap-4 rounded-xl border border-ink/10 p-4 sm:grid-cols-2"><label className="grid gap-1 text-sm font-semibold">Group results by<select value={form.groupingKey} onChange={(event) => setForm({ ...form, groupingKey: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="">No grouping</option>{availableColumns.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}</select></label><label className="grid gap-1 text-sm font-semibold">Group order<select value={form.groupingDirection} onChange={(event) => setForm({ ...form, groupingDirection: event.target.value as "asc" | "desc" })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="asc">Ascending</option><option value="desc">Descending</option></select></label></div>
+        <fieldset className="rounded-xl border border-ink/10 p-4"><legend className="px-1 text-sm font-semibold">Chart</legend><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={form.chart} onChange={(event) => setForm({ ...form, chart: event.target.checked, chartOnly: event.target.checked ? form.chartOnly : false })} />Show chart in results</label>{form.chart && <><label className="mt-3 flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={form.chartOnly} onChange={(event) => setForm({ ...form, chartOnly: event.target.checked })} />Show chart only (hide table)</label><label className="mt-3 grid gap-1 text-sm font-semibold">Chart type<select value={form.chartType} onChange={(event) => setForm({ ...form, chartType: event.target.value as "bar" | "line" | "pie" })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal"><option value="bar">Bar</option><option value="line">Line</option><option value="pie">Pie</option></select></label></>}</fieldset>
         <div className="flex flex-wrap gap-2"><Button type="submit">{editing ? "Update report" : "Save report"}</Button><Button type="button" variant="default" onClick={runOnce}>Run now</Button></div>
         {message && <Notification variant="success">{message}</Notification>}{error && <Notification variant="danger">{error}</Notification>}
       </form>

@@ -342,7 +342,7 @@ export async function PATCH(request: Request) {
     const layout = normalizeDashboardLayout(await request.json());
     await db.membershipDashboardPreference.upsert({
       where: { userId: user.id },
-      create: { userId: user.id, configuration: layout },
+      create: { churchId: user.churchId!, userId: user.id, configuration: layout },
       update: { configuration: layout }
     });
     return NextResponse.json({ layout });

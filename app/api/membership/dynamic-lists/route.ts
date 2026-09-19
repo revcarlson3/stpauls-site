@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
+import { requireTenantScope } from "@/lib/tenant";
 import { audienceSlug, dynamicMemberIds, normalizeCriteria } from "@/lib/membership-audiences";
 
 async function authorize() {
   const user = await requirePermission("MANAGE_MEMBERSHIP");
   await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
+  return requireTenantScope();
 }
 
 async function withCounts(lists: Array<{ id: string; name: string; description: string | null; slug: string; criteria: unknown; createdAt: Date; updatedAt: Date }>) {
@@ -15,8 +17,8 @@ async function withCounts(lists: Array<{ id: string; name: string; description: 
 
 export async function GET() {
   try {
-    await authorize();
-    const lists = await db.membershipDynamicList.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, description: true, slug: true, criteria: true, createdAt: true, updatedAt: true } });
+    const scope = await authorize();
+    const lists = await db.membershipDynamicList.findMany({ where: { churchId: scope.church.id }, orderBy: { name: "asc" }, select: { id: true, name: true, description: true, slug: true, criteria: true, createdAt: true, updatedAt: true } });
     return NextResponse.json({ lists: await withCounts(lists) });
   } catch {
     return NextResponse.json({ error: "Unable to load dynamic lists." }, { status: 403 });
@@ -25,13 +27,13 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await authorize();
+    const scope = await authorize();
     const input = await request.json();
     const name = typeof input?.name === "string" ? input.name.trim().replace(/\s+/g, " ") : "";
     const description = typeof input?.description === "string" ? input.description.trim().slice(0, 500) : null;
     if (!name || name.length > 100) return NextResponse.json({ error: "Enter a dynamic list name." }, { status: 400 });
     const criteria = normalizeCriteria(input?.criteria);
-    const list = await db.membershipDynamicList.create({ data: { name, description, slug: `${audienceSlug(name)}-${Date.now().toString(36)}`, criteria }, select: { id: true, name: true, description: true, slug: true, criteria: true, createdAt: true, updatedAt: true } });
+    const list = await db.membershipDynamicList.create({ data: { churchId: scope.church.id, name, description, slug: `${audienceSlug(name)}-${Date.now().toString(36)}`, criteria }, select: { id: true, name: true, description: true, slug: true, criteria: true, createdAt: true, updatedAt: true } });
     return NextResponse.json({ list: { ...list, criteria, count: (await dynamicMemberIds(criteria)).length } }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Unable to create dynamic list." }, { status: 400 });

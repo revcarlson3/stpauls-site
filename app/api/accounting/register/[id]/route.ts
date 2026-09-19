@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { ensureAccountingFoundation } from "@/lib/accounting";
 import { buildEntry } from "@/lib/accounting-register";
 import { ensureAccountingContact } from "@/lib/accounting-contacts";
+import { notifyGivingManagers } from "@/lib/giving-notifications";
 
 async function authorize() {
   const user = await requirePermission("MANAGE_ACCOUNTING");
@@ -52,6 +53,44 @@ export async function PATCH(
         });
       });
       return NextResponse.json({ approved: true });
+    }
+    if (input?.action === "deny") {
+      if (existing.status !== "PENDING")
+        return NextResponse.json(
+          { error: "This transaction is not pending approval." },
+          { status: 409 },
+        );
+      const batch = await db.givingContributionBatch.findFirst({
+        where: { depositJournalEntryId: existing.id, churchId: church.id },
+        select: { id: true, batchDate: true, description: true },
+      });
+      await db.$transaction(async (transaction) => {
+        await transaction.accountingJournalEntry.delete({
+          where: { id: existing.id },
+        });
+        await transaction.givingContributionBatch.updateMany({
+          where: { depositJournalEntryId: existing.id },
+          data: {
+            isPosted: false,
+            depositStatus: "UNPOSTED",
+            postedAt: null,
+            depositBankAccountId: null,
+            depositMemo: null,
+            depositJournalEntryId: null,
+          },
+        });
+      });
+      if (batch) {
+        const note =
+          typeof input.note === "string" ? input.note.trim().slice(0, 500) : "";
+        await notifyGivingManagers({
+          senderId: (await requirePermission("MANAGE_ACCOUNTING")).id,
+          title: "Contribution batch deposit denied",
+          message: `${batch.description || "Contribution batch"} dated ${batch.batchDate.toLocaleDateString()} was denied in the Accounting register.${note ? ` Note: ${note}` : ""}`,
+          link: "/admin/giving",
+        });
+      }
+      return NextResponse.json({ denied: true });
     }
     const description = await ensureAccountingContact(church.id, input);
     if (description) input.description = description;

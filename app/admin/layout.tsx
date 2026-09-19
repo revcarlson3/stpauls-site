@@ -14,6 +14,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
   const pathname = usePathname();
   const [publicSiteEnabled, setPublicSiteEnabled] = useState(true);
   const [membershipLinked, setMembershipLinked] = useState(false);
+  const [onlineGivingEnabled, setOnlineGivingEnabled] = useState(false);
   const [canAccessAdmin, setCanAccessAdmin] = useState(false);
   const [isAdministrator, setIsAdministrator] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -25,6 +26,21 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
   const isEditor = pathname === "/admin/editor" || pathname.startsWith("/admin/editor/");
   const [editorChromeVisible, setEditorChromeVisible] = useState(true);
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    const refreshOnlineGiving = () => {
+      void fetch("/api/giving/online-giving", { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((value) =>
+          setOnlineGivingEnabled(
+            value?.enabled === true && value?.tithelyEnvironment === "live",
+          ),
+        )
+        .catch(() => undefined);
+    };
+    window.addEventListener("online-giving-settings-updated", refreshOnlineGiving);
+    return () =>
+      window.removeEventListener("online-giving-settings-updated", refreshOnlineGiving);
+  }, []);
   useEffect(() => {
     if (!membershipMenuOpen) return;
     const closeOnOutsideClick = (event: MouseEvent) => {
@@ -61,6 +77,13 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
       if (!response.ok) return;
       const value = await response.json();
       setMembershipLinked(value.linked === true);
+    }).catch(() => undefined);
+    void fetch("/api/giving/online-giving", { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) return;
+      const value = await response.json();
+      setOnlineGivingEnabled(
+        value.enabled === true && value.tithelyEnvironment === "live",
+      );
     }).catch(() => undefined);
     void fetch("/api/view-as").then(async (response) => {
       if (!response.ok) return;
@@ -102,7 +125,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
             {isAdministrator && viewAsGroups.length > 0 && <label className="flex items-center gap-2 text-xs font-semibold text-ink/60"><span className="sr-only">View as security group</span><select aria-label="View as security group" value={viewAsGroupId} onChange={(event) => void changeViewAs(event.target.value)} className="focus-ring rounded-lg border border-ink/15 bg-white px-2 py-1.5 text-xs font-semibold text-ink"><option value="">View as: Administrator</option>{viewAsGroups.map((group) => <option key={group.id} value={group.id}>View as: {group.name}</option>)}</select>{viewAsGroupId && <button type="button" className="focus-ring text-xs font-semibold text-coral hover:underline" onClick={() => void changeViewAs("")}>Clear</button>}</label>}
             <Link className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href="/account">Account</Link>
             <NotificationBell />
-            {membershipLinked && <div className="relative"><button ref={membershipButtonRef} type="button" aria-expanded={membershipMenuOpen} aria-controls="admin-member-navigation" className="focus-ring rounded-full border border-coral px-3 py-2 text-sm font-semibold text-coral hover:bg-coral hover:text-white" onClick={() => setMembershipMenuOpen((current) => !current)}>My membership <span aria-hidden="true">{membershipMenuOpen ? "⌃" : "⌄"}</span></button>{membershipMenuOpen && mounted && createPortal(<div id="admin-member-navigation" className="fixed right-6 top-20 z-[100] grid min-w-56 gap-1 rounded-xl border border-ink/10 bg-white p-2 text-ink shadow-lg"><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership">Member center</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/profile">Member profile</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/prayer-requests">Prayer requests</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/scheduling">Scheduling</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving">Online giving</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving-history">Giving history and pledges</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/documents">Documents and forms</Link></div>, document.body)}</div>}
+            {membershipLinked && <div className="relative"><button ref={membershipButtonRef} type="button" aria-expanded={membershipMenuOpen} aria-controls="admin-member-navigation" className="focus-ring rounded-full border border-coral px-3 py-2 text-sm font-semibold text-coral hover:bg-coral hover:text-white" onClick={() => setMembershipMenuOpen((current) => !current)}>My membership <span aria-hidden="true">{membershipMenuOpen ? "⌃" : "⌄"}</span></button>{membershipMenuOpen && mounted && createPortal(<div id="admin-member-navigation" className="fixed right-6 top-20 z-[100] grid min-w-56 gap-1 rounded-xl border border-ink/10 bg-white p-2 text-ink shadow-lg"><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership">Member center</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/profile">Member profile</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/prayer-requests">Prayer requests</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/scheduling">Scheduling</Link>{onlineGivingEnabled && <Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving">Online giving</Link>}<Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving-history">Giving history and pledges</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/documents">Documents and forms</Link></div>, document.body)}</div>}
             {publicSiteEnabled && <Link className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href="/">View site</Link>}
           </div>
         </Container>

@@ -10,6 +10,7 @@ type Account = {
   description: string | null;
   parentId: string | null;
   givingEnabled: boolean;
+  onlineGivingEnabled: boolean;
   givingFundId: string | null;
 };
 type Fund = { id: string; code: string; name: string };
@@ -78,8 +79,8 @@ export function CategoriesPage() {
     const walk = (
       account: Account,
       depth: number,
-    ): Array<{ account: Account; depth: number }> => [
-      { account, depth },
+    ): Array<{ account: Account; depth: number; hasChildren: boolean }> => [
+      { account, depth, hasChildren: (children.get(account.id) ?? []).length > 0 },
       ...(children.get(account.id) ?? [])
         .sort((a, b) => a.code.localeCompare(b.code))
         .flatMap((child) => walk(child, depth + 1)),
@@ -109,7 +110,11 @@ export function CategoriesPage() {
     }
     await load();
     setNotice(
-      changes.givingEnabled === undefined
+      changes.onlineGivingEnabled !== undefined
+        ? value.account.onlineGivingEnabled
+          ? "Online giving enabled."
+          : "Online giving disabled."
+        : changes.givingEnabled === undefined
         ? "Fund assignment saved."
         : value.account.givingEnabled
           ? "Category enabled."
@@ -171,7 +176,7 @@ export function CategoriesPage() {
             <p className="p-6 text-sm text-ink/55">Loading categories…</p>
           ) : (
             <div className="divide-y divide-ink/10">
-              {rows.map(({ account, depth }) => (
+              {rows.map(({ account, depth, hasChildren }) => (
                 <div
                   key={account.id}
                   style={{ marginLeft: `${depth * 1.5}rem` }}
@@ -198,13 +203,28 @@ export function CategoriesPage() {
                     )}
                   </div>
                   <div className="flex shrink-0 gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => openFundModal(account)}
-                    >
-                      Assign fund
-                    </Button>
+                    <label className="flex items-center gap-2 text-sm font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={account.onlineGivingEnabled}
+                        onChange={() =>
+                          void update(account, {
+                            onlineGivingEnabled: !account.onlineGivingEnabled,
+                          })
+                        }
+                        className="focus-ring h-4 w-4 accent-coral"
+                      />
+                      {hasChildren ? "Online giving (all children)" : "Online giving"}
+                    </label>
+                    {!hasChildren && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => openFundModal(account)}
+                      >
+                        Assign fund
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="secondary"

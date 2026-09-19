@@ -7,11 +7,14 @@ export function schoolYearForDate(referenceDate = new Date()) {
 
 export async function advanceMembershipGrades(referenceDate = new Date()) {
   const schoolYear = schoolYearForDate(referenceDate);
+  const church = await db.church.findFirst({ where: { status: "ACTIVE" }, orderBy: { createdAt: "asc" }, select: { id: true } })
+    ?? await db.church.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true } });
+  if (!church) throw new Error("A church is required to advance membership grades.");
   try {
     const result = await db.$transaction(async (transaction) => {
-      await transaction.membershipGradeAdvancementRun.create({ data: { schoolYear } });
+      await transaction.membershipGradeAdvancementRun.create({ data: { churchId: church.id, schoolYear } });
       const people = await transaction.membershipIndividual.findMany({
-        where: { status: { not: "REMOVED" } },
+        where: { churchId: church.id, status: { not: "REMOVED" } },
         select: { id: true, birthday: true, gradeLevel: true }
       });
       const updates = people.flatMap((person) => {
@@ -23,7 +26,8 @@ export async function advanceMembershipGrades(referenceDate = new Date()) {
       for (const update of updates) {
         await transaction.membershipIndividual.update({ where: { id: update.id }, data: { gradeLevel: update.gradeLevel } });
       }
-      await transaction.membershipGradeAdvancementRun.update({ where: { schoolYear }, data: { updatedCount: updates.length } });
+      const run = await transaction.membershipGradeAdvancementRun.findFirst({ where: { churchId: church.id, schoolYear }, select: { id: true } });
+      if (run) await transaction.membershipGradeAdvancementRun.update({ where: { id: run.id }, data: { updatedCount: updates.length } });
       return { schoolYear, updated: updates.length, alreadyRun: false };
     });
     return result;

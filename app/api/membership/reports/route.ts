@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { normalizeCriteria } from "@/lib/membership-audiences";
 import { DEFAULT_MEMBERSHIP_REPORT_COLUMNS, MEMBERSHIP_REPORT_TYPES, type MembershipReportColumn, type MembershipReportSort } from "@/lib/membership-reporting";
+import { authorizeReportModule } from "@/lib/reporting";
 
 const reportTypes = MEMBERSHIP_REPORT_TYPES.map((report) => report.value);
-
-async function authorize() {
-  const user = await requirePermission("MANAGE_MEMBERSHIP");
-  await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
-  return user;
-}
 
 function reportData(input: unknown) {
   const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
@@ -25,11 +18,12 @@ function reportData(input: unknown) {
   return { name, reportType, description, visibility, criteria: normalizeCriteria(value.criteria), columns, sort, grouping: value.grouping && typeof value.grouping === "object" ? value.grouping : {}, layout, striped: value.striped !== false };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await authorize();
+    const scope = await authorizeReportModule({ module: "membership", churchId: new URL(request.url).searchParams.get("churchId") || undefined });
+    const { user } = scope;
     const reports = await db.membershipReport.findMany({
-      where: { scope: "MEMBERSHIP", OR: [{ createdById: user.id }, { visibility: "MEMBERSHIP_MANAGERS" }] },
+      where: { churchId: scope.churchId, scope: "MEMBERSHIP", OR: [{ createdById: user.id }, { visibility: "MEMBERSHIP_MANAGERS" }] },
       orderBy: [{ updatedAt: "desc" }],
       select: { id: true, name: true, description: true, reportType: true, criteria: true, columns: true, sort: true, grouping: true, layout: true, striped: true, visibility: true, createdAt: true, updatedAt: true }
     });
@@ -41,10 +35,12 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const user = await authorize();
-    const data = reportData(await request.json());
+    const input = await request.json();
+    const data = reportData(input);
+    const scope = await authorizeReportModule({ module: "membership", churchId: typeof input?.churchId === "string" ? input.churchId : undefined });
+    const { user } = scope;
     if (!data.name || !data.reportType) return NextResponse.json({ error: "Report name and type are required." }, { status: 400 });
-    const report = await db.membershipReport.create({ data: { ...data, scope: "MEMBERSHIP", createdById: user.id } });
+    const report = await db.membershipReport.create({ data: { ...data, churchId: scope.churchId, scope: "MEMBERSHIP", createdById: user.id } });
     return NextResponse.json({ report }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Unable to create report." }, { status: 400 });

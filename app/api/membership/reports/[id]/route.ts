@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { normalizeCriteria } from "@/lib/membership-audiences";
 import { DEFAULT_MEMBERSHIP_REPORT_COLUMNS, MEMBERSHIP_REPORT_TYPES, type MembershipReportColumn, type MembershipReportSort } from "@/lib/membership-reporting";
+import { authorizeReportModule } from "@/lib/reporting";
 
 const reportTypes = MEMBERSHIP_REPORT_TYPES.map((report) => report.value);
-
-async function authorize() {
-  const user = await requirePermission("MANAGE_MEMBERSHIP");
-  await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
-  return user;
-}
 
 function reportData(input: unknown) {
   const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
@@ -27,10 +20,12 @@ function reportData(input: unknown) {
 
 export async function PATCH(request: Request, context: { params: { id: string } }) {
   try {
-    const user = await authorize();
-    const existing = await db.membershipReport.findFirst({ where: { id: context.params.id, scope: "MEMBERSHIP", createdById: user.id } });
+    const input = await request.json();
+    const scope = await authorizeReportModule({ module: "membership", churchId: typeof input?.churchId === "string" ? input.churchId : undefined });
+    const { user } = scope;
+    const existing = await db.membershipReport.findFirst({ where: { id: context.params.id, churchId: scope.churchId, scope: "MEMBERSHIP", createdById: user.id } });
     if (!existing) return NextResponse.json({ error: "Report not found." }, { status: 404 });
-    const body = await request.json();
+    const body = input;
     if (body && typeof body === "object" && Object.prototype.hasOwnProperty.call(body, "layout") && !Object.prototype.hasOwnProperty.call(body, "name")) {
       const layout = body.layout && typeof body.layout === "object" ? body.layout : {};
       const report = await db.membershipReport.update({ where: { id: existing.id }, data: { layout } });
@@ -47,8 +42,9 @@ export async function PATCH(request: Request, context: { params: { id: string } 
 
 export async function DELETE(_: Request, context: { params: { id: string } }) {
   try {
-    const user = await authorize();
-    const existing = await db.membershipReport.findFirst({ where: { id: context.params.id, scope: "MEMBERSHIP", createdById: user.id } });
+    const scope = await authorizeReportModule({ module: "membership", churchId: new URL(_.url).searchParams.get("churchId") || undefined });
+    const { user } = scope;
+    const existing = await db.membershipReport.findFirst({ where: { id: context.params.id, churchId: scope.churchId, scope: "MEMBERSHIP", createdById: user.id } });
     if (!existing) return NextResponse.json({ error: "Report not found." }, { status: 404 });
     await db.membershipReport.delete({ where: { id: existing.id } });
     return NextResponse.json({ ok: true });

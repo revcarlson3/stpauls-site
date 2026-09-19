@@ -66,6 +66,7 @@ export async function GET() {
           description: true,
           parentId: true,
           givingEnabled: true,
+          onlineGivingEnabled: true,
           givingFundId: true,
         },
       }),
@@ -109,7 +110,11 @@ export async function PATCH(request: Request) {
         { status: 404 },
       );
     }
-    const data: { givingEnabled?: boolean; givingFundId?: string | null } = {};
+    const data: {
+      givingEnabled?: boolean;
+      onlineGivingEnabled?: boolean;
+      givingFundId?: string | null;
+    } = {};
     if (input.givingEnabled !== undefined) {
       if (typeof input.givingEnabled !== "boolean") {
         return NextResponse.json(
@@ -118,6 +123,15 @@ export async function PATCH(request: Request) {
         );
       }
       data.givingEnabled = input.givingEnabled;
+    }
+    if (input.onlineGivingEnabled !== undefined) {
+      if (typeof input.onlineGivingEnabled !== "boolean") {
+        return NextResponse.json(
+          { error: "The online giving category status is invalid." },
+          { status: 400 },
+        );
+      }
+      data.onlineGivingEnabled = input.onlineGivingEnabled;
     }
     if (input.givingFundId !== undefined) {
       if (
@@ -154,6 +168,18 @@ export async function PATCH(request: Request) {
       );
     }
     const ids = await descendantIds(church.id, account.id);
+    if (
+      input.givingFundId !== undefined &&
+      ids.length > 1
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Fund assignments and online giving are available only for categories without child categories.",
+        },
+        { status: 400 },
+      );
+    }
     const updated = await db.$transaction(async (transaction) => {
       if (input.givingFundId !== undefined) {
         await transaction.accountingAccount.updateMany({
@@ -167,9 +193,15 @@ export async function PATCH(request: Request) {
           data: { givingEnabled: false },
         });
       } else if (input.givingEnabled === true) {
-        await transaction.accountingAccount.update({
-          where: { id: account.id },
+        await transaction.accountingAccount.updateMany({
+          where: { churchId: church.id, id: { in: ids } },
           data: { givingEnabled: true },
+        });
+      }
+      if (input.onlineGivingEnabled !== undefined) {
+        await transaction.accountingAccount.updateMany({
+          where: { churchId: church.id, id: { in: ids } },
+          data: { onlineGivingEnabled: data.onlineGivingEnabled },
         });
       }
       return transaction.accountingAccount.findUnique({
@@ -181,6 +213,7 @@ export async function PATCH(request: Request) {
           description: true,
           parentId: true,
           givingEnabled: true,
+          onlineGivingEnabled: true,
           givingFundId: true,
         },
       });

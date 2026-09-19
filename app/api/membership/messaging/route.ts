@@ -171,6 +171,7 @@ export async function POST(request: Request) {
 
     const message = await db.membershipMessage.create({
       data: {
+        churchId: user.churchId!,
         channel,
         subject: channel === "EMAIL" ? subject : null,
         bodyHtml,

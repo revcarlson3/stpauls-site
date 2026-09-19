@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { Card, Container } from "@/components/ui";
+import { getOnlineGivingEnabled } from "@/lib/online-giving";
+import { notFound } from "next/navigation";
 
-export default function OnlineGivingPage() {
+export default async function OnlineGivingPage() {
+  if (!(await getOnlineGivingEnabled())) notFound();
   const givingUrl = process.env.NEXT_PUBLIC_TITHELY_GIVING_URL;
   return <main className="py-12 sm:py-16"><Container className="max-w-3xl"><Card>
     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Member center</p>

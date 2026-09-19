@@ -25,3 +25,29 @@ export async function notifyAccountingManagers(input: {
     })),
   });
 }
+
+export async function notifyGivingManagers(input: {
+  senderId: string;
+  title: string;
+  message: string;
+  link: string;
+}) {
+  const recipients = await db.user.findMany({
+    where: {
+      isActive: true,
+      group: { permissions: { some: { permission: "MANAGE_GIVING" } } },
+    },
+    select: { id: true },
+  });
+  if (!recipients.length) return;
+  await db.reportAutomationNotification.createMany({
+    data: recipients.map((recipient) => ({
+      userId: recipient.id,
+      senderId: input.senderId,
+      title: input.title,
+      message: input.message,
+      category: "GIVING",
+      link: input.link,
+    })),
+  });
+}

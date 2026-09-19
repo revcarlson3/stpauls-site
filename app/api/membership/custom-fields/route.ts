@@ -3,6 +3,7 @@ import { MembershipCustomFieldType } from "@prisma/client";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
+import { requireTenantScope } from "@/lib/tenant";
 
 const fieldTypes = ["TEXT", "TEXTAREA", "SELECT", "RADIO", "CHECKBOX", "DATE", "PHONE", "EMAIL"];
 const targets = ["INDIVIDUAL", "FAMILY"];
@@ -15,11 +16,13 @@ export async function GET(request: Request) {
   try {
     const user = await requirePermission("MANAGE_MEMBERSHIP");
     await authorize(user.id);
+    const scope = await requireTenantScope(new URL(request.url).searchParams.get("churchId") || undefined);
     const url = new URL(request.url);
     const appliesTo = url.searchParams.get("appliesTo");
     const activeOnly = url.searchParams.get("active") === "1";
     const fields = await db.membershipCustomFieldDefinition.findMany({
       where: {
+        churchId: scope.church.id,
         ...(targets.includes(appliesTo as (typeof targets)[number]) ? { appliesTo: appliesTo as string } : {}),
         ...(activeOnly ? { isActive: true } : {})
       },
@@ -35,6 +38,7 @@ export async function POST(request: Request) {
   try {
     const user = await requirePermission("MANAGE_MEMBERSHIP");
     await authorize(user.id);
+    const scope = await requireTenantScope();
     const input = await request.json();
     const name = typeof input?.name === "string" ? input.name.trim() : "";
     const slugSource = typeof input?.slug === "string" && input.slug.trim() ? input.slug : name;
@@ -45,7 +49,7 @@ export async function POST(request: Request) {
     const options: string[] = Array.isArray(input.options) ? input.options.filter((option: unknown): option is string => typeof option === "string" && Boolean(option.trim())).map((option: string) => option.trim()) : [];
     if (["SELECT", "RADIO"].includes(type) && !options.length) return NextResponse.json({ error: "Select and radio fields require at least one option." }, { status: 400 });
     if (options.some((option) => option.length > 200) || options.length > 100) return NextResponse.json({ error: "Custom field options are too long or numerous." }, { status: 400 });
-    const field = await db.membershipCustomFieldDefinition.create({ data: { name, slug, type: type as MembershipCustomFieldType, appliesTo, options: options.length ? options : undefined, isRequired: input.isRequired === true } });
+    const field = await db.membershipCustomFieldDefinition.create({ data: { churchId: scope.church.id, name, slug, type: type as MembershipCustomFieldType, appliesTo, options: options.length ? options : undefined, isRequired: input.isRequired === true } });
     return NextResponse.json({ field }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Unable to create custom field. Slugs must be unique." }, { status: 400 });

@@ -1,33 +1,34 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import { requireEnabledModule } from "@/lib/modules";
-import { requireCurrentChurch } from "@/lib/tenant";
 import { db } from "@/lib/db";
 import { ensureAccountingFoundation } from "@/lib/accounting";
 import { normalizeAccountingReport } from "@/lib/accounting-reporting";
+import { authorizeReportModule } from "@/lib/reporting";
 
-async function authorize() {
-  const user = await requirePermission("MANAGE_ACCOUNTING");
-  await requireEnabledModule("accounting", user.id, "MANAGE_ACCOUNTING");
-  const { church } = await requireCurrentChurch();
+async function authorize(churchId?: string) {
+  const scope = await authorizeReportModule({ module: "accounting", churchId });
+  const church = await db.church.findUnique({ where: { id: scope.churchId } });
+  if (!church) throw new Error("The requested church is unavailable.");
   await ensureAccountingFoundation(church.id);
-  return { user, church };
+  return { user: scope.user, church };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const { user } = await authorize();
-    const reports = await db.membershipReport.findMany({ where: { scope: "ACCOUNTING", createdById: user.id }, orderBy: { updatedAt: "desc" } });
+    const scope = await authorize(new URL(request.url).searchParams.get("churchId") || undefined);
+    const { user } = scope;
+    const reports = await db.membershipReport.findMany({ where: { churchId: scope.church.id, scope: "ACCOUNTING", createdById: user.id }, orderBy: { updatedAt: "desc" } });
     return NextResponse.json({ reports });
   } catch { return NextResponse.json({ error: "Unable to load accounting reports." }, { status: 403 }); }
 }
 
 export async function POST(request: Request) {
   try {
-    const { user } = await authorize();
-    const data = normalizeAccountingReport(await request.json());
+    const input = await request.json();
+    const scope = await authorize(typeof input?.churchId === "string" ? input.churchId : undefined);
+    const { user } = scope;
+    const data = normalizeAccountingReport(input);
     if (!data.name || !data.reportType) return NextResponse.json({ error: "Report name and type are required." }, { status: 400 });
-    const report = await db.membershipReport.create({ data: { ...data, scope: "ACCOUNTING", createdById: user.id } });
+    const report = await db.membershipReport.create({ data: { ...data, churchId: scope.church.id, scope: "ACCOUNTING", createdById: user.id } });
     return NextResponse.json({ report }, { status: 201 });
   } catch { return NextResponse.json({ error: "Unable to create accounting report." }, { status: 400 }); }
 }

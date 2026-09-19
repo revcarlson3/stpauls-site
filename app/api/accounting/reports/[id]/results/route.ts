@@ -1,18 +1,8 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import { requireEnabledModule } from "@/lib/modules";
-import { requireCurrentChurch } from "@/lib/tenant";
 import { db } from "@/lib/db";
 import { ensureAccountingFoundation, parentCodeForAccount } from "@/lib/accounting";
 import { ACCOUNTING_REPORT_COLUMNS, accountingReportTypeLabel, reportPreset, type AccountingReportCriteria, type AccountingReportType } from "@/lib/accounting-reporting";
-
-async function authorize() {
-  const user = await requirePermission("MANAGE_ACCOUNTING");
-  await requireEnabledModule("accounting", user.id, "MANAGE_ACCOUNTING");
-  const { church } = await requireCurrentChurch();
-  await ensureAccountingFoundation(church.id);
-  return { user, church };
-}
+import { authorizeReportExecution, authorizeReportModule } from "@/lib/reporting";
 
 function dateRange(criteria: AccountingReportCriteria) {
   const from = criteria.dateFrom ? new Date(`${criteria.dateFrom}T00:00:00.000Z`) : undefined;
@@ -36,14 +26,20 @@ function accountDepth(accountId: string, accountsById: Map<string, { parentId: s
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const { user, church } = await authorize();
-    let report = await db.membershipReport.findFirst({ where: { id: params.id, scope: "ACCOUNTING", createdById: user.id } });
+    const url = new URL(request.url);
+    const requestedChurchId = url.searchParams.get("churchId") || undefined;
+    const scope = await authorizeReportModule({ module: "accounting", churchId: requestedChurchId });
+    const currentUser = scope.user;
+    const church = { id: scope.churchId };
+    await ensureAccountingFoundation(church.id);
+    let report = await db.membershipReport.findFirst({ where: { id: params.id, churchId: scope.churchId, scope: "ACCOUNTING", createdById: currentUser.id } });
     if (params.id === "preview") {
       const definition = new URL(request.url).searchParams.get("definition");
       if (!definition) return NextResponse.json({ error: "Report definition is required." }, { status: 400 });
       report = JSON.parse(definition) as typeof report;
     }
     if (!report) return NextResponse.json({ error: "Report not found." }, { status: 404 });
+    const { user } = await authorizeReportExecution({ module: "accounting", reportType: report.reportType, churchId: requestedChurchId });
     const type = report.reportType as AccountingReportType;
     const criteria = (report.criteria ?? {}) as AccountingReportCriteria;
     const preset = reportPreset(type);
@@ -199,7 +195,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
       statement = { income, expenses, accounts, totalIncome, totalExpenses, net: totalIncome - totalExpenses, accountsTotal: accounts.reduce((sum, item) => sum + item.amount, 0) };
     }
-    const reportMeta = { id: report.id, name: typeof report.name === "string" && report.name.trim() ? report.name : accountingReportTypeLabel(type), reportType: report.reportType, columns, grouping: requestedGrouping, groupingCounts, dateFrom: criteria.dateFrom ?? "", dateTo: criteria.dateTo ?? "", chart: Boolean((criteria as Record<string, unknown>).chart), chartType: String((criteria as Record<string, unknown>).chartType ?? "bar"), pivotRow: String(criteria.pivotRow ?? ""), pivotColumn: String(criteria.pivotColumn ?? ""), pivotValue: String(criteria.pivotValue ?? "amount"), pivotAggregation: String(criteria.pivotAggregation ?? "sum"), summary: { total: detailRows.length, amount: detailRows.reduce((sum, row) => sum + Number(row.amount ?? row.actual ?? row.balance ?? 0), 0) }, statement, layout: report.layout ?? {}, generatedAt: new Date().toISOString(), generatedBy: user.name };
+    const reportMeta = { id: report.id, name: typeof report.name === "string" && report.name.trim() ? report.name : accountingReportTypeLabel(type), reportType: report.reportType, columns, grouping: requestedGrouping, groupingCounts, dateFrom: criteria.dateFrom ?? "", dateTo: criteria.dateTo ?? "", chart: Boolean((criteria as Record<string, unknown>).chart), chartOnly: Boolean((criteria as Record<string, unknown>).chartOnly), chartType: String((criteria as Record<string, unknown>).chartType ?? "bar"), pivotRow: String(criteria.pivotRow ?? ""), pivotColumn: String(criteria.pivotColumn ?? ""), pivotValue: String(criteria.pivotValue ?? "amount"), pivotAggregation: String(criteria.pivotAggregation ?? "sum"), summary: { total: detailRows.length, amount: detailRows.reduce((sum, row) => sum + Number(row.amount ?? row.actual ?? row.balance ?? 0), 0) }, statement, layout: report.layout ?? {}, generatedAt: new Date().toISOString(), generatedBy: user.name };
     return NextResponse.json({ report: reportMeta, rows, total: rows.length });
   } catch { return NextResponse.json({ error: "Unable to run accounting report." }, { status: 400 }); }
 }

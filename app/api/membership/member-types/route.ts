@@ -2,17 +2,19 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
+import { requireTenantScope } from "@/lib/tenant";
 
 async function authorize() {
   const user = await requirePermission("MANAGE_MEMBERSHIP");
   await requireEnabledModule("membership", user.id, "MANAGE_MEMBERSHIP");
+  return requireTenantScope();
 }
 
 export async function GET() {
   try {
-    await authorize();
+    const scope = await authorize();
     const types = await db.membershipMemberType.findMany({
-      orderBy: [{ position: "asc" }, { name: "asc" }],
+      where: { churchId: scope.church.id }, orderBy: [{ position: "asc" }, { name: "asc" }],
       select: { id: true, name: true, slug: true, position: true, _count: { select: { individuals: true } } }
     });
     return NextResponse.json({ types });
@@ -23,13 +25,13 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await authorize();
+    const scope = await authorize();
     const input = await request.json();
     const name = typeof input?.name === "string" ? input.name.trim().replace(/\s+/g, " ") : "";
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     if (!name || name.length > 80 || !slug) return NextResponse.json({ error: "Enter a valid member type name." }, { status: 400 });
-    const last = await db.membershipMemberType.aggregate({ _max: { position: true } });
-    const type = await db.membershipMemberType.create({ data: { name, slug, position: (last._max.position ?? -1) + 1 }, select: { id: true, name: true, slug: true, position: true, _count: { select: { individuals: true } } } });
+    const last = await db.membershipMemberType.aggregate({ where: { churchId: scope.church.id }, _max: { position: true } });
+    const type = await db.membershipMemberType.create({ data: { churchId: scope.church.id, name, slug, position: (last._max.position ?? -1) + 1 }, select: { id: true, name: true, slug: true, position: true, _count: { select: { individuals: true } } } });
     return NextResponse.json({ type }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Unable to add member type. A type with that name may already exist." }, { status: 400 });

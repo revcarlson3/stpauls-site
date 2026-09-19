@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import { requireEnabledModule } from "@/lib/modules";
 import { db } from "@/lib/db";
 import { EVENT_REPORT_TYPES, EVENT_REPORT_COLUMNS, type EventReportColumn } from "@/lib/event-reporting";
+import { authorizeReportModule } from "@/lib/reporting";
 
-async function authorize() {
-  const user = await requirePermission("MANAGE_EVENTS");
-  await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
-  return user;
-}
 function normalize(input: unknown) {
   const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const reportType = EVENT_REPORT_TYPES.some((item) => item.value === value.reportType) ? String(value.reportType) : "";
@@ -23,19 +17,21 @@ function normalize(input: unknown) {
     visibility: value.visibility === "EVENT_MANAGERS" ? "EVENT_MANAGERS" : "PRIVATE"
   };
 }
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await authorize();
-    const reports = await db.membershipReport.findMany({ where: { scope: "EVENT", OR: [{ createdById: user.id }, { visibility: "EVENT_MANAGERS" }] }, orderBy: { updatedAt: "desc" }, select: { id: true, name: true, description: true, reportType: true, criteria: true, columns: true, sort: true, grouping: true, layout: true, striped: true, visibility: true, updatedAt: true } });
+    const scope = await authorizeReportModule({ module: "events", churchId: new URL(request.url).searchParams.get("churchId") || undefined });
+    const { user } = scope;
+    const reports = await db.membershipReport.findMany({ where: { churchId: scope.churchId, scope: "EVENT", OR: [{ createdById: user.id }, { visibility: "EVENT_MANAGERS" }] }, orderBy: { updatedAt: "desc" }, select: { id: true, name: true, description: true, reportType: true, criteria: true, columns: true, sort: true, grouping: true, layout: true, striped: true, visibility: true, updatedAt: true } });
     return NextResponse.json({ reports });
   } catch { return NextResponse.json({ error: "Unable to load event reports." }, { status: 403 }); }
 }
 export async function POST(request: Request) {
   try {
-    const user = await authorize();
     const data = normalize(await request.json());
+    const scope = await authorizeReportModule({ module: "events", churchId: new URL(request.url).searchParams.get("churchId") || undefined });
+    const { user } = scope;
     if (!data.name || !data.reportType) return NextResponse.json({ error: "Report name and type are required." }, { status: 400 });
-    const report = await db.membershipReport.create({ data: { ...data, createdById: user.id } });
+    const report = await db.membershipReport.create({ data: { ...data, churchId: scope.churchId, createdById: user.id } });
     return NextResponse.json({ report }, { status: 201 });
   } catch { return NextResponse.json({ error: "Unable to save event report." }, { status: 400 }); }
 }
