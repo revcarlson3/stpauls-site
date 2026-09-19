@@ -76,7 +76,7 @@ export async function serializeTicket(id: string, user: Awaited<ReturnType<typeo
   const ticket = await db.supportTicket.findFirst({
     where: { id, ...ticketWhere(user) },
     include: {
-      creator: { select: { id: true, name: true, email: true } },
+      createdBy: { select: { id: true, name: true, email: true } },
       messages: { orderBy: { createdAt: "asc" }, include: { author: { select: { id: true, name: true } }, attachments: true } },
       attachments: true,
     },

@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button, Card, Container, Notification } from "@/components/ui";
 
-type Ticket = { id: string; subject: string; description: string; status: string; updatedAt: string; creator: { name: string }; _count: { messages: number; attachments: number } };
+type Ticket = { id: string; subject: string; description: string; status: string; updatedAt: string; createdBy: { name: string }; _count: { messages: number; attachments: number } };
 
 export default function SupportPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);

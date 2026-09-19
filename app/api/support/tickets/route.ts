@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     const tickets = await db.supportTicket.findMany({
       where: ticketWhere(user, url.searchParams.get("churchId") ?? undefined),
       orderBy: { updatedAt: "desc" },
-      select: { id: true, subject: true, description: true, status: true, createdAt: true, updatedAt: true, creator: { select: { id: true, name: true } }, _count: { select: { messages: true, attachments: true } } },
+      select: { id: true, subject: true, description: true, status: true, createdAt: true, updatedAt: true, createdBy: { select: { id: true, name: true } }, _count: { select: { messages: true, attachments: true } } },
     });
     return NextResponse.json({ tickets });
   } catch (error) {
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       const ticket = await db.supportTicket.create({
         data: {
           churchId,
-          creatorId: user.id,
+          createdById: user.id,
           subject,
           description,
           attachments: { create: saved },
