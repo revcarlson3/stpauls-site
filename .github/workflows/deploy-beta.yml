@@ -79,4 +79,4 @@ jobs:
         run: |
           set -euo pipefail
           ssh -p "$DEPLOY_PORT" -i "$HOME/.ssh/beta_deploy_key" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && npm ci && npm run deployment:check && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260918200000_tenant_membership_events/migration.sql && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260919090000_scope_event_settings_templates/migration.sql && npm run db:push && npm run db:generate && npm run build && sudo -n systemctl restart stpauls-site"
+            "cd '$DEPLOY_PATH' && npm ci && npm run deployment:check && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260918200000_tenant_membership_events/migration.sql && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260919090000_scope_event_settings_templates/migration.sql && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260919110000_platform_tenant_foundation/migration.sql && npm run db:push && npm run db:generate && npm run build && sudo -n systemctl restart stpauls-site"

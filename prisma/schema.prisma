@@ -19,6 +19,81 @@ enum ChurchStatus {
   SUSPENDED
 }
 
+enum TenantLifecycleStatus {
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+  DISABLED
+  CANCELED
+}
+
+enum OnboardingStatus {
+  PENDING_VERIFICATION
+  SUBSCRIPTION_REQUIRED
+  PROVISIONING
+  SITE_SETUP
+  COMPLETE
+}
+
+enum BillingProvider {
+  STRIPE
+  PAYPAL
+}
+
+enum BillingInterval {
+  MONTHLY
+  ANNUAL
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  PAUSED
+}
+
+enum PromotionDiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE
+}
+
+enum PromotionDuration {
+  ONCE
+  REPEATING
+  FOREVER
+}
+
+enum DomainKind {
+  PLATFORM_SUBDOMAIN
+  CUSTOM_DOMAIN
+}
+
+enum DomainStatus {
+  PENDING
+  VERIFYING
+  ACTIVE
+  FAILED
+  DISABLED
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_TENANT
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
 enum ChurchUserRole {
   OWNER
   ADMIN
@@ -109,48 +184,59 @@ model User {
   uploadedMedia                  MediaAsset[]                    @relation("UploadedMedia")
   prayerRequests                 PrayerRequest[]                 @relation("PrayerRequestSubmitter")
   prayerRequestsReviewed         PrayerRequest[]                 @relation("PrayerRequestReviewer")
+  supportTicketsCreated          SupportTicket[]                 @relation("SupportTicketCreator")
+  supportTicketsAssigned         SupportTicket[]                 @relation("SupportTicketAssignee")
+  supportTicketMessages          SupportTicketMessage[]          @relation("SupportTicketMessageAuthor")
 }
 
 model Church {
-  id                  String                    @id @default(cuid())
-  name                String
-  slug                String                    @unique
-  city                String?
-  state               String?
-  postalCode          String?
-  status              ChurchStatus              @default(ACTIVE)
-  memberships         ChurchUser[]
-  accountingSettings  AccountingSettings?
-  fiscalYears         AccountingFiscalYear[]
-  bankAccounts        AccountingBankAccount[]
-  chartOfAccounts     AccountingAccount[]
-  funds               AccountingFund[]
-  contacts            AccountingContact[]
-  budgets             AccountingBudget[]
-  journalEntries      AccountingJournalEntry[]
-  contributionBatches GivingContributionBatch[]
-  pledgeCampaigns     PledgeCampaign[]
-  givingReports       GivingReport[]
-  membershipGradeAdvancementRuns MembershipGradeAdvancementRun[]
-  membershipFamilies MembershipFamily[]
-  membershipIndividuals MembershipIndividual[]
-  membershipEvents MembershipEvent[]
-  membershipEventSettings MembershipEventSettings?
+  id                                   String                                @id @default(cuid())
+  name                                 String
+  slug                                 String                                @unique
+  city                                 String?
+  state                                String?
+  postalCode                           String?
+  status                               ChurchStatus                          @default(ACTIVE)
+  memberships                          ChurchUser[]
+  accountingSettings                   AccountingSettings?
+  fiscalYears                          AccountingFiscalYear[]
+  bankAccounts                         AccountingBankAccount[]
+  chartOfAccounts                      AccountingAccount[]
+  funds                                AccountingFund[]
+  contacts                             AccountingContact[]
+  budgets                              AccountingBudget[]
+  journalEntries                       AccountingJournalEntry[]
+  contributionBatches                  GivingContributionBatch[]
+  pledgeCampaigns                      PledgeCampaign[]
+  givingReports                        GivingReport[]
+  membershipGradeAdvancementRuns       MembershipGradeAdvancementRun[]
+  membershipFamilies                   MembershipFamily[]
+  membershipIndividuals                MembershipIndividual[]
+  membershipEvents                     MembershipEvent[]
+  membershipEventSettings              MembershipEventSettings?
   membershipEventNotificationTemplates MembershipEventNotificationTemplate[]
-  membershipFamilyRoles MembershipFamilyRole[]
-  membershipWorkflows MembershipWorkflow[]
-  membershipMemberTypes MembershipMemberType[]
-  membershipVolunteerGroups MembershipVolunteerGroup[]
-  membershipManualLists MembershipManualList[]
-  membershipDynamicLists MembershipDynamicList[]
-  membershipCustomFieldDefinitions MembershipCustomFieldDefinition[]
-  membershipMessageTemplates MembershipMessageTemplate[]
-  membershipMessages MembershipMessage[]
-  membershipReports MembershipReport[]
-  reportAutomations ReportAutomation[]
-  membershipDashboardPreferences MembershipDashboardPreference[]
-  createdAt           DateTime                  @default(now())
-  updatedAt           DateTime                  @updatedAt
+  membershipFamilyRoles                MembershipFamilyRole[]
+  membershipWorkflows                  MembershipWorkflow[]
+  membershipMemberTypes                MembershipMemberType[]
+  membershipVolunteerGroups            MembershipVolunteerGroup[]
+  membershipManualLists                MembershipManualList[]
+  membershipDynamicLists               MembershipDynamicList[]
+  membershipCustomFieldDefinitions     MembershipCustomFieldDefinition[]
+  membershipMessageTemplates           MembershipMessageTemplate[]
+  membershipMessages                   MembershipMessage[]
+  membershipReports                    MembershipReport[]
+  reportAutomations                    ReportAutomation[]
+  membershipDashboardPreferences       MembershipDashboardPreference[]
+  tenantAccount                        TenantAccount?
+  subscriptions                        Subscription[]
+  promotionRedemptions                 PromotionRedemption[]
+  domains                              SiteDomain[]
+  onboarding                           TenantOnboarding?
+  supportTickets                       SupportTicket[]
+  announcements                        GlobalAnnouncementDelivery[]
+  auditLogs                            AuditLog[]
+  createdAt                            DateTime                              @default(now())
+  updatedAt                            DateTime                              @updatedAt
 
   @@index([status])
 }
@@ -158,7 +244,7 @@ model Church {
 model AccountingSettings {
   id                   String   @id @default(cuid())
   churchId             String   @unique
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church               Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
   fiscalYearStartMonth Int      @default(1)
   fiscalYearStartDay   Int      @default(1)
   currency             String   @default("USD")
@@ -169,7 +255,7 @@ model AccountingSettings {
 model AccountingFiscalYear {
   id        String   @id @default(cuid())
   churchId  String
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church    Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
   year      Int
   startsOn  DateTime
   endsOn    DateTime
@@ -184,7 +270,7 @@ model AccountingFiscalYear {
 model AccountingBankAccount {
   id                     String                       @id @default(cuid())
   churchId               String
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church                 Church                       @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name                   String
   type                   String                       @default("CHECKING")
   institution            String?
@@ -204,7 +290,7 @@ model AccountingBankAccount {
 model AccountingAccount {
   id                  String                       @id @default(cuid())
   churchId            String
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church              Church                       @relation(fields: [churchId], references: [id], onDelete: Cascade)
   parentId            String?
   parent              AccountingAccount?           @relation("AccountingAccountHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children            AccountingAccount[]          @relation("AccountingAccountHierarchy")
@@ -214,7 +300,7 @@ model AccountingAccount {
   description         String?
   isActive            Boolean                      @default(true)
   givingEnabled       Boolean                      @default(true)
-  onlineGivingEnabled Boolean                       @default(false)
+  onlineGivingEnabled Boolean                      @default(false)
   givingFundId        String?
   journalLines        AccountingJournalEntryLine[]
   budgetItems         AccountingBudgetItem[]
@@ -229,7 +315,7 @@ model AccountingAccount {
 model AccountingFund {
   id           String                       @id @default(cuid())
   churchId     String
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church       Church                       @relation(fields: [churchId], references: [id], onDelete: Cascade)
   code         String
   name         String
   description  String?
@@ -246,7 +332,7 @@ model AccountingFund {
 model AccountingContact {
   id           String   @id @default(cuid())
   churchId     String
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church       Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
   contactType  String   @default("PERSON")
   firstName    String?
   lastName     String?
@@ -270,7 +356,7 @@ model AccountingContact {
 model AccountingBudget {
   id         String                 @id @default(cuid())
   churchId   String
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church     Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name       String
   fiscalYear Int
   startDate  DateTime
@@ -314,24 +400,24 @@ model AccountingBudgetItem {
 }
 
 model AccountingJournalEntry {
-  id              String                       @id @default(cuid())
-  churchId        String
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  transactionDate DateTime
-  bankAccountId   String?
-  bankAccount     AccountingBankAccount?       @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
-  description     String
-  reference       String?
-  paymentMethod   String                       @default("CASH")
-  transactionType String                       @default("CREDIT")
-  entryType       String                       @default("STANDARD")
-  status          String                       @default("POSTED")
-  deletedGivingBatch Boolean                  @default(false)
-  deletedGivingBatchAt DateTime?
+  id                     String                       @id @default(cuid())
+  churchId               String
+  church                 Church                       @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  transactionDate        DateTime
+  bankAccountId          String?
+  bankAccount            AccountingBankAccount?       @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  description            String
+  reference              String?
+  paymentMethod          String                       @default("CASH")
+  transactionType        String                       @default("CREDIT")
+  entryType              String                       @default("STANDARD")
+  status                 String                       @default("POSTED")
+  deletedGivingBatch     Boolean                      @default(false)
+  deletedGivingBatchAt   DateTime?
   deletedGivingBatchById String?
-  lines           AccountingJournalEntryLine[]
-  createdAt       DateTime                     @default(now())
-  updatedAt       DateTime                     @updatedAt
+  lines                  AccountingJournalEntryLine[]
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
 
   @@index([churchId, transactionDate])
   @@index([churchId, status])
@@ -361,7 +447,7 @@ model ChurchUser {
   churchId  String
   userId    String
   role      ChurchUserRole @default(MEMBER)
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church    Church         @relation(fields: [churchId], references: [id], onDelete: Cascade)
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
@@ -395,10 +481,17 @@ model AuditLog {
   details      String?
   actorId      String?
   actor        User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  churchId     String?
+  church       Church?  @relation(fields: [churchId], references: [id], onDelete: SetNull)
+  targetType   String?
+  targetId     String?
+  metadata     Json?
   createdAt    DateTime @default(now())
 
   @@index([activityType, createdAt])
   @@index([createdAt])
+  @@index([churchId, createdAt])
+  @@index([targetType, targetId])
 }
 
 model EmailChangeToken {
@@ -474,13 +567,13 @@ model SecuritySettings {
   tithelyPublicKey                String?
   tithelyPrivateKeyEncrypted      String?
   tithelyOrganizationId           String?
-  tithelyEnvironment               String   @default("test")
-  tithelyTestPublicKey             String?
-  tithelyTestPrivateKeyEncrypted   String?
-  tithelyTestOrganizationId        String?
-  tithelyLivePublicKey             String?
-  tithelyLivePrivateKeyEncrypted   String?
-  tithelyLiveOrganizationId        String?
+  tithelyEnvironment              String   @default("test")
+  tithelyTestPublicKey            String?
+  tithelyTestPrivateKeyEncrypted  String?
+  tithelyTestOrganizationId       String?
+  tithelyLivePublicKey            String?
+  tithelyLivePrivateKeyEncrypted  String?
+  tithelyLiveOrganizationId       String?
   membershipAgeCategories         Json     @default("[\"Infant\",\"Toddler\",\"Preschool\",\"Elementary\",\"Youth\",\"Young Adult\",\"Adult\",\"Senior\"]")
   publicSiteEnabled               Boolean  @default(true)
   maintenanceMode                 Boolean  @default(false)
@@ -536,7 +629,7 @@ model SecuritySettings {
 model MembershipGradeAdvancementRun {
   id           String   @id @default(cuid())
   churchId     String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church       Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
   schoolYear   Int      @unique
   updatedCount Int      @default(0)
   createdAt    DateTime @default(now())
@@ -817,7 +910,7 @@ enum MembershipCustomFieldType {
 model MembershipFamily {
   id                 String                       @id @default(cuid())
   churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church             Church                       @relation(fields: [churchId], references: [id], onDelete: Cascade)
   externalSource     String?
   externalKey        String?
   lastName           String
@@ -853,8 +946,8 @@ model MembershipFamily {
 
 model MembershipIndividual {
   id                         String                               @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId                   String
+  church                     Church                               @relation(fields: [churchId], references: [id], onDelete: Cascade)
   externalSource             String?
   externalId                 String?
   familyId                   String
@@ -914,74 +1007,74 @@ model MembershipIndividual {
 }
 
 model GivingContributionBatch {
-  id            String               @id @default(cuid())
-  churchId      String
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  batchDate     DateTime
-  description   String?
-  isPosted      Boolean             @default(false)
-  depositStatus String              @default("UNPOSTED")
-  isLocked      Boolean             @default(false)
-  postedAt      DateTime?
-  depositBankAccountId String?
-  depositMemo   String?
+  id                    String               @id @default(cuid())
+  churchId              String
+  church                Church               @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  batchDate             DateTime
+  description           String?
+  isPosted              Boolean              @default(false)
+  depositStatus         String               @default("UNPOSTED")
+  isLocked              Boolean              @default(false)
+  postedAt              DateTime?
+  depositBankAccountId  String?
+  depositMemo           String?
   depositJournalEntryId String?
-  lockedAt      DateTime?
-  contributions GivingContribution[]
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  lockedAt              DateTime?
+  contributions         GivingContribution[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
   @@index([churchId, batchDate])
 }
 
 model PledgeCampaign {
-  id          String             @id @default(cuid())
-  churchId    String
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  name        String
-  categoryId  String?
-  startDate   DateTime?
-  endDate     DateTime?
-  assignments PledgeAssignment[]
+  id            String               @id @default(cuid())
+  churchId      String
+  church        Church               @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  name          String
+  categoryId    String?
+  startDate     DateTime?
+  endDate       DateTime?
+  assignments   PledgeAssignment[]
   contributions GivingContribution[]
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
 
   @@unique([churchId, name])
   @@index([churchId, createdAt])
 }
 
 model PledgeAssignment {
-  id         String        @id @default(cuid())
+  id         String               @id @default(cuid())
   campaignId String
-  campaign   PledgeCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign   PledgeCampaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   memberId   String
   member     MembershipIndividual @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  amount     Decimal       @db.Decimal(14, 2)
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  amount     Decimal              @db.Decimal(14, 2)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
 
   @@unique([campaignId, memberId])
   @@index([memberId])
 }
 
 model GivingContribution {
-  id          String                  @id @default(cuid())
-  batchId     String
-  batch       GivingContributionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  memberId    String?
-  member      MembershipIndividual?   @relation(fields: [memberId], references: [id], onDelete: SetNull)
-  categoryId  String
-  category    AccountingAccount       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  id               String                  @id @default(cuid())
+  batchId          String
+  batch            GivingContributionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  memberId         String?
+  member           MembershipIndividual?   @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  categoryId       String
+  category         AccountingAccount       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   pledgeCampaignId String?
-  pledgeCampaign   PledgeCampaign?     @relation(fields: [pledgeCampaignId], references: [id], onDelete: SetNull)
-  amount      Decimal                 @db.Decimal(14, 2)
-  deductible  Boolean                 @default(true)
-  paymentType String                  @default("CASH")
-  checkNumber String?
-  memo        String?
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
+  pledgeCampaign   PledgeCampaign?         @relation(fields: [pledgeCampaignId], references: [id], onDelete: SetNull)
+  amount           Decimal                 @db.Decimal(14, 2)
+  deductible       Boolean                 @default(true)
+  paymentType      String                  @default("CASH")
+  checkNumber      String?
+  memo             String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
 
   @@index([batchId])
   @@index([memberId])
@@ -991,8 +1084,8 @@ model GivingContribution {
 
 model MembershipEvent {
   id                     String                               @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId               String
+  church                 Church                               @relation(fields: [churchId], references: [id], onDelete: Cascade)
   title                  String
   description            String?
   eventType              String                               @default("Other")
@@ -1073,8 +1166,8 @@ model MembershipAttendanceRecord {
 
 model MembershipFamilyRole {
   id          String                 @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId    String
+  church      Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name        String
   slug        String                 @unique
   individuals MembershipIndividual[]
@@ -1084,8 +1177,8 @@ model MembershipFamilyRole {
 
 model MembershipWorkflow {
   id          String   @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId    String
+  church      Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name        String
   description String?
   targetType  String
@@ -1100,8 +1193,8 @@ model MembershipWorkflow {
 
 model MembershipMemberType {
   id          String                 @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId    String
+  church      Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name        String
   slug        String                 @unique
   position    Int                    @default(0)
@@ -1112,8 +1205,8 @@ model MembershipMemberType {
 
 model MembershipVolunteerGroup {
   id                       String                                @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId                 String
+  church                   Church                                @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name                     String
   singularName             String?
   description              String?
@@ -1232,8 +1325,8 @@ model MembershipVolunteerGroupMember {
 
 model MembershipManualList {
   id          String                       @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId    String
+  church      Church                       @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name        String
   description String?
   slug        String                       @unique
@@ -1255,8 +1348,8 @@ model MembershipManualListMember {
 
 model MembershipDynamicList {
   id          String   @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId    String
+  church      Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name        String
   description String?
   slug        String   @unique
@@ -1376,7 +1469,7 @@ model MembershipVolunteerNotification {
 model MembershipEventNotificationTemplate {
   id                     Int                       @id @default(1)
   churchId               String
-  church                  Church                    @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church                 Church                    @relation(fields: [churchId], references: [id], onDelete: Cascade)
   groupId                String?                   @unique
   group                  MembershipVolunteerGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
   emailSubject           String
@@ -1392,8 +1485,8 @@ model MembershipEventNotificationTemplate {
 
 model MembershipCustomFieldDefinition {
   id         String                       @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId   String
+  church     Church                       @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name       String
   slug       String                       @unique
   type       MembershipCustomFieldType
@@ -1470,8 +1563,8 @@ enum MembershipMessageStatus {
 
 model MembershipMessageTemplate {
   id          String   @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId    String
+  church      Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name        String
   subject     String
   bodyHtml    String
@@ -1487,8 +1580,8 @@ model MembershipMessageTemplate {
 
 model MembershipMessage {
   id           String                        @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId     String
+  church       Church                        @relation(fields: [churchId], references: [id], onDelete: Cascade)
   channel      MembershipMessageChannel
   subject      String?
   bodyHtml     String
@@ -1554,7 +1647,7 @@ model MembershipMessageAttachment {
 model GivingReport {
   id          String   @id @default(cuid())
   churchId    String
-  church             Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church      Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
   createdById String
   createdBy   User     @relation("GivingReportAuthor", fields: [createdById], references: [id], onDelete: Restrict)
   name        String
@@ -1573,8 +1666,8 @@ model GivingReport {
 
 model MembershipReport {
   id          String             @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId    String
+  church      Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
   scope       String             @default("MEMBERSHIP")
   name        String
   description String?
@@ -1599,8 +1692,8 @@ model MembershipReport {
 
 model ReportAutomation {
   id           String                @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId     String
+  church       Church                @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name         String
   reportId     String
   report       MembershipReport      @relation(fields: [reportId], references: [id], onDelete: Cascade)
@@ -1682,8 +1775,8 @@ model ReportAutomationSchedulerLock {
 
 model MembershipDashboardPreference {
   id            String   @id @default(cuid())
-  churchId           String
-  church             Church            @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  churchId      String
+  church        Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
   userId        String   @unique
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   configuration Json     @default("{}")
@@ -1767,3 +1860,220 @@ model MenuItem {
   @@index([menuId, position])
 }
 
+model TenantAccount {
+  id               String                @id @default(cuid())
+  churchId         String                @unique
+  church           Church                @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  lifecycleStatus  TenantLifecycleStatus @default(PROVISIONING)
+  onboardingStatus OnboardingStatus      @default(PENDING_VERIFICATION)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+}
+
+model AccountSignup {
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  contactName           String
+  churchName            String
+  passwordHash          String
+  promoCode             String?
+  verificationHash      String    @unique
+  verificationSentAt    DateTime  @default(now())
+  verificationExpiresAt DateTime
+  verifiedAt            DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([verificationExpiresAt, verifiedAt])
+}
+
+model SubscriptionPlan {
+  id            String         @id @default(cuid())
+  name          String
+  slug          String         @unique
+  description   String?
+  monthlyPrice  Decimal        @db.Decimal(12, 2)
+  annualPrice   Decimal        @db.Decimal(12, 2)
+  currency      String         @default("USD")
+  stripeEnabled Boolean        @default(true)
+  paypalEnabled Boolean        @default(true)
+  isActive      Boolean        @default(true)
+  sortOrder     Int            @default(0)
+  subscriptions Subscription[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Promotion {
+  id              String                @id @default(cuid())
+  code            String                @unique
+  name            String
+  discountType    PromotionDiscountType
+  duration        PromotionDuration     @default(ONCE)
+  percentageOff   Int?
+  amountOff       Decimal?              @db.Decimal(12, 2)
+  currency        String                @default("USD")
+  durationMonths  Int?
+  appliesMonthly  Boolean               @default(true)
+  appliesAnnual   Boolean               @default(true)
+  startsAt        DateTime              @default(now())
+  endsAt          DateTime?
+  maxRedemptions  Int?
+  redemptionCount Int                   @default(0)
+  maxPerAccount   Int                   @default(1)
+  isActive        Boolean               @default(true)
+  redemptions     PromotionRedemption[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([isActive, startsAt, endsAt])
+}
+
+model PromotionRedemption {
+  id             String        @id @default(cuid())
+  promotionId    String
+  promotion      Promotion     @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  churchId       String
+  church         Church        @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  redeemedAt     DateTime      @default(now())
+
+  @@unique([promotionId, churchId])
+  @@index([churchId, redeemedAt])
+}
+
+model Subscription {
+  id                     String                @id @default(cuid())
+  churchId               String
+  church                 Church                @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  planId                 String
+  plan                   SubscriptionPlan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  provider               BillingProvider
+  interval               BillingInterval
+  status                 SubscriptionStatus    @default(INCOMPLETE)
+  externalCustomerId     String?
+  externalSubscriptionId String?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean               @default(false)
+  canceledAt             DateTime?
+  gracePeriodEndsAt      DateTime?
+  promotionRedemptions   PromotionRedemption[]
+  events                 SubscriptionEvent[]
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  @@unique([provider, externalSubscriptionId])
+  @@index([churchId, status])
+  @@index([externalCustomerId])
+}
+
+model SubscriptionEvent {
+  id              String       @id @default(cuid())
+  subscriptionId  String
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  providerEventId String       @unique
+  eventType       String
+  payload         Json
+  processedAt     DateTime     @default(now())
+  createdAt       DateTime     @default(now())
+
+  @@index([subscriptionId, createdAt])
+}
+
+model SiteDomain {
+  id                String       @id @default(cuid())
+  churchId          String
+  church            Church       @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  hostname          String       @unique
+  kind              DomainKind
+  status            DomainStatus @default(PENDING)
+  verificationToken String?
+  verifiedAt        DateTime?
+  tlsStatus         String?
+  dnsManaged        Boolean      @default(false)
+  lastCheckedAt     DateTime?
+  lastError         String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([churchId, status])
+}
+
+model TenantOnboarding {
+  id               String           @id @default(cuid())
+  churchId         String           @unique
+  church           Church           @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  status           OnboardingStatus @default(PENDING_VERIFICATION)
+  currentStep      String           @default("ACCOUNT")
+  siteIdentityDone Boolean          @default(false)
+  modulesDone      Boolean          @default(false)
+  securityDone     Boolean          @default(false)
+  completedAt      DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+model SupportTicket {
+  id           String                 @id @default(cuid())
+  churchId     String
+  church       Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  createdById  String
+  createdBy    User                   @relation("SupportTicketCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  assignedToId String?
+  assignedTo   User?                  @relation("SupportTicketAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  subject      String
+  description  String
+  status       SupportTicketStatus    @default(OPEN)
+  priority     SupportTicketPriority  @default(NORMAL)
+  messages     SupportTicketMessage[]
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  closedAt     DateTime?
+
+  @@index([churchId, status, updatedAt])
+  @@index([assignedToId, status])
+}
+
+model SupportTicketMessage {
+  id         String        @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User          @relation("SupportTicketMessageAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  body       String
+  isInternal Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+model GlobalAnnouncement {
+  id         String                       @id @default(cuid())
+  title      String
+  body       String
+  severity   String                       @default("INFO")
+  startsAt   DateTime                     @default(now())
+  endsAt     DateTime?
+  isActive   Boolean                      @default(true)
+  deliveries GlobalAnnouncementDelivery[]
+  createdAt  DateTime                     @default(now())
+  updatedAt  DateTime                     @updatedAt
+
+  @@index([isActive, startsAt, endsAt])
+}
+
+model GlobalAnnouncementDelivery {
+  id             String             @id @default(cuid())
+  announcementId String
+  announcement   GlobalAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  churchId       String
+  church         Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  publishedAt    DateTime           @default(now())
+  acknowledgedAt DateTime?
+
+  @@unique([announcementId, churchId])
+  @@index([churchId, acknowledgedAt])
+}
