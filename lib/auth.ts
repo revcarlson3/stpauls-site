@@ -34,7 +34,7 @@ export function getCurrentUser() {
       let effectiveGroupId = membership.groupId;
       let effectivePermissions = membership.group?.permissions ?? [];
       const viewAsGroupId = cookies().get("viewAsGroupId")?.value;
-      if (role === "admin" && viewAsGroupId) {
+      if (role === "admin" && session.user.authBoundary === "global-admin" && viewAsGroupId) {
         const viewAsGroup = await db.securityGroup.findUnique({ where: { id: viewAsGroupId }, select: { id: true, permissions: { select: { permission: true } } } });
         if (viewAsGroup) {
           effectiveGroupId = viewAsGroup.id;

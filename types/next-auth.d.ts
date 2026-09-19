@@ -6,6 +6,8 @@ declare module "next-auth" {
     role: "viewer" | "editor" | "admin";
     rememberMe?: boolean;
     canAccessAdmin?: boolean;
+    authBoundary?: "tenant-admin" | "global-admin";
+    reauthenticatedAt?: number;
     mfaPending?: boolean;
     mfaPendingUserId?: string;
     mfaPendingChannel?: "authenticator" | "email" | "sms";
@@ -17,6 +19,8 @@ declare module "next-auth" {
       id: string;
       role: "viewer" | "editor" | "admin";
       canAccessAdmin: boolean;
+      authBoundary?: "tenant-admin" | "global-admin";
+      reauthenticatedAt?: number;
       mfaPending?: boolean;
       mfaPendingUserId?: string;
       mfaPendingChannel?: "authenticator" | "email" | "sms";
@@ -30,6 +34,8 @@ declare module "next-auth/jwt" {
     id: string;
     role: "viewer" | "editor" | "admin";
     canAccessAdmin: boolean;
+    authBoundary?: "tenant-admin" | "global-admin";
+    reauthenticatedAt?: number;
     mfaPending?: boolean;
     mfaPendingUserId?: string;
     mfaPendingChannel?: "authenticator" | "email" | "sms";
