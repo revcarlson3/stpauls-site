@@ -22,21 +22,25 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Invalid site identity." }, { status: 400 });
   }
   try {
-    await requirePermission("MANAGE_SETTINGS");
+    const user = await requirePermission("MANAGE_SETTINGS");
+    const identity = Object.fromEntries([
+      ["siteName", typeof input.siteName === "string" ? input.siteName.trim() : "St. Paul's"],
+      ["siteUrl", input.siteUrl.trim()],
+      ...["siteAddressStreet", "siteAddressCity", "siteAddressState", "siteAddressZip", "sitePhone", "siteEmail", "siteTaxId"].map((field) => [field, typeof input[field] === "string" ? input[field].trim() : ""])
+    ]);
     await db.securitySettings.upsert({
       where: { id: 1 },
-      update: Object.fromEntries([
-        ["siteName", typeof input.siteName === "string" ? input.siteName.trim() : "St. Paul's"],
-        ["siteUrl", input.siteUrl.trim()],
-        ...["siteAddressStreet", "siteAddressCity", "siteAddressState", "siteAddressZip", "sitePhone", "siteEmail", "siteTaxId"].map((field) => [field, typeof input[field] === "string" ? input[field].trim() : ""])
-      ]),
+      update: identity,
       create: {
-        id: 1,
-        siteName: typeof input.siteName === "string" ? input.siteName.trim() : "St. Paul's",
-        siteUrl: input.siteUrl.trim(),
-        ...Object.fromEntries(["siteAddressStreet", "siteAddressCity", "siteAddressState", "siteAddressZip", "sitePhone", "siteEmail", "siteTaxId"].map((field) => [field, typeof input[field] === "string" ? input[field].trim() : ""]))
+        id: 1, ...identity
       }
     });
+    if (user.churchId) {
+      await db.church.update({
+        where: { id: user.churchId },
+        data: { name: identity.siteName, siteUrl: identity.siteUrl, addressStreet: identity.siteAddressStreet, city: identity.siteAddressCity || null, state: identity.siteAddressState || null, postalCode: identity.siteAddressZip || null, phone: identity.sitePhone, email: identity.siteEmail, taxId: identity.siteTaxId }
+      });
+    }
     return NextResponse.json({ saved: true });
   } catch (error) {
     return apiErrorResponse(error, "Unable to save site identity.");

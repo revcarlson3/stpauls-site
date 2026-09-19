@@ -15,24 +15,27 @@ export async function GET() {
   } catch (error) {
     return authorizationError(error);
   }
-  const church = await db.church.findUnique({
-    where: { id: context.church!.id },
-    select: { name: true, slug: true, siteUrl: true, tagline: true, addressStreet: true, city: true, state: true, postalCode: true, phone: true, email: true, taxId: true, enabledModules: true }
-  });
+  const [church, settings] = await Promise.all([
+    db.church.findUnique({
+      where: { id: context.church!.id },
+      select: { name: true, slug: true, siteUrl: true, tagline: true, addressStreet: true, city: true, state: true, postalCode: true, phone: true, email: true, taxId: true, enabledModules: true }
+    }),
+    db.securitySettings.findUnique({ where: { id: 1 }, select: { siteName: true, siteUrl: true, siteTagline: true, siteAddressStreet: true, siteAddressCity: true, siteAddressState: true, siteAddressZip: true, sitePhone: true, siteEmail: true, siteTaxId: true } })
+  ]);
   if (!church) return NextResponse.json({ error: "The selected site is unavailable." }, { status: 404 });
   return NextResponse.json({
     site: {
-      name: church.name,
+      name: church.name || settings?.siteName || "",
       slug: church.slug,
-      url: church.siteUrl,
-      tagline: church.tagline,
-      addressStreet: church.addressStreet,
-      city: church.city ?? "",
-      state: church.state ?? "",
-      postalCode: church.postalCode ?? "",
-      phone: church.phone,
-      email: church.email,
-      taxId: church.taxId,
+      url: church.siteUrl || settings?.siteUrl || "",
+      tagline: church.tagline || settings?.siteTagline || "",
+      addressStreet: church.addressStreet || settings?.siteAddressStreet || "",
+      city: church.city || settings?.siteAddressCity || "",
+      state: church.state || settings?.siteAddressState || "",
+      postalCode: church.postalCode || settings?.siteAddressZip || "",
+      phone: church.phone || settings?.sitePhone || "",
+      email: church.email || settings?.siteEmail || "",
+      taxId: church.taxId || settings?.siteTaxId || "",
       enabledModules: Array.isArray(church.enabledModules) ? church.enabledModules.filter((slug): slug is string => typeof slug === "string") : []
     }
   });
@@ -53,10 +56,17 @@ export async function PATCH(request: Request) {
   const current = await db.church.findUnique({ where: { id: churchId }, select: { name: true, siteUrl: true, tagline: true, addressStreet: true, city: true, state: true, postalCode: true, phone: true, email: true, taxId: true, enabledModules: true } });
   if (!current) return NextResponse.json({ error: "The selected site is unavailable." }, { status: 404 });
 
-  await db.church.update({
-    where: { id: churchId },
-    data: { name: identity.name, siteUrl: identity.url, tagline: identity.tagline, addressStreet: identity.addressStreet, city: identity.city || null, state: identity.state || null, postalCode: identity.postalCode || null, phone: identity.phone, email: identity.email, taxId: identity.taxId, enabledModules: identity.enabledModules }
-  });
+  await db.$transaction([
+    db.church.update({
+      where: { id: churchId },
+      data: { name: identity.name, siteUrl: identity.url, tagline: identity.tagline, addressStreet: identity.addressStreet, city: identity.city || null, state: identity.state || null, postalCode: identity.postalCode || null, phone: identity.phone, email: identity.email, taxId: identity.taxId, enabledModules: identity.enabledModules }
+    }),
+    db.securitySettings.upsert({
+      where: { id: 1 },
+      update: { siteName: identity.name, siteUrl: identity.url, siteTagline: identity.tagline, siteAddressStreet: identity.addressStreet, siteAddressCity: identity.city, siteAddressState: identity.state, siteAddressZip: identity.postalCode, sitePhone: identity.phone, siteEmail: identity.email, siteTaxId: identity.taxId },
+      create: { id: 1, siteName: identity.name, siteUrl: identity.url, siteTagline: identity.tagline, siteAddressStreet: identity.addressStreet, siteAddressCity: identity.city, siteAddressState: identity.state, siteAddressZip: identity.postalCode, sitePhone: identity.phone, siteEmail: identity.email, siteTaxId: identity.taxId }
+    })
+  ]);
   const changedFields = Object.entries({
     name: identity.name !== current.name,
     url: identity.url !== current.siteUrl,

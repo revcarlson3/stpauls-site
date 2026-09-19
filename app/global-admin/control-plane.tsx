@@ -47,7 +47,8 @@ export default function GlobalAdminControlPlane() {
       return;
     }
     void fetch("/api/global-admin/overview", { cache: "no-store" }).then(async (response) => {
-      const value = await response.json();
+      const body = await response.text();
+      const value = body ? JSON.parse(body) : {};
       if (!response.ok) throw new Error(value.error ?? "Unable to load site overview.");
       setOverview(value);
       setError("");
@@ -73,7 +74,7 @@ export default function GlobalAdminControlPlane() {
       {!selectedChurchId && <Card className="mt-8 p-8"><h2 className="font-serif text-2xl">Choose a site to begin</h2><p className="mt-2 text-sm text-ink/60">The dashboard will show lifecycle and health details without exposing internal tenant identifiers.</p></Card>}
       {overview && <div id="site-overview" className="mt-8 grid gap-6">
         <Card className="p-6 sm:p-8"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Selected site</p><h2 className="mt-2 font-serif text-3xl">{overview.site.name}</h2><p className="mt-1 text-sm text-ink/60">{overview.site.location ?? overview.site.slug}</p></div><span className="rounded-full bg-mist px-3 py-1 text-xs font-semibold uppercase tracking-wide text-ink/70">{overview.site.status}</span></div><div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Summary label="Lifecycle" value={overview.lifecycle.status} /><Summary label="Active users" value={String(overview.health.activeUsers)} /><Summary label="Open support" value={String(overview.health.openSupportTickets)} /><Summary label="Subscription" value={overview.health.subscription?.status ?? "Not active"} /></div></Card>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{areas.map((area) => area.href ? <Link key={area.title} href={area.href} className="focus-ring"><AreaCard area={area} /></Link> : <AreaCard key={area.title} area={area} />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{areas.map((area) => area.href === "#site-overview" ? <button key={area.title} type="button" onClick={() => document.getElementById("site-overview")?.scrollIntoView({ behavior: "smooth", block: "start" })} className="text-left focus-ring"><AreaCard area={area} /></button> : area.href ? <Link key={area.title} href={area.href} className="focus-ring"><AreaCard area={area} /></Link> : <AreaCard key={area.title} area={area} />)}</div>
       </div>}
     </Container>
   </main>;

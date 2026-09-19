@@ -2,6 +2,7 @@ import type { Permission } from "@prisma/client";
 import { db } from "@/lib/db";
 
 export const MODULES = [
+  { slug: "public-site", name: "Public website", permission: "EDIT_PAGES" as Permission, href: "/admin/pages" },
   { slug: "membership", name: "Membership", permission: "MANAGE_MEMBERSHIP" as Permission, href: "/admin/membership" },
   { slug: "events", name: "Events and scheduling", permission: "MANAGE_EVENTS" as Permission, href: "/admin/events" },
   { slug: "giving", name: "Giving and pledges", permission: "MANAGE_GIVING" as Permission, href: "/admin/giving" },
