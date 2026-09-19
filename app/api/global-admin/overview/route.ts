@@ -14,7 +14,7 @@ export async function GET() {
   }
 
   const churchId = context.church!.id;
-  const [church, activeUsers, domains, openSupportTickets, subscription, announcements] = await Promise.all([
+  const [church, activeUsers] = await Promise.all([
     db.church.findUnique({
       where: { id: churchId },
       select: {
@@ -26,16 +26,10 @@ export async function GET() {
         lifecycleStatus: true,
         onboardingStatus: true,
         onboardingStep: true,
-        createdAt: true,
-        tenantAccount: { select: { lifecycleStatus: true, onboardingStatus: true } },
-        onboarding: { select: { currentStep: true, siteIdentityDone: true, modulesDone: true, securityDone: true, completedAt: true } }
+        createdAt: true
       }
     }),
-    db.churchUser.count({ where: { churchId, user: { isActive: true } } }),
-    db.siteDomain.findMany({ where: { churchId }, select: { status: true } }),
-    db.supportTicket.count({ where: { churchId, status: { in: ["OPEN", "IN_PROGRESS", "WAITING_ON_TENANT"] } } }),
-    db.subscription.findFirst({ where: { churchId, status: "ACTIVE" }, select: { interval: true, currentPeriodEnd: true } }),
-    db.globalAnnouncementDelivery.count({ where: { churchId, announcement: { isActive: true } } })
+    db.churchUser.count({ where: { churchId, user: { isActive: true } } })
   ]);
 
   if (!church) return NextResponse.json({ error: "The selected site is unavailable." }, { status: 404 });
@@ -51,25 +45,16 @@ export async function GET() {
     lifecycle: {
       status: church.lifecycleStatus,
       onboardingStatus: church.onboardingStatus,
-      currentStep: church.onboardingStep ?? church.onboarding?.currentStep ?? null
+      currentStep: church.onboardingStep ?? null
     },
     health: {
       users: activeUsers,
-      activeUsers,
-      domains: {
-        total: domains.length,
-        active: domains.filter((domain) => domain.status === "ACTIVE").length,
-        pending: domains.filter((domain) => ["PENDING", "VERIFYING"].includes(domain.status)).length,
-        failed: domains.filter((domain) => domain.status === "FAILED").length
-      },
-      openSupportTickets,
-      subscription: subscription ? { status: "ACTIVE", interval: subscription.interval, currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null } : null,
-      activeAnnouncements: announcements
+      activeUsers
     },
     setup: {
-      siteIdentity: church.onboarding?.siteIdentityDone ?? false,
-      modules: church.onboarding?.modulesDone ?? false,
-      security: church.onboarding?.securityDone ?? false
+      siteIdentity: false,
+      modules: false,
+      security: false
     },
     recentActions: []
   });

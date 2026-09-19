@@ -94,7 +94,7 @@ export async function getOwnAccount() {
 
 export async function signOutAllSessions() {
   const actor = await requireOwnAccount();
-  await db.user.update({ where: { id: actor.id }, data: { sessionVersion: { increment: 1 } } });
+  await db.user.update({ where: { id: actor.id }, data: { sessionVersion: { increment: 1 }, lastSessionRevokedAt: new Date() } });
   await logAudit({ activityType: "sessions-revoked", summary: "Revoked all sessions", actorId: actor.id });
 }
 

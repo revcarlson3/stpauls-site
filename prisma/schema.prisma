@@ -32,6 +32,7 @@ enum OnboardingStatus {
   SUBSCRIPTION_REQUIRED
   PROVISIONING
   SITE_SETUP
+  IN_PROGRESS
   COMPLETE
 }
 
@@ -138,6 +139,8 @@ model User {
   loginWindowStartedAt           DateTime?
   lockedUntil                    DateTime?
   sessionVersion                 Int                             @default(0)
+  lastAccessAt                   DateTime?
+  lastSessionRevokedAt           DateTime?
   mfaEnabled                     Boolean                         @default(false)
   mfaSecretEncrypted             String?
   mfaRecoveryCodesEncrypted      String?

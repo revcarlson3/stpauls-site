@@ -122,7 +122,7 @@ export const authOptions: NextAuthOptions = {
             throw new Error("That verification code was not accepted.");
           }
         }
-        await db.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginWindowStartedAt: null, lockedUntil: null } });
+        await db.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginWindowStartedAt: null, lockedUntil: null, lastAccessAt: new Date() } });
         return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: access, authBoundary: bridgeRequested ? "global-admin" : "tenant-admin", reauthenticatedAt: Math.floor(Date.now() / 1000), rememberMe: credentials.rememberMe === "true" };
       }
     })
