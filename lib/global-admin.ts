@@ -16,6 +16,10 @@ export function isActiveSelectedChurch(selectedChurchId: string | null, church: 
   return Boolean(selectedChurchId && church?.id === selectedChurchId && church.status === "ACTIVE");
 }
 
+export function canReadSelectedSiteOverview(context: { user: { isPlatformAdmin: boolean }; church: { id: string; status: string } | null }) {
+  return context.user.isPlatformAdmin && context.church?.status === "ACTIVE";
+}
+
 export function buildGlobalAuditDetails(input: { churchId: string; targetType: string; targetId?: string; metadata?: Record<string, unknown> }) {
   return JSON.stringify({ boundary: GLOBAL_ADMIN_BOUNDARY, selectedChurchId: input.churchId, targetType: input.targetType, targetId: input.targetId ?? null, metadata: input.metadata ?? {} });
 }

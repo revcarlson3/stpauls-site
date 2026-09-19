@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGlobalAuditDetails, hasRecentReauthentication, isActiveSelectedChurch, isGlobalAdminSession } from "@/lib/global-admin";
+import { buildGlobalAuditDetails, hasRecentReauthentication, isActiveSelectedChurch, isGlobalAdminSession, canReadSelectedSiteOverview } from "@/lib/global-admin";
 
 describe("global administrator bridge authorization", () => {
   it("accepts only a completed global-admin session", () => {
@@ -29,5 +29,11 @@ describe("global administrator bridge authorization", () => {
       targetId: "user-1",
       metadata: { action: "update" }
     });
+  });
+
+  it("only permits overview reads for an active selected site", () => {
+    expect(canReadSelectedSiteOverview({ user: { isPlatformAdmin: true }, church: { id: "church-1", status: "ACTIVE" } })).toBe(true);
+    expect(canReadSelectedSiteOverview({ user: { isPlatformAdmin: true }, church: null })).toBe(false);
+    expect(canReadSelectedSiteOverview({ user: { isPlatformAdmin: false }, church: { id: "church-1", status: "ACTIVE" } })).toBe(false);
   });
 });
