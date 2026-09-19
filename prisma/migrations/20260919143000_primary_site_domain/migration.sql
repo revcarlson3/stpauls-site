@@ -1,0 +1,1 @@
+ALTER TABLE "SiteDomain" ADD COLUMN "isPrimary" BOOLEAN NOT NULL DEFAULT false;

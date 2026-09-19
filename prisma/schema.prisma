@@ -2014,6 +2014,7 @@ model SiteDomain {
   hostname          String       @unique
   kind              DomainKind
   status            DomainStatus @default(PENDING)
+  isPrimary         Boolean      @default(false)
   verificationToken String?
   verifiedAt        DateTime?
   tlsStatus         String?
