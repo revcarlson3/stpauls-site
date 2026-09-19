@@ -15,7 +15,7 @@ async function accountUser() {
   return db.user.findUnique({
     where: { id: user.id },
     select: {
-      id: true, email: true, emailVerifiedAt: true, passwordHash: true, mfaEnabled: true,
+      id: true, email: true, emailVerifiedAt: true, passwordHash: true, mfaEnabled: true, isPlatformAdmin: true,
       mfaSecretEncrypted: true, mfaRecoveryCodesEncrypted: true, emailMfaEnabled: true,
       smsMfaEnabled: true, phoneNumber: true, phoneVerifiedAt: true
     }
@@ -64,11 +64,12 @@ export async function POST(request: Request) {
     });
     const action = input.action;
     if (action === "begin") {
-      if (!settings?.authenticatorMfaEnabled) return NextResponse.json({ error: "Authenticator apps are not enabled by the site administrator." }, { status: 403 });
+      if (!settings?.authenticatorMfaEnabled && !user.isPlatformAdmin) return NextResponse.json({ error: "Authenticator apps are not enabled by the site administrator." }, { status: 403 });
       if (user.mfaEnabled) return NextResponse.json({ error: "Disable your existing authenticator before enrolling a new one." }, { status: 400 });
       const secret = createTotpSecret();
       await db.user.update({ where: { id: user.id }, data: { mfaEnabled: false, mfaSecretEncrypted: encryptConfig(secret), mfaRecoveryCodesEncrypted: null, mfaEnrolledAt: null } });
-      return NextResponse.json({ secret, issuer: settings.totpIssuer, account: user.email, otpauthUri: createOtpAuthUri(secret, user.email, settings.totpIssuer) });
+      const issuer = settings?.totpIssuer ?? "St. Paul's Site";
+      return NextResponse.json({ secret, issuer, account: user.email, otpauthUri: createOtpAuthUri(secret, user.email, issuer) });
     }
     if (action === "enable") {
       if (typeof input.code !== "string" || !user.mfaSecretEncrypted || !verifyTotp(decryptConfig(user.mfaSecretEncrypted), input.code)) return NextResponse.json({ error: "That authenticator code is not valid." }, { status: 400 });

@@ -49,7 +49,8 @@ export default function GlobalAdminLoginPage() {
       return;
     }
     const session = await getSession();
-    if (session?.user.mfaPending) setChallenge(true);
+    if (session?.user.globalAdminMfaSetupRequired) window.location.href = "/global-admin/mfa-setup";
+    else if (session?.user.mfaPending) setChallenge(true);
     else window.location.href = callbackUrl;
   }
 

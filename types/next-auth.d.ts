@@ -12,6 +12,7 @@ declare module "next-auth" {
     mfaPendingUserId?: string;
     mfaPendingChannel?: "authenticator" | "email" | "sms";
     mfaAvailableChannels?: Array<"authenticator" | "email" | "sms">;
+    globalAdminMfaSetupRequired?: boolean;
   }
 
   interface Session {
@@ -25,6 +26,7 @@ declare module "next-auth" {
       mfaPendingUserId?: string;
       mfaPendingChannel?: "authenticator" | "email" | "sms";
       mfaAvailableChannels?: Array<"authenticator" | "email" | "sms">;
+      globalAdminMfaSetupRequired?: boolean;
     } & DefaultSession["user"];
   }
 }
@@ -40,5 +42,6 @@ declare module "next-auth/jwt" {
     mfaPendingUserId?: string;
     mfaPendingChannel?: "authenticator" | "email" | "sms";
     mfaAvailableChannels?: Array<"authenticator" | "email" | "sms">;
+    globalAdminMfaSetupRequired?: boolean;
   }
 }

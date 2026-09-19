@@ -12,6 +12,7 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "user:create": "node scripts/create-user.mjs",
+    "global-admin:create": "node scripts/create-global-admin.mjs",
     "user:reset-password": "node scripts/reset-user-password.mjs",
     "groups:seed": "node scripts/seed-groups.mjs",
     "membership:seed": "node scripts/seed-membership.mjs",

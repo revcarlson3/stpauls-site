@@ -46,8 +46,8 @@ export function buildGlobalAuditDetails(input: { churchId: string; targetType: s
   return JSON.stringify({ boundary: GLOBAL_ADMIN_BOUNDARY, selectedChurchId: input.churchId, targetType: input.targetType, targetId: input.targetId ?? null, metadata: input.metadata ?? {} });
 }
 
-export function isGlobalAdminSession(session: { user?: { authBoundary?: string; mfaPending?: boolean } } | null) {
-  return session?.user?.authBoundary === GLOBAL_ADMIN_BOUNDARY && session.user.mfaPending !== true;
+export function isGlobalAdminSession(session: { user?: { authBoundary?: string; mfaPending?: boolean; globalAdminMfaSetupRequired?: boolean } } | null) {
+  return session?.user?.authBoundary === GLOBAL_ADMIN_BOUNDARY && session.user.mfaPending !== true && session.user.globalAdminMfaSetupRequired !== true;
 }
 
 export async function requireGlobalAdmin(options: { selectedChurch?: boolean; sensitive?: boolean } = {}) {

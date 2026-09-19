@@ -66,10 +66,10 @@ export const authOptions: NextAuthOptions = {
           settings.emailMfaEnabled && user.emailMfaEnabled && user.emailVerifiedAt ? "email" : "",
           settings.smsMfaEnabled && user.smsMfaEnabled && user.phoneVerifiedAt && user.phoneNumber ? "sms" : ""
         ].filter(Boolean) as Array<"email" | "sms">;
-        const authenticatorAvailable = Boolean(settings.authenticatorMfaEnabled && user.mfaEnabled && user.mfaSecretEncrypted);
+        const authenticatorAvailable = Boolean(user.isPlatformAdmin && user.mfaEnabled && user.mfaSecretEncrypted || settings.authenticatorMfaEnabled && user.mfaEnabled && user.mfaSecretEncrypted);
         const mfaRequired = Boolean(bridgeRequested || (!trusted && (authenticatorAvailable || availableChannels.length)));
-        if (bridgeRequested && !authenticatorAvailable && availableChannels.length === 0) {
-          throw new Error("Bridge access requires MFA enrollment.");
+        if (bridgeRequested && !authenticatorAvailable) {
+          return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: access, authBoundary: "global-admin", rememberMe: credentials.rememberMe === "true", globalAdminMfaSetupRequired: true, reauthenticatedAt: Math.floor(Date.now() / 1000) };
         }
         if (mfaRequired) {
           const mfaCode = typeof credentials.mfaCode === "string" ? credentials.mfaCode : "";
@@ -139,6 +139,7 @@ export const authOptions: NextAuthOptions = {
         token.mfaPendingUserId = user.mfaPendingUserId;
         token.mfaPendingChannel = user.mfaPendingChannel;
         token.mfaAvailableChannels = user.mfaAvailableChannels;
+        token.globalAdminMfaSetupRequired = Boolean(user.globalAdminMfaSetupRequired);
         token.exp = Math.floor(Date.now() / 1000) + (user.rememberMe ? REMEMBERED_SESSION_SECONDS : STANDARD_SESSION_SECONDS);
         token.sessionVersion = (await db.user.findUnique({ where: { id: user.id }, select: { sessionVersion: true } }))?.sessionVersion ?? 0;
       } else if (token.id) {
@@ -159,6 +160,7 @@ export const authOptions: NextAuthOptions = {
         session.user.mfaPendingUserId = token.mfaPendingUserId;
         session.user.mfaPendingChannel = token.mfaPendingChannel;
         session.user.mfaAvailableChannels = token.mfaAvailableChannels;
+        session.user.globalAdminMfaSetupRequired = token.globalAdminMfaSetupRequired;
         if (token.invalid || token.mfaPending) session.user.id = "";
       }
       return session;

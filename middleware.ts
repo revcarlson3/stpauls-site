@@ -6,6 +6,8 @@ export async function middleware(request: NextRequest) {
   if (pathname === "/admin/login" || pathname === "/global-admin/login") return NextResponse.next();
   const token = await getToken({ req: request });
   if (pathname.startsWith("/global-admin")) {
+    if (pathname === "/global-admin/mfa-setup" && token?.authBoundary === "global-admin" && token.globalAdminMfaSetupRequired === true) return NextResponse.next();
+    if (token?.globalAdminMfaSetupRequired === true) return NextResponse.redirect(new URL("/global-admin/mfa-setup", request.url));
     if (token?.authBoundary === "global-admin" && !token.mfaPending) return NextResponse.next();
     return NextResponse.redirect(new URL("/global-admin/login", request.url));
   }
