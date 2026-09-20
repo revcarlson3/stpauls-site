@@ -16,7 +16,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
     const [individual, role, highest] = await Promise.all([
       db.membershipIndividual.findUnique({ where: { id: params.id }, select: { id: true, firstName: true, familyId: true, status: true } }),
-      db.membershipFamilyRole.findUnique({ where: { slug: "head-of-household" }, select: { id: true } }),
+      db.membershipFamilyRole.findFirst({ where: { churchId: user.churchId!, slug: "head-of-household" }, select: { id: true } }),
       db.membershipIndividual.aggregate({ _max: { memberNumber: true } })
     ]);
     if (!individual || individual.status === "REMOVED") return NextResponse.json({ error: "Individual not found." }, { status: 404 });

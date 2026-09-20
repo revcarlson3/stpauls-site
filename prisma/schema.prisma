@@ -1194,10 +1194,13 @@ model MembershipFamilyRole {
   churchId    String
   church      Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
   name        String
-  slug        String                 @unique
+  slug        String
   individuals MembershipIndividual[]
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
+
+  @@unique([churchId, slug])
+  @@index([churchId])
 }
 
 model MembershipWorkflow {

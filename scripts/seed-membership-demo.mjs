@@ -14,14 +14,16 @@ const families = [
   ["Patel", "Raj", "Anika", "raj.patel@example.test", "763-555-0115", "Foley", "56329"]
 ];
 try {
-  const headRole = await db.membershipFamilyRole.findUniqueOrThrow({ where: { slug: "head-of-household" } });
-  const spouseRole = await db.membershipFamilyRole.findUniqueOrThrow({ where: { slug: "spouse" } });
+  const church = await db.church.findFirstOrThrow({ orderBy: { createdAt: "asc" }, select: { id: true } });
+  const headRole = await db.membershipFamilyRole.findUniqueOrThrow({ where: { churchId_slug: { churchId: church.id, slug: "head-of-household" } } });
+  const spouseRole = await db.membershipFamilyRole.findUniqueOrThrow({ where: { churchId_slug: { churchId: church.id, slug: "spouse" } } });
   const memberType = await db.membershipMemberType.findUniqueOrThrow({ where: { slug: "member" } });
   for (let index = 0; index < families.length; index += 1) {
     const [lastName, headFirst, spouseFirst, email, phone, city = "Milaca", zip = "56353"] = families[index];
     const existing = await db.membershipFamily.findFirst({ where: { email } });
     if (existing) continue;
     const family = await db.membershipFamily.create({ data: {
+      churchId: church.id,
       lastName, formalGreeting: `Mr. & Mrs. ${headFirst} ${lastName}`, informalGreeting: `${headFirst} and ${spouseFirst}`,
       addressStreet: `${100 + index} Example Avenue`, addressCity: city, addressState: "MN", addressZip: `${zip}-000${index + 1}`,
       secondaryStreet: `PO Box ${200 + index}`, secondaryCity: city, secondaryState: "MN", secondaryZip: zip, secondaryIsMailing: true,

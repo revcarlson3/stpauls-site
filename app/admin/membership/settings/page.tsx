@@ -7,6 +7,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Button, Container, Notification } from "@/components/ui";
 
 type MemberType = { id: string; name: string; slug: string; position: number; _count: { individuals: number } };
+type FamilyRole = { id: string; name: string; slug: string; _count: { individuals: number } };
 type DocumentCleanupPreview = {
   asOf: string;
   expiredCount: number;
@@ -34,7 +35,11 @@ function SortableMemberType({ type, onRemove }: { type: MemberType; onRemove: (t
 
 export default function MembershipSettingsPage() {
   const [types, setTypes] = useState<MemberType[]>([]);
+  const [roles, setRoles] = useState<FamilyRole[]>([]);
   const [name, setName] = useState("");
+  const [roleName, setRoleName] = useState("");
+  const [editingRole, setEditingRole] = useState<FamilyRole | null>(null);
+  const [editingRoleName, setEditingRoleName] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -61,7 +66,18 @@ export default function MembershipSettingsPage() {
     }
   }
 
-  useEffect(() => { void loadTypes(); }, []);
+  async function loadRoles() {
+    try {
+      const response = await fetch("/api/membership/family-roles");
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error ?? "Unable to load family roles.");
+      setRoles(value.roles ?? []);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to load family roles.");
+    }
+  }
+
+  useEffect(() => { void Promise.all([loadTypes(), loadRoles()]); }, []);
   useEffect(() => { void fetch("/api/membership/age-categories").then((response) => response.json()).then((value) => setAgeCategories(value.categories ?? [])); }, []);
 
   async function addType(event: React.FormEvent<HTMLFormElement>) {
@@ -96,6 +112,39 @@ export default function MembershipSettingsPage() {
 
     setMessage("Member type removed.");
     await loadTypes();
+  }
+
+  async function saveRole(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    const response = await fetch("/api/membership/family-roles", {
+      method: editingRole ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: editingRole?.id, name: editingRole ? editingRoleName : roleName })
+    });
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(value.error ?? "Unable to save family role.");
+      return;
+    }
+    setRoleName("");
+    setEditingRole(null);
+    setEditingRoleName("");
+    setMessage(editingRole ? "Family role updated." : "Family role added.");
+    await loadRoles();
+  }
+
+  async function removeRole(role: FamilyRole) {
+    if (!window.confirm(`Delete the "${role.name}" family role?`)) return;
+    const response = await fetch(`/api/membership/family-roles?id=${encodeURIComponent(role.id)}`, { method: "DELETE" });
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(value.error ?? "Unable to delete family role.");
+      return;
+    }
+    setMessage("Family role deleted.");
+    await loadRoles();
   }
 
   async function reorder(event: DragEndEvent) {
@@ -193,7 +242,8 @@ export default function MembershipSettingsPage() {
       <div><h1 className="mt-2 font-serif text-4xl">Membership settings</h1><p className="mt-3 max-w-2xl text-ink/60">Manage the member types available when adding and editing individual records.</p></div>
       <a href="/admin/membership" className="focus-ring rounded-full border border-coral px-4 py-2 text-sm font-semibold text-coral">Back to directory</a>
     </div>
-    <section className="mt-8 max-w-3xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+    <div className="mt-8 grid gap-6 xl:grid-cols-2">
+    <section className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
       <h2 className="font-serif text-2xl">Member types</h2>
       <p className="mt-2 text-sm text-ink/60">Drag the handle to set the order used by member forms and filters. Types assigned to members cannot be removed until those members are assigned a different type.</p>
       <form onSubmit={(event) => void addType(event)} className="mt-5 flex flex-wrap gap-3">
@@ -209,7 +259,7 @@ export default function MembershipSettingsPage() {
         {savingOrder && <p className="text-xs text-ink/55">Saving order…</p>}
       </div>
     </section>
-    <section className="mt-8 max-w-3xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+    <section className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
       <h2 className="font-serif text-2xl">Age categories</h2>
       <p className="mt-2 text-sm text-ink/60">Manage the options available for an individual&apos;s age-category override. Categories assigned to members cannot be removed.</p>
       <form onSubmit={(event) => void addAgeCategory(event)} className="mt-5 flex flex-wrap gap-3">
@@ -218,12 +268,22 @@ export default function MembershipSettingsPage() {
       </form>
       <div className="mt-5 grid gap-2">{ageCategories.map((category) => <div key={category} className="flex items-center justify-between gap-3 rounded-xl border border-ink/10 p-3"><span className="font-semibold">{category}</span><button type="button" onClick={() => void removeAgeCategory(category)} className="focus-ring rounded-full border border-coral px-3 py-2 text-sm font-semibold text-coral">Remove</button></div>)}</div>
     </section>
-    <section className="mt-8 max-w-3xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+    <section className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+      <h2 className="font-serif text-2xl">Family roles</h2>
+      <p className="mt-2 text-sm text-ink/60">Manage the relationship options available when assigning individuals to families. Roles in use cannot be deleted.</p>
+      <form onSubmit={(event) => void saveRole(event)} className="mt-5 flex flex-wrap gap-3">
+        <label className="grid min-w-64 flex-1 gap-1 text-sm font-semibold">{editingRole ? "Edit family role" : "New family role"}<input required maxLength={80} value={editingRole ? editingRoleName : roleName} onChange={(event) => editingRole ? setEditingRoleName(event.target.value) : setRoleName(event.target.value)} placeholder="e.g. Grandparent" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
+        <Button type="submit" className="self-end">{editingRole ? "Save role" : "Add role"}</Button>
+        {editingRole && <button type="button" onClick={() => { setEditingRole(null); setEditingRoleName(""); }} className="focus-ring self-end rounded-full border border-ink/15 px-4 py-2 text-sm font-semibold">Cancel</button>}
+      </form>
+      <div className="mt-5 grid gap-2">{roles.map((role) => <div key={role.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink/10 p-3"><div><p className="font-semibold">{role.name}</p><p className="text-xs text-ink/55">{role._count.individuals} assigned individual{role._count.individuals === 1 ? "" : "s"} · {role.slug}</p></div><div className="flex gap-3"><button type="button" onClick={() => { setEditingRole(role); setEditingRoleName(role.name); }} className="text-sm font-semibold text-coral">Edit</button><button type="button" onClick={() => void removeRole(role)} className="text-sm font-semibold text-coral">Delete</button></div></div>)}{!roles.length && <p className="text-sm text-ink/60">No family roles have been defined.</p>}</div>
+    </section>
+    <section className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
       <h2 className="font-serif text-2xl">Grade levels</h2>
       <p className="mt-2 text-sm text-ink/60">New individuals receive an estimated grade from their birthday when no grade is selected. Run this once each school year to advance members from preschool through 12th grade.</p>
       <Button type="button" onClick={() => void advanceGrades()} disabled={advancingGrades} className="mt-5">{advancingGrades ? "Updating grades…" : "Advance grade levels"}</Button>
     </section>
-    <section className="mt-8 max-w-3xl rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
+    <section className="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm xl:col-span-2">
       <h2 className="font-serif text-2xl">Document retention cleanup</h2>
       <p className="mt-2 text-sm text-ink/60">Cleanup is manual and disabled by default. Only documents whose saved expiry has passed are eligible. Documents with no expiry or a future expiry are always excluded.</p>
       <div className="mt-5 flex flex-wrap gap-3">
@@ -239,5 +299,6 @@ export default function MembershipSettingsPage() {
         {cleanupPreview.truncated && <p className="mt-2 text-xs text-ink/55">Showing the first 100 expired documents. Cleanup applies to the full preview count.</p>}
       </div>}
     </section>
+    </div>
   </Container></main>;
 }
