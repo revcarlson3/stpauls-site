@@ -144,7 +144,7 @@ function familyLastNameFromImport(rawFamilyLastName: string | undefined, rawFami
   return surname.replace(/\s+family$/i, "").trim();
 }
 
-function parseDate(value: string | undefined): string | null {
+function parseDate(value: string | undefined, sourceSystem = "generic"): string | null {
   const originalText = value?.trim();
   if (!originalText) return null;
   const excelSerial = Number(originalText);
@@ -171,9 +171,15 @@ function parseDate(value: string | undefined): string | null {
   } else {
     match = /^(\d{2})-(\d{1,2})-(\d{1,2})$/.exec(text);
     if (match) {
-      year = parseYear(match[1]);
-      month = Number(match[2]);
-      day = Number(match[3]);
+      if (sourceSystem !== "churchtrac" && Number(match[1]) > 12) {
+        day = Number(match[1]);
+        month = Number(match[2]);
+        year = parseYear(match[3]);
+      } else {
+        year = parseYear(match[1]);
+        month = Number(match[2]);
+        day = Number(match[3]);
+      }
     } else {
       match = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(text);
       if (match) {
@@ -312,7 +318,7 @@ export function createMembershipImportPreview(csv: string, context: MembershipIm
         .filter((field) => raw[`customField:${field.id}`]?.trim())
         .map((field) => {
           const rawValue = raw[`customField:${field.id}`].trim();
-          const value = field.type === "DATE" ? parseDate(rawValue) ?? rawValue : rawValue;
+          const value = field.type === "DATE" ? parseDate(rawValue, sourceSystem) ?? rawValue : rawValue;
           return [`${field.appliesTo}:${field.id}`, value];
         })
     );
@@ -346,10 +352,10 @@ export function createMembershipImportPreview(csv: string, context: MembershipIm
 
     const firstName = optional(raw.firstName) ?? "";
     if (!firstName) rowErrors.push("Member first name is required.");
-    const birthday = parseDate(raw.birthday);
+    const birthday = parseDate(raw.birthday, sourceSystem);
     if (!birthday) rowWarnings.push("Birthday is missing and should be completed later.");
-    const weddingDate = optional(raw.weddingDate) ? parseDate(raw.weddingDate) : null;
-    const deceasedDate = optional(raw.deceasedDate) ? parseDate(raw.deceasedDate) : null;
+    const weddingDate = optional(raw.weddingDate) ? parseDate(raw.weddingDate, sourceSystem) : null;
+    const deceasedDate = optional(raw.deceasedDate) ? parseDate(raw.deceasedDate, sourceSystem) : null;
     if (optional(raw.weddingDate) && !weddingDate) rowErrors.push("Wedding date must be YYYY-MM-DD, YY-MM-DD, M/D/YYYY, or D-Mon-YY.");
     if (optional(raw.deceasedDate) && !deceasedDate) rowErrors.push("Deceased date must be YYYY-MM-DD, YY-MM-DD, M/D/YYYY, or D-Mon-YY.");
     const gender = parseGender(raw.gender);
