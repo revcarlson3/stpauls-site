@@ -177,9 +177,14 @@ function parseDate(value: string | undefined): string | null {
     } else {
       match = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(text);
       if (match) {
-        month = Number(match[1]);
-        day = Number(match[2]);
-        year = parseYear(match[3]);
+          const first = Number(match[1]);
+          const second = Number(match[2]);
+          month = text.includes("-") ? second : first;
+          day = text.includes("-") ? first : second;
+          year = parseYear(match[3]);
+          if (text.includes("-") && month > 12 && day <= 12) {
+            [day, month] = [month, day];
+          }
       } else {
         match = /^(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s](\d{2,4})$/.exec(text);
         if (!match) return null;
