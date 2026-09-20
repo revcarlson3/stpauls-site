@@ -192,12 +192,20 @@ function parseDate(value: string | undefined, sourceSystem = "generic"): string 
             [day, month] = [month, day];
           }
       } else {
-        match = /^(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s](\d{2,4})$/.exec(text);
-        if (!match) return null;
-        month = monthNames.indexOf(match[2].slice(0, 3).toLowerCase()) + 1;
-        day = Number(match[1]);
-        year = parseYear(match[3]);
-        if (!month) return null;
+          match = /^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})$/.exec(text);
+          if (match) {
+            month = monthNames.indexOf(match[1].slice(0, 3).toLowerCase()) + 1;
+            day = Number(match[2]);
+            year = parseYear(match[3]);
+            if (!month) return null;
+          } else {
+          match = /^(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s](\d{2,4})$/.exec(text);
+          if (!match) return null;
+          month = monthNames.indexOf(match[2].slice(0, 3).toLowerCase()) + 1;
+          day = Number(match[1]);
+          year = parseYear(match[3]);
+          if (!month) return null;
+          }
       }
     }
   }

@@ -124,6 +124,16 @@ describe("membership CSV import", () => {
     expect(preview.rows[0].member.birthday).toBe("1950-01-31");
   });
 
+  it("normalizes month-name-first dates displayed by spreadsheet imports", () => {
+    const preview = createMembershipImportPreview(
+      "family_name,first_name,birthday,gender,marital_status,member_type,family_role\n"
+      + 'Smith,Jane,"Oct 1, 1950",Female,Married,Confirmed Member,Head of Household',
+      context
+    );
+    expect(preview.rows[0].warnings).not.toContain("Birthday is missing and should be completed later.");
+    expect(preview.rows[0].member.birthday).toBe("1950-10-01");
+  });
+
   it("normalizes household values exported as last name comma head of household", () => {
     const preview = createMembershipImportPreview(
       "family_name,first_name,birthday,gender,marital_status,member_type,family_role\n"
