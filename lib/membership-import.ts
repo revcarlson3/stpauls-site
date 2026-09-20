@@ -171,7 +171,7 @@ function parseDate(value: string | undefined, sourceSystem = "generic"): string 
   } else {
     match = /^(\d{2})-(\d{1,2})-(\d{1,2})$/.exec(text);
     if (match) {
-      if (sourceSystem !== "churchtrac" && Number(match[1]) > 12) {
+      if (Number(match[1]) > 12 && Number(match[1]) <= 31) {
         day = Number(match[1]);
         month = Number(match[2]);
         year = parseYear(match[3]);

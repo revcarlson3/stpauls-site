@@ -113,6 +113,17 @@ describe("membership CSV import", () => {
     expect(preview.rows[0].member.birthday).toBe("1950-01-31");
   });
 
+  it("normalizes ChurchTrac two-digit day-month-year dates", () => {
+    const preview = createMembershipImportPreview(
+      "family_name,first_name,birthday,gender,marital_status,member_type,family_role\n"
+      + "Smith,Jane,31-01-50,Female,Married,Confirmed Member,Head of Household",
+      context,
+      undefined,
+      "churchtrac"
+    );
+    expect(preview.rows[0].member.birthday).toBe("1950-01-31");
+  });
+
   it("normalizes household values exported as last name comma head of household", () => {
     const preview = createMembershipImportPreview(
       "family_name,first_name,birthday,gender,marital_status,member_type,family_role\n"
