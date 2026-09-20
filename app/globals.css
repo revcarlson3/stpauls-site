@@ -258,6 +258,35 @@ body {
     animation: none;
     transition-duration: 0.01ms;
   }
+
+}
+
+@keyframes announcement-ticker-scroll {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+.announcement-ticker-track {
+  animation: announcement-ticker-scroll 35s linear infinite;
+}
+
+.announcement-ticker:hover .announcement-ticker-track,
+.announcement-ticker:focus-within .announcement-ticker-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .announcement-ticker {
+    overflow-x: auto;
+  }
+
+  .announcement-ticker-track {
+    animation: none;
+  }
 }
 
 /* Keep above-panel CTA images flush with the panel's clipped border. */

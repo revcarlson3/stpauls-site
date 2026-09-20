@@ -10,6 +10,7 @@ import { ModuleNavigation } from "@/components/module-navigation";
 import { AdminLogout } from "@/components/admin-logout";
 import { NotificationBell } from "@/components/notification-bell";
 import { AdminNavIcon } from "@/components/admin-nav-icon";
+import { AnnouncementTicker } from "@/components/announcement-ticker";
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
@@ -134,6 +135,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
           </div>
         </Container>
       </header>
+      {!isEditor && pathname !== "/admin/login" && <AnnouncementTicker />}
       <div className={`flex w-full flex-col lg:flex-row ${isEditor ? "min-h-0 flex-1" : ""}`}>
         {!canAccessAdmin ? <div className="min-h-[calc(100vh-5rem)] flex-1">{pathname.startsWith("/admin") ? <Container className="py-16"><h1 className="font-serif text-3xl">Administration access required</h1><p className="mt-3 text-sm text-ink/60">This account can manage its Account page, but does not have access to Site Administration.</p></Container> : children}</div> : <>
         <aside className={`max-h-[2000px] overflow-hidden border-b border-ink/10 bg-white transition-[max-height,max-width,opacity,transform,width] duration-300 ease-out lg:max-w-72 lg:shrink-0 lg:border-b-0 lg:border-r ${isEditor ? "lg:min-h-0 lg:overflow-y-auto" : "lg:min-h-[calc(100vh-5rem)]"} ${isEditor && !editorChromeVisible ? "pointer-events-none max-h-0 -translate-x-2 opacity-0 lg:w-0 lg:max-w-0" : "translate-x-0 opacity-100 lg:w-72"}`}>
@@ -185,6 +187,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-identity">Site Identity</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings">General Settings</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/messaging">Messaging</Link>
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/announcements">Announcements</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/cron">Cron</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/report-automations">Report Automations</Link>
               </div>

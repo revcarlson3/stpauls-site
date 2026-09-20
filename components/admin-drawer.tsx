@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { clearAnnouncementSession } from "@/lib/announcement-session";
 import { ModuleNavigation } from "@/components/module-navigation";
 
 export function AdminDrawer() {
@@ -135,7 +136,7 @@ export function AdminDrawer() {
           <button type="button" className="focus-ring flex justify-between rounded-lg px-4 py-3 text-left font-semibold hover:bg-mist" onClick={() => toggle("site-settings")}>Site Settings <span>⌄</span></button>
           {expanded === "site-settings" && <div className="ml-4 grid gap-1"><Link href="/admin/site-identity" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Site Identity</Link><Link href="/admin/site-settings" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>General Settings</Link><Link href="/admin/site-settings/messaging" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Messaging</Link></div>}
           <ModuleNavigation />
-          <button type="button" className="focus-ring rounded-lg px-4 py-3 text-left font-semibold text-coral hover:bg-sand" onClick={() => signOut({ callbackUrl: "/" })}>Logout</button>
+          <button type="button" className="focus-ring rounded-lg px-4 py-3 text-left font-semibold text-coral hover:bg-sand" onClick={() => { clearAnnouncementSession(); void signOut({ callbackUrl: "/" }); }}>Logout</button>
         </nav>
         <p className="absolute bottom-6 left-6 right-6 border-t border-ink/10 pt-4 text-xs leading-5 text-ink/50">This menu is visible only to authenticated users. Access is still enforced by the server.</p>
       </aside>

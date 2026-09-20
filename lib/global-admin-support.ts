@@ -71,18 +71,14 @@ function assertEnum(value: unknown, values: readonly string[]) {
 }
 
 async function requireActiveSupportContext() {
-  const context = await requireGlobalAdmin({ selectedChurch: true, sensitive: true });
-  const church = await db.church.findUnique({ where: { id: context.church!.id }, select: { id: true, name: true, status: true, lifecycleStatus: true } });
-  if (!church) throw new Error("A site must be selected before continuing.");
-  if (church.status !== "ACTIVE" || church.lifecycleStatus !== "ACTIVE") throw new Error("The selected site is not active.");
-  return { ...context, church };
+  return requireGlobalAdmin({ sensitive: true });
 }
 
 export async function listSelectedSiteSupportTickets(status?: string) {
-  const context = await requireGlobalAdmin({ selectedChurch: true });
+  await requireGlobalAdmin();
   if (status && !assertEnum(status, supportTicketStatuses)) throw new Error("Support ticket fields are invalid.");
   const tickets = await db.supportTicket.findMany({
-    where: { churchId: context.church!.id, ...(status ? { status: status as SupportTicketStatus } : {}) },
+    where: status ? { status: status as SupportTicketStatus } : undefined,
     orderBy: { updatedAt: "desc" },
     take: 100,
     select: ticketListSelect
@@ -91,9 +87,9 @@ export async function listSelectedSiteSupportTickets(status?: string) {
 }
 
 export async function getSelectedSiteSupportTicket(ticketId: string) {
-  const context = await requireGlobalAdmin({ selectedChurch: true });
+  await requireGlobalAdmin();
   const ticket = await db.supportTicket.findFirst({
-    where: { id: ticketId, churchId: context.church!.id },
+    where: { id: ticketId },
     select: {
       ...ticketListSelect,
       description: true,
@@ -111,7 +107,7 @@ export async function addSelectedSiteSupportReply(ticketId: string, body: string
   if (!trimmedBody || trimmedBody.length > 10_000) throw new Error("Support reply is invalid.");
   validateSupportFiles(files);
   const existing = await db.supportTicket.findFirst({
-    where: { id: ticketId, churchId: context.church!.id },
+    where: { id: ticketId },
     select: { id: true, churchId: true, status: true }
   });
   if (!existing) return null;
@@ -152,10 +148,10 @@ export async function addSelectedSiteSupportReply(ticketId: string, body: string
 }
 
 export async function getSelectedSiteSupportAttachment(attachmentId: string) {
-  const context = await requireGlobalAdmin({ selectedChurch: true });
+  const context = await requireGlobalAdmin();
   const attachment = await db.supportTicketAttachment.findFirst({
-    where: { id: attachmentId, ticket: { churchId: context.church!.id } },
-    select: { id: true, storedName: true, mimeType: true, originalName: true, ticketId: true }
+    where: { id: attachmentId },
+    select: { id: true, storedName: true, mimeType: true, originalName: true, ticketId: true, ticket: { select: { churchId: true } } }
   });
   if (!attachment) return null;
   const data = await readSupportFile(attachment.storedName);
@@ -164,16 +160,16 @@ export async function getSelectedSiteSupportAttachment(attachmentId: string) {
     summary: `Downloaded a support attachment for ticket ${attachment.ticketId}.`,
     actorId: context.user.id,
     details: buildGlobalAuditDetails({
-      churchId: context.church!.id,
+      churchId: attachment.ticket.churchId,
       targetType: "support-ticket-attachment",
       targetId: attachment.id
     })
   });
-  return { ...attachment, data };
+  return { id: attachment.id, storedName: attachment.storedName, mimeType: attachment.mimeType, originalName: attachment.originalName, ticketId: attachment.ticketId, data };
 }
 
 export async function listSupportAssignees() {
-  await requireGlobalAdmin({ selectedChurch: true });
+  await requireGlobalAdmin();
   return db.user.findMany({ where: { isActive: true, isPlatformAdmin: true }, orderBy: { name: "asc" }, select: { id: true, name: true } });
 }
 
@@ -191,7 +187,7 @@ export async function updateSelectedSiteSupportTicket(ticketId: string, input: R
     const assignee = await db.user.findFirst({ where: { id: assignedToId, isActive: true, isPlatformAdmin: true }, select: { id: true } });
     if (!assignee) throw new Error("The assignee must be an active platform administrator.");
   }
-  const existing = await db.supportTicket.findFirst({ where: { id: ticketId, churchId: context.church!.id }, select: { id: true, subject: true, status: true, priority: true, assignedToId: true } });
+  const existing = await db.supportTicket.findFirst({ where: { id: ticketId }, select: { id: true, subject: true, status: true, priority: true, assignedToId: true, churchId: true } });
   if (!existing) return null;
   if (status === undefined && priority === undefined && assignedToId === undefined && note === undefined) throw new Error("Support ticket fields are invalid.");
 
@@ -217,7 +213,7 @@ export async function updateSelectedSiteSupportTicket(ticketId: string, input: R
     summary: note !== undefined ? `Added an internal note to support ticket ${existing.id}.` : `Updated support ticket ${existing.id}.`,
     actorId: context.user.id,
     details: buildGlobalAuditDetails({
-      churchId: context.church!.id,
+      churchId: existing.churchId,
       targetType: "support-ticket",
       targetId: existing.id,
       metadata: {

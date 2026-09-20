@@ -250,6 +250,7 @@ model Church {
   onboarding                           TenantOnboarding?
   supportTickets                       SupportTicket[]
   announcements                        GlobalAnnouncementDelivery[]
+  ownedAnnouncements                   GlobalAnnouncement[]                  @relation("GlobalAnnouncementChurch")
   auditLogs                            AuditLog[]
   createdAt                            DateTime                              @default(now())
   updatedAt                            DateTime                              @updatedAt
@@ -2046,21 +2047,21 @@ model TenantOnboarding {
 }
 
 model SupportTicket {
-  id           String                 @id @default(cuid())
+  id           String                    @id @default(cuid())
   churchId     String
-  church       Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  church       Church                    @relation(fields: [churchId], references: [id], onDelete: Cascade)
   createdById  String
-  createdBy    User                   @relation("SupportTicketCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy    User                      @relation("SupportTicketCreator", fields: [createdById], references: [id], onDelete: Restrict)
   assignedToId String?
-  assignedTo   User?                  @relation("SupportTicketAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedTo   User?                     @relation("SupportTicketAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   subject      String
   description  String
-  status       SupportTicketStatus    @default(OPEN)
-  priority     SupportTicketPriority  @default(NORMAL)
+  status       SupportTicketStatus       @default(OPEN)
+  priority     SupportTicketPriority     @default(NORMAL)
   messages     SupportTicketMessage[]
   attachments  SupportTicketAttachment[]
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
   closedAt     DateTime?
 
   @@index([churchId, status, updatedAt])
@@ -2068,30 +2069,30 @@ model SupportTicket {
 }
 
 model SupportTicketMessage {
-  id         String        @id @default(cuid())
-  ticketId   String
-  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  authorId   String
-  author     User          @relation("SupportTicketMessageAuthor", fields: [authorId], references: [id], onDelete: Restrict)
-  body       String
-  isInternal Boolean       @default(false)
+  id          String                    @id @default(cuid())
+  ticketId    String
+  ticket      SupportTicket             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User                      @relation("SupportTicketMessageAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  body        String
+  isInternal  Boolean                   @default(false)
   attachments SupportTicketAttachment[]
-  createdAt  DateTime      @default(now())
+  createdAt   DateTime                  @default(now())
 
   @@index([ticketId, createdAt])
 }
 
 model SupportTicketAttachment {
-  id           String                 @id @default(cuid())
+  id           String                @id @default(cuid())
   ticketId     String
-  ticket       SupportTicket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket       SupportTicket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   messageId    String?
-  message      SupportTicketMessage?  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message      SupportTicketMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
   originalName String
-  storedName   String                 @unique
+  storedName   String                @unique
   mimeType     String
   sizeBytes    Int
-  createdAt    DateTime               @default(now())
+  createdAt    DateTime              @default(now())
 
   @@index([ticketId, createdAt])
 }
@@ -2101,6 +2102,10 @@ model GlobalAnnouncement {
   title      String
   body       String
   severity   String                       @default("INFO")
+  audience   String                       @default("GLOBAL")
+  placement  String                       @default("AUTHENTICATED")
+  churchId   String?
+  church     Church?                      @relation("GlobalAnnouncementChurch", fields: [churchId], references: [id], onDelete: Cascade)
   startsAt   DateTime                     @default(now())
   endsAt     DateTime?
   isActive   Boolean                      @default(true)
@@ -2108,6 +2113,7 @@ model GlobalAnnouncement {
   createdAt  DateTime                     @default(now())
   updatedAt  DateTime                     @updatedAt
 
+  @@index([churchId, isActive, startsAt, endsAt])
   @@index([isActive, startsAt, endsAt])
 }
 

@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import QRCode from "qrcode";
 import Image from "next/image";
 import Link from "next/link";
+import { clearAnnouncementSession } from "@/lib/announcement-session";
 
 type Account = { name: string; email: string; emailVerifiedAt: string | null };
 type MfaState = { available: boolean; issuer: string; enabled: boolean; recoveryCodesRemaining: number; emailAvailable: boolean; emailEnabled: boolean; emailVerified: boolean; smsAvailable: boolean; smsEnabled: boolean; phoneNumber: string | null; phoneVerified: boolean };
@@ -77,6 +78,7 @@ export default function AccountPage() {
     const response = await fetch("/api/account", { method: "DELETE" });
     const body = await response.json().catch(() => ({}));
     if (response.ok) {
+      clearAnnouncementSession();
       await signOut({ callbackUrl: "/admin/login" });
     } else {
       setMessage(body.error ?? "Unable to sign out sessions.");
