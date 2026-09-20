@@ -145,7 +145,17 @@ function familyLastNameFromImport(rawFamilyLastName: string | undefined, rawFami
 }
 
 function parseDate(value: string | undefined): string | null {
-  const text = value?.trim();
+  const originalText = value?.trim();
+  if (!originalText) return null;
+  const excelSerial = Number(originalText);
+  if (/^\d+(?:\.\d+)?$/.test(originalText) && excelSerial >= 1 && excelSerial <= 2958465) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(excelSerial) * 86400000);
+    return date.toISOString().slice(0, 10);
+  }
+  const text = originalText
+    .replace(/T\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/i, "")
+    .replace(/\s+\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:\s*[AP]M)?$/i, "")
+    .trim();
   if (!text) return null;
   let year: number;
   let month: number;
@@ -165,7 +175,7 @@ function parseDate(value: string | undefined): string | null {
       month = Number(match[2]);
       day = Number(match[3]);
     } else {
-      match = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(text);
+      match = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(text);
       if (match) {
         month = Number(match[1]);
         day = Number(match[2]);

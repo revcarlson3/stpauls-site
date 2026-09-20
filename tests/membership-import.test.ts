@@ -76,6 +76,21 @@ describe("membership CSV import", () => {
     });
   });
 
+  it("normalizes spreadsheet date-times and Excel serial dates", () => {
+    const preview = createMembershipImportPreview(
+      "family_name,first_name,birthday,wedding_date,deceased_date,gender,marital_status,member_type,family_role\n"
+      + "Smith,Jane,10/16/1998 12:00:00 AM,2005-06-01T00:00:00.000Z,45123,Female,Married,Confirmed Member,Head of Household",
+      context
+    );
+    expect(preview.errors).toEqual([]);
+    expect(preview.rows[0].warnings).not.toContain("Birthday is missing and should be completed later.");
+    expect(preview.rows[0].member).toMatchObject({
+      birthday: "1998-10-16",
+      weddingDate: "2005-06-01",
+      deceasedDate: "2023-07-16"
+    });
+  });
+
   it("normalizes household values exported as last name comma head of household", () => {
     const preview = createMembershipImportPreview(
       "family_name,first_name,birthday,gender,marital_status,member_type,family_role\n"
