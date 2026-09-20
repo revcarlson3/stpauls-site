@@ -6,6 +6,7 @@ import { validatePassword } from "@/lib/password-policy";
 import { notifyUserCreated } from "@/lib/user-notifications";
 import { logAudit } from "@/lib/audit";
 import { requireCurrentChurch } from "@/lib/tenant";
+import { canEditSecurityGroupPermissions, canRenameSecurityGroup, isSystemSecurityGroup } from "@/lib/security-group-policy";
 
 export function securityGroupScope(churchId: string) {
   return { churchId };
@@ -144,11 +145,10 @@ async function requireOwnAccount() {
 export async function updateSecurityGroup(id: string, input: { name: string; permissions: Permission[] }) {
   await requirePermission("MANAGE_USERS");
   const { church } = await requireCurrentChurch();
-  const existing = await db.securityGroup.findFirst({ where: { id, ...securityGroupScope(church.id) }, select: { slug: true } });
+  const existing = await db.securityGroup.findFirst({ where: { id, ...securityGroupScope(church.id) }, select: { slug: true, name: true } });
   if (!existing) throw new Error("Security group not found.");
-  if (["visitor", "church-member", "editor", "administrator"].includes(existing.slug)) {
-    throw new Error("The default security groups cannot be changed.");
-  }
+  if (!canRenameSecurityGroup(existing.slug) && input.name.trim() !== existing.name) throw new Error("The default security groups cannot be renamed.");
+  if (!canEditSecurityGroupPermissions(existing.slug)) throw new Error("The default security groups cannot be changed.");
   return db.securityGroup.update({
     where: { id },
     data: {
@@ -167,7 +167,7 @@ export async function deleteSecurityGroup(id: string) {
   const { church } = await requireCurrentChurch();
   const group = await db.securityGroup.findFirst({ where: { id, ...securityGroupScope(church.id) }, select: { slug: true } });
   if (!group) throw new Error("Security group not found.");
-  if (["visitor", "church-member", "editor", "administrator"].includes(group.slug)) {
+  if (isSystemSecurityGroup(group.slug)) {
     throw new Error("The default security groups cannot be deleted.");
   }
   await db.securityGroup.delete({ where: { id } });

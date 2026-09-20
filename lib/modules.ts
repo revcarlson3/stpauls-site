@@ -10,6 +10,17 @@ export const MODULES = [
   { slug: "services", name: "Services and sermons", permission: "MANAGE_SERVICES" as Permission, href: "/admin/services" }
 ] as const;
 
+export const PUBLIC_WEBSITE_LINKS = [
+  { label: "Pages", href: "/admin/pages", permission: "EDIT_PAGES" as Permission },
+  { label: "Media Library", href: "/admin/media", permission: "EDIT_PAGES" as Permission },
+  { label: "Menus", href: "/admin/navigation", permission: "MANAGE_MENUS" as Permission },
+  { label: "Theme", href: "/admin/theme", permission: "MANAGE_SETTINGS" as Permission }
+] as const;
+
+export function hasPublicWebsiteModuleAccess(moduleSlugs: readonly string[], permissions: readonly string[]) {
+  return moduleSlugs.includes("public-site") && permissions.includes("PUBLISH_PAGES");
+}
+
 export const MARITAL_STATUSES = ["Single", "Married", "Separated", "Divorced", "Widowed", "Engaged", "Prefer not to say"] as const;
 
 export async function getEnabledModuleSlugs() {

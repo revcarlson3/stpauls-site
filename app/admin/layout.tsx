@@ -15,6 +15,7 @@ import { AnnouncementTicker } from "@/components/announcement-ticker";
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
   const [publicSiteEnabled, setPublicSiteEnabled] = useState(true);
+  const [publicWebsiteModuleEnabled, setPublicWebsiteModuleEnabled] = useState(false);
   const [membershipLinked, setMembershipLinked] = useState(false);
   const [onlineGivingEnabled, setOnlineGivingEnabled] = useState(false);
   const [canAccessAdmin, setCanAccessAdmin] = useState(false);
@@ -75,6 +76,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
 
       const value = await response.json();
       setPublicSiteEnabled(value.publicSiteEnabled !== false);
+      setPublicWebsiteModuleEnabled(Array.isArray(value.modules) && value.modules.some((module: { slug?: string }) => module.slug === "public-site"));
     });
     void fetch("/api/account/membership").then(async (response) => {
       if (!response.ok) return;
@@ -142,7 +144,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
           <nav aria-label="Admin navigation" className="grid gap-1 p-4 sm:p-6">
             <Link className="focus-ring flex items-center gap-3 rounded-lg bg-mist px-4 py-3 font-semibold hover:bg-coral hover:text-white" href="/admin"><AdminNavIcon name="dashboard" />Admin Dashboard</Link>
             <p className="mt-4 border-t border-ink/10 px-4 pt-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Site administration</p>
-            {publicSiteEnabled && can("EDIT_PAGES") && <details open={pathname.startsWith("/admin/pages")} className="group">
+            {publicWebsiteModuleEnabled && can("PUBLISH_PAGES") && can("EDIT_PAGES") && <details open={pathname.startsWith("/admin/pages")} className="group">
               <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="pages" />Pages <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/pages">Pages</Link>
@@ -151,7 +153,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/forms">Forms</Link>
               </div>
             </details>}
-            {publicSiteEnabled && can("EDIT_PAGES") && <Link className={`focus-ring flex items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist ${pathname.startsWith("/admin/media") ? "bg-mist text-coral" : ""}`} href="/admin/media"><AdminNavIcon name="media" />Media Library</Link>}
+            {publicWebsiteModuleEnabled && can("EDIT_PAGES") && <Link className={`focus-ring flex items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist ${pathname.startsWith("/admin/media") ? "bg-mist text-coral" : ""}`} href="/admin/media"><AdminNavIcon name="media" />Media Library</Link>}
             {can("MANAGE_USERS") && <details open={pathname.startsWith("/admin/security")} className="group">
               <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="security" />Security <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
@@ -166,14 +168,14 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/users">Edit Users</Link>
               </div>
             </details>}
-            {publicSiteEnabled && can("MANAGE_MENUS") && <details open={pathname.startsWith("/admin/navigation")} className="group">
+            {publicWebsiteModuleEnabled && can("MANAGE_MENUS") && <details open={pathname.startsWith("/admin/navigation")} className="group">
               <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="navigation" />Navigation <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/navigation">Menus</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/navigation/locations">Locations</Link>
               </div>
             </details>}
-            {publicSiteEnabled && can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/theme")} className="group">
+            {publicWebsiteModuleEnabled && can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/theme")} className="group">
               <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="theme" />Theme</summary>
               <div className="ml-3 grid gap-1 border-l border-ink/10 pl-3">
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/theme">Visual theme</Link>

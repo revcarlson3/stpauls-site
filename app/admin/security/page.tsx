@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button, Container, Card, Notification } from "@/components/ui";
+import { canEditSecurityGroupPermissions, canRenameSecurityGroup } from "@/lib/security-group-policy";
 
 const permissionOptions = [
   ["ACCESS_ADMIN", "Access admin area"],
@@ -106,11 +107,11 @@ export default function SecurityPage() {
           <div className="mt-8 grid gap-6 lg:grid-cols-2">
             {groups.map((group) => {
               const selected = new Set(group.permissions.map((item) => item.permission));
-              const protectedGroup = ["visitor", "church-member", "editor", "administrator"].includes(group.slug);
+              const protectedGroup = !canEditSecurityGroupPermissions(group.slug);
               return <Card key={group.id} className="p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div><h2 className="font-serif text-2xl">{group.name}</h2><p className="mt-1 text-xs text-ink/50">{group.slug} · {group._count.users} users</p></div>
-                  <div className="flex items-center gap-2"><span className="rounded-full bg-mist px-3 py-1 text-xs font-semibold">Group</span>{!["visitor", "editor", "administrator"].includes(group.slug) && <button type="button" onClick={() => void removeGroup(group)} className="text-xs font-semibold text-coral hover:underline">Remove</button>}</div>
+                  <div className="flex items-center gap-2"><span className="rounded-full bg-mist px-3 py-1 text-xs font-semibold">Group</span>{canRenameSecurityGroup(group.slug) && <button type="button" onClick={() => void removeGroup(group)} className="text-xs font-semibold text-coral hover:underline">Remove</button>}</div>
                 </div>
                 <div className="mt-6 grid gap-3">
                   {permissionOptions.map(([permission, label]) => <label key={permission} className="flex items-center gap-3 text-sm">

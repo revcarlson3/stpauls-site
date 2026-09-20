@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button, Container, Notification } from "@/components/ui";
-import { THEME_BUTTONS, THEME_ELEVATIONS, THEME_NAVS, THEME_OPTIONS, THEME_RADII, THEME_SPACING, googleFontStylesheet, isHexColor, themeComponentColorCssVars, themeCssVars, themeFontCssVars, themeStyleCssVars, type ThemeButton, type ThemeElevation, type ThemeFamily, type ThemeNav, type ThemeRadius, type ThemeSpacing, type ThemeWidth } from "@/lib/theme";
+import { THEME_BUTTONS, THEME_ELEVATIONS, THEME_NAVS, THEME_OPTIONS, THEME_RADII, THEME_SPACING, contrastTextColor, googleFontStylesheet, isHexColor, themeComponentColorCssVars, themeCssVars, themeFontCssVars, themeStyleCssVars, type ThemeButton, type ThemeElevation, type ThemeFamily, type ThemeNav, type ThemeRadius, type ThemeSpacing, type ThemeWidth } from "@/lib/theme";
 
 type ThemeSettings = {
   themeFamily: ThemeFamily;
@@ -54,6 +54,16 @@ const NOTIFICATION_COLOR_FIELDS = [
   ["themeNotificationDanger", "Danger"],
   ["themeNotificationInfo", "Info"]
 ] as const;
+
+const NOTIFICATION_PREVIEW_FIELDS = {
+  primary: "themeNotificationPrimary",
+  secondary: "themeNotificationSecondary",
+  default: "themeNotificationDefault",
+  success: "themeNotificationSuccess",
+  warning: "themeNotificationWarning",
+  danger: "themeNotificationDanger",
+  info: "themeNotificationInfo"
+} as const;
 
 const PALETTES = [
   { name: "Current", background: "#f8f4ee", foreground: "#17324d", accent: "#e66f51", surface: "#ffffff" },
@@ -372,7 +382,10 @@ export default function ThemePage() {
               </div>
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {(["primary", "secondary", "default", "success", "warning", "danger", "info"] as const).map((kind) => <div key={kind} className={`rounded-lg border border-ink/10 px-3 py-2 text-xs font-semibold ${kind === "primary" ? "bg-[rgb(var(--site-notification-primary))] text-white" : kind === "secondary" ? "bg-[rgb(var(--site-notification-secondary))] text-white" : kind === "default" ? "bg-[rgb(var(--site-notification-default))]" : `bg-[rgb(var(--site-notification-${kind}))] text-white`}`}>{kind[0].toUpperCase() + kind.slice(1)} notification</div>)}
+              {(["primary", "secondary", "default", "success", "warning", "danger", "info"] as const).map((kind) => {
+                const color = settings[NOTIFICATION_PREVIEW_FIELDS[kind]];
+                return <div key={kind} className="rounded-lg border border-ink/10 px-3 py-2 text-xs font-semibold" style={{ backgroundColor: color, color: contrastTextColor(color) }}>{kind[0].toUpperCase() + kind.slice(1)} notification</div>;
+              })}
             </div>
           </div>
         </details>

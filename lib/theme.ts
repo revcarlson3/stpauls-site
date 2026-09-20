@@ -79,7 +79,7 @@ export function hexToRgb(value: string) {
   return `${Number.parseInt(normalized.slice(0, 2), 16)} ${Number.parseInt(normalized.slice(2, 4), 16)} ${Number.parseInt(normalized.slice(4, 6), 16)}`;
 }
 
-function contrastTextColor(value: string) {
+export function contrastTextColor(value: string) {
   const normalized = value.replace("#", "");
   const channels = [0, 2, 4].map((offset) => Number.parseInt(normalized.slice(offset, offset + 2), 16) / 255);
   const luminance = channels.map((channel) => channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);

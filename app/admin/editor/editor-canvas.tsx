@@ -937,7 +937,7 @@ function ListMarker({ bullet, color, size, label }: { bullet: ListBullet; color:
 
 function PaletteElement({ type, onClick }: { type: BlockType; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `palette:${type}`, data: { kind: "palette", type } });
-  return <div ref={setNodeRef} className={isDragging ? "opacity-40" : ""}><Button {...attributes} {...listeners} type="button" aria-label={`Add ${blockDefinitions[type].label}`} className="aspect-square w-full flex-col justify-center gap-2 rounded-xl bg-ink px-2 py-3 text-center hover:bg-ink/90" onClick={onClick}><BlockIcon type={type} /><span className="text-xs leading-tight">{blockDefinitions[type].label}</span></Button></div>;
+  return <div ref={setNodeRef} className={isDragging ? "opacity-40" : ""}><Button {...attributes} {...listeners} type="button" variant="default" aria-label={`Add ${blockDefinitions[type].label}`} className="aspect-square w-full flex-col justify-center gap-2 rounded-xl !border-ink/40 !bg-white !text-ink px-2 py-3 text-center hover:!bg-mist disabled:cursor-not-allowed disabled:opacity-50" onClick={onClick}><BlockIcon type={type} /><span className="text-xs leading-tight">{blockDefinitions[type].label}</span></Button></div>;
 }
 
 function SortableLayerRow({ block, path, selected, onClick }: { block: Block; path: number[]; selected: boolean; onClick: () => void }) {
