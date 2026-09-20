@@ -217,6 +217,7 @@ body {
 .theme-preview-stage {
   animation: theme-preview-enter 520ms cubic-bezier(0.22, 1, 0.36, 1);
   isolation: isolate;
+  overflow: hidden;
   position: relative;
 }
 
