@@ -68,6 +68,7 @@ export default function GlobalAdminControlPlane() {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Bridge administration</p>
             <h1 className="mt-3 font-serif text-4xl">Control plane</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/60">Select a site context before opening lifecycle tools. Sensitive actions require recent bridge reauthentication.</p>
+            <Link href="/global-admin/operations" className="focus-ring mt-4 inline-block text-sm font-semibold text-coral hover:underline">View platform operations</Link>
           </div>
           <label className="grid min-w-64 gap-2 text-sm font-semibold">
             Selected site
