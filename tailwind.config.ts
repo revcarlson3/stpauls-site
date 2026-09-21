@@ -5,14 +5,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#17324d",
-        coral: "#e66f51",
-        sand: "#f8f4ee",
-        mist: "#e6eef2"
+        ink: "rgb(var(--color-ink) / <alpha-value>)",
+        coral: "rgb(var(--color-coral) / <alpha-value>)",
+        sand: "rgb(var(--color-sand) / <alpha-value>)",
+        mist: "rgb(var(--color-mist) / <alpha-value>)",
+        surface: "rgb(var(--color-surface) / <alpha-value>)"
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "Arial", "sans-serif"],
-        serif: ["var(--font-lora)", "Georgia", "serif"]
+        sans: ["var(--font-body)", "Arial", "sans-serif"],
+        serif: ["var(--font-heading)", "Georgia", "serif"]
       }
     }
   },
@@ -20,4 +21,3 @@ const config: Config = {
 };
 
 export default config;
-

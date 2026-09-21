@@ -11,6 +11,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return NextResponse.json(await updateUserAccount({ id: params.id, name: input.name, email: input.email, password: input.password, groupId: input.groupId, isActive: input.isActive }));
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Permission required." }, { status: 403 });
+    if (error instanceof Error && error.message === "Tenant user was not found.") return NextResponse.json({ error: "User not found." }, { status: 404 });
+    if (error instanceof Error && error.message === "Invalid security group.") return NextResponse.json({ error: error.message }, { status: 400 });
     if (error instanceof Error && error.message.includes("Unique constraint")) return NextResponse.json({ error: "That email address is already in use." }, { status: 409 });
     return NextResponse.json({ error: "Unable to update this user." }, { status: 500 });
   }
@@ -22,6 +24,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Permission required." }, { status: 403 });
+    if (error instanceof Error && error.message === "Tenant user was not found.") return NextResponse.json({ error: "User not found." }, { status: 404 });
     if (error instanceof Error && error.message.includes("cannot delete")) return NextResponse.json({ error: error.message }, { status: 400 });
     if (error instanceof Error && error.message.includes("cannot deactivate")) return NextResponse.json({ error: error.message }, { status: 400 });
     if (error instanceof Error && error.message.startsWith("New password")) return NextResponse.json({ error: error.message }, { status: 400 });

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { deleteSecurityGroup, updateSecurityGroup } from "@/lib/users";
 import type { Permission } from "@prisma/client";
 
-const permissions = new Set<Permission>(["ACCESS_ADMIN", "EDIT_PAGES", "PUBLISH_PAGES", "MANAGE_MENUS", "MANAGE_USERS", "MANAGE_SETTINGS", "MANAGE_MODULES", "MANAGE_MEMBERSHIP", "MANAGE_EVENTS", "MANAGE_GIVING", "MANAGE_ACCOUNTING", "MANAGE_SERVICES"]);
+const permissions = new Set<Permission>(["ACCESS_ADMIN", "MY_MEMBERSHIP", "EDIT_PAGES", "PUBLISH_PAGES", "MANAGE_MENUS", "MANAGE_USERS", "MANAGE_SETTINGS", "MANAGE_MODULES", "MANAGE_MEMBERSHIP", "MANAGE_EVENTS", "MANAGE_GIVING", "MANAGE_ACCOUNTING", "MANAGE_SERVICES", "CREATE_SUPPORT_TICKETS"]);
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const input = await request.json();
@@ -13,6 +13,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return NextResponse.json(await updateSecurityGroup(params.id, { name: input.name, permissions: input.permissions }));
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Permission required." }, { status: 403 });
+    if (error instanceof Error && error.message.includes("cannot be renamed")) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ error: "Unable to update the security group." }, { status: 500 });
   }
 }

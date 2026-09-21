@@ -1,18 +1,22 @@
 import Link from "next/link";
 import { Button, Card, Container } from "@/components/ui";
-import { SiteHeader } from "@/components/site-header";
 import { db } from "@/lib/db";
+import { redirect } from "next/navigation";
 import { PublishedPageShell } from "@/components/page-renderer";
+import { PagePasswordGate } from "@/components/page-password-gate";
+import { hasPageAccess } from "@/lib/page-access";
+import { isPublicSiteEnabled } from "@/lib/modules";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const homePage = await db.page.findFirst({ where: { isHome: true, status: "PUBLISHED" }, select: { title: true, blocks: true } });
-  if (homePage) return <PublishedPageShell title={homePage.title} blocks={homePage.blocks} />;
+  if (!(await isPublicSiteEnabled())) redirect("/admin/login");
+  const homePage = await db.page.findFirst({ where: { isHome: true, OR: [{ status: "PUBLISHED", OR: [{ publishAt: null }, { publishAt: { lte: new Date() } }] }, { status: "DRAFT", publishAt: { lte: new Date() } }] }, select: { id: true, slug: true, title: true, blocks: true, pageThemeFamily: true, pageThemeWidth: true, showHeader: true, showFooter: true, fullScreen: true, passwordHash: true } });
+  if (homePage && !hasPageAccess(homePage.id, homePage.passwordHash)) return <PagePasswordGate pageId={homePage.id} title={homePage.title} />;
+  if (homePage) return <PublishedPageShell title={homePage.title} blocks={homePage.blocks} pageId={homePage.id} pageSlug={homePage.slug} pageThemeFamily={homePage.pageThemeFamily} pageThemeWidth={homePage.pageThemeWidth} editHref={`/admin/editor/${homePage.id}`} showHeader={homePage.showHeader} showFooter={homePage.showFooter} fullScreen={homePage.fullScreen} />;
   return (
     <main>
-      <SiteHeader />
-      <section className="bg-sand pb-20 pt-16 sm:pb-28 sm:pt-24">
+      <section className="site-section bg-sand">
         <Container className="grid items-center gap-12 md:grid-cols-[1.1fr_.9fr]">
           <div>
             <p className="mb-5 text-sm font-semibold uppercase tracking-[0.2em] text-coral">Come as you are</p>
@@ -38,7 +42,7 @@ export default async function HomePage() {
           </div>
         </Container>
       </section>
-      <section id="gather" className="py-20 sm:py-24">
+      <section id="gather" className="site-section">
         <Container>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Gather</p>
           <h2 className="mt-3 font-serif text-4xl">Make space for what matters.</h2>

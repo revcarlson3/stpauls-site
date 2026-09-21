@@ -1,6 +1,8 @@
 import { Container } from "@/components/ui";
-import ActivityFeed from "./activity-feed";
+import { getCurrentUser } from "@/lib/auth";
+import AdminDashboard from "./admin-dashboard";
 
 export default async function AdminPage() {
-  return <main><Container className="py-10 sm:py-14"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Overview</p><h1 className="mt-2 font-serif text-4xl">Admin Dashboard</h1><ActivityFeed /></Container></main>;
+  const user = await getCurrentUser();
+  return <main><Container className="py-10 sm:py-14"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Welcome, {user?.name ?? "there"}!</p><AdminDashboard /></Container></main>;
 }

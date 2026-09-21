@@ -12,7 +12,8 @@ export default function RegisterPage() {
     setMessage("");
     setError("");
     const form = new FormData(event.currentTarget);
-    const response = await fetch("/api/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(form)) });
+    const values = Object.fromEntries(form);
+    const response = await fetch("/api/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...values, memberRequested: form.get("memberRequested") === "on" }) });
     const result = await response.json();
     if (!response.ok) setError(result.error ?? "Registration could not be completed.");
     else setMessage(result.message);
@@ -24,14 +25,17 @@ export default function RegisterPage() {
         <Card>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Join the community</p>
           <h1 className="mt-3 font-serif text-4xl">Create an account</h1>
-          <p className="mt-3 text-sm leading-6 text-ink/60">Use your name and email. A church code connects you to an existing member profile when the details match.</p>
+          <p className="mt-3 text-sm leading-6 text-ink/60">Use your name and email to create your account. Membership access is reviewed by a church administrator.</p>
           <form className="mt-8 grid gap-4" onSubmit={submit}>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-1 text-sm font-semibold">First name<input required name="firstName" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
               <label className="grid gap-1 text-sm font-semibold">Last name<input required name="lastName" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
             </div>
             <label className="grid gap-1 text-sm font-semibold">Email<input required type="email" name="email" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
-            <label className="grid gap-1 text-sm font-semibold">Church code <span className="font-normal text-ink/50">(optional)</span><input name="churchCode" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
+            <label className="flex items-start gap-3 rounded-xl border border-ink/10 bg-sand/40 p-4 text-sm">
+              <input type="checkbox" name="memberRequested" className="mt-1 accent-coral" />
+              <span><span className="font-semibold">I am registering as a member</span><span className="mt-1 block font-normal text-ink/60">Request access to my existing church membership record. An administrator will review the request.</span></span>
+            </label>
             {error && <p role="alert" className="text-sm font-semibold text-coral">{error}</p>}
             {message && <p role="status" className="text-sm font-semibold text-ink">{message}</p>}
             <Button type="submit">Create account</Button>
@@ -41,4 +45,3 @@ export default function RegisterPage() {
     </main>
   );
 }
-

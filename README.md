@@ -22,9 +22,10 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). The public site is at `/`; the editor prototype is at `/admin/editor`.
 
-To prepare the CMS database, copy `.env.example` to `.env`, set `DATABASE_URL`, then run:
+To prepare the CMS database, copy `.env.example` to `.env`, set the required values, then run:
 
 ```bash
+npm run deployment:check
 npm run db:generate
 npm run db:push
 ```
@@ -39,7 +40,11 @@ npm run groups:seed
 
 Users can be assigned to groups from the Users administration screen. Server-side writes use group permission checks rather than trusting client-side switches. The existing `role` field remains for compatibility and session display, but is not used for authorization.
 
-Planned site settings include a Modules page where church-management modules (membership, events and scheduling, giving and pledges, accounting and budget, and services and sermons) can be enabled or disabled. Enabled modules will add their own admin navigation entries for authenticated users whose security groups grant the corresponding permission.
+Site Settings includes a Modules block for users with `MANAGE_MODULES`. It stores enabled modules in `SecuritySettings`; enabled modules add admin navigation entries only for authenticated users whose security groups grant the corresponding permission. Membership currently has a protected placeholder route at `/admin/membership`; the other catalog entries are skeletons for future work.
+
+The membership foundation uses separate family and individual records, configurable family roles and member types, soft lifecycle states (`ACTIVE`, `INACTIVE`, `DECEASED`, and `REMOVED`), custom-field definitions, private document metadata, authored notes, and preference-aware membership messaging. Select members in the directory and choose **Message selected** to open the email/SMS composer. Messaging stores an auditable stub until an SMTP or SMS provider adapter is enabled; recipients are checked server-side against their opt-in preferences. After applying the schema, seed the initial reference data with `npm run membership:seed`.
+
+The Membership landing page includes a responsive directory preview with partial first/last-name search, member-type filtering, and selected individual/family details. For local visual data, apply the schema and reference seed, then run `npm run membership:seed-demo`; this creates five clearly fake example families and ten example members and can be run repeatedly without duplicating them.
 
 Login protection limits an account to five failed password attempts within a 15-minute window, followed by a 15-minute temporary lockout. A successful login clears the failed-attempt counter. Password recovery remains available for locked accounts.
 
@@ -55,12 +60,48 @@ USER_EMAIL=admin@example.org USER_NAME="Site Admin" USER_ROLE=admin USER_PASSWOR
 
 On Windows PowerShell, set the variables for the command with `$env:USER_EMAIL=...` syntax. Remove the password from the environment after the command completes. Once signed in, only an administrator can create additional users through `POST /api/users`; public registration is intentionally disabled.
 
+If an administrator cannot sign in, reset the password and clear any temporary lockout from the runtime terminal without using the admin UI:
+
+```bash
+USER_EMAIL=admin@example.org USER_PASSWORD="use-a-new-temporary-password" npm run user:reset-password
+```
+
+This command uses the configured `DATABASE_URL`, increments the session version, and reports whether the account is active. If it reports no user, the deployed process is connected to a different database than expected.
+
 Available checks:
 
 ```bash
 npm run lint
 npm run build
 ```
+
+## Current module status
+
+The Events and Scheduling module is functionally complete for the current release scope. It includes event CRUD, recurring events, attendance, reports, dashboards, volunteer groups, rotations, overrides, notifications, tenant-scoped data access, and permission enforcement. Public event registration is intentionally deferred until the public beta.
+
+The current production-hardening baseline includes tenant authorization checks, normalized API authentication/permission responses, private member-document lifecycle controls, media cleanup safeguards, a database-backed `/api/health` readiness endpoint, and a user-safe application error boundary. The full automated suite currently passes 19 test files and 91 tests.
+
+The following items are intentionally deferred:
+
+- Public event registration for the public beta.
+- Online giving completion until the provider API keys and webhook configuration are available.
+- Member-center scheduling and giving-history integrations until their shared module data is ready.
+- Scheduled report delivery until a persistent queue/worker system exists.
+- Broad code deduplication and remaining image-rendering lint cleanup until tenant administration is complete.
+
+The next planned implementation scope is tenant administration and tenant-level functionality. Do not commit, push, or deploy local changes unless explicitly requested.
+
+For a Node deployment such as 1Panel, install the supported Node 22 LTS runtime, copy `.env.example` to `.env`, set `DATABASE_URL`, `NEXTAUTH_URL`, and a unique `NEXTAUTH_SECRET` of at least 32 characters, then run `npm install`, `npm run deployment:check`, `npm run db:generate`, and `npm run db:push` when the database schema changes. Run `npm run build` followed by `npm start`. The start script binds Next.js to `0.0.0.0` and honors the `PORT` environment variable (use the same port in the reverse proxy). Configure HTTPS at the reverse proxy and schedule encrypted PostgreSQL backups before accepting production data. Node 25 is not the supported deployment baseline.
+
+Annual grade advancement is safe to run from a host scheduler:
+
+```bash
+npm run membership:advance-grades
+```
+
+The command records the school year and refuses duplicate runs, so it can be scheduled once near the start of each school year. Scheduled email/SMS delivery still requires a persistent queue worker; do not use a web request or short-lived cron process to send a large audience directly.
+
+To enable Media Library AI image generation, create an API key at Pollinations.AI and set `POLLINATIONS_API_KEY` in the server environment. The default provider endpoint is `https://gen.pollinations.ai/image` and model is `flux`; set `POLLINATIONS_API_URL` or `POLLINATIONS_MODEL` to override them. The key is server-only and must not be prefixed with `NEXT_PUBLIC_`.
 
 ## Architecture
 
@@ -84,18 +125,15 @@ The public and admin interfaces share typography, color tokens, buttons, cards, 
 
 ## Security boundaries
 
-Authentication is intentionally **not implemented**. `lib/auth.ts` exposes `getCurrentUser()` and `requireRole()` as the integration seam for a real server-side session provider. The current placeholder returns no user and `requireRole()` throws when called, so it cannot be mistaken for production authentication. Do not add credentials or treat client-side editor state as authorization.
+Authentication and authorization use server-side NextAuth credentials sessions, security-group permissions, MFA options, login protection, and protected admin/API boundaries. Never treat client-side controls as authorization; membership, page, menu, media, user, and settings writes enforce permissions on the server.
 
-The database service is server-only. Never expose `DATABASE_URL` to the browser (`NEXT_PUBLIC_` variables are public). The current page/menu service is intentionally unusable until a real authenticated session provider is connected.
+The database service is server-only. Never expose `DATABASE_URL` or provider credentials to the browser (`NEXT_PUBLIC_` variables are public). Keep `.env` and production secrets outside source control, use HTTPS for the deployed `NEXTAUTH_URL`, and rotate `NEXTAUTH_SECRET` only with a planned session invalidation.
 
-Before deploying an editor:
-
-1. Add a server-side identity/session provider (for example, an OIDC provider) and implement `getCurrentUser()`.
-2. Enforce `requireRole("editor")` or `requireRole("admin")` in every server action/API handler and protect the `/admin` boundary with middleware or server redirects.
-3. Validate and sanitize persisted block content on the server, add CSRF/session protections, and audit publishing actions.
+Before accepting production data, verify that PostgreSQL backups can be restored, mail/SMS provider credentials and sender identities are verified, MFA settings are configured for administrators, and the reverse proxy forwards HTTPS and the application port correctly.
 
 ## Next steps
 
+- Complete tenant administration, tenant provisioning, module enablement, invitations, and tenant-level platform controls.
 - Connect a server-side identity provider so page CRUD and publishing can be used from the admin UI.
 - Replace native drag-and-drop with accessible pointer/keyboard interactions if the editor grows.
 - Add real preview/publish workflows, autosave, media uploads, and audit history.

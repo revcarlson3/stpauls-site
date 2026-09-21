@@ -3,8 +3,8 @@ import EditorCanvas from "./editor-canvas";
 
 export default function EditorPage() {
   return (
-    <main>
-      <Container className="py-10 sm:py-14">
+    <main className="h-full overflow-hidden">
+      <Container className="flex h-full min-h-0 flex-col py-6 sm:py-8">
         <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Draft page</p>
@@ -13,7 +13,9 @@ export default function EditorPage() {
           </div>
           <span className="w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Schema prototype</span>
         </div>
-        <EditorCanvas />
+        <div className="min-h-0 flex-1">
+          <EditorCanvas />
+        </div>
       </Container>
     </main>
   );

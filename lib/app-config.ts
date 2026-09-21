@@ -24,17 +24,27 @@ export function decryptConfig(value: string | null) {
 export async function getMailSettings() {
   const settings = await db.securitySettings.findUnique({ where: { id: 1 } });
   return {
+    provider: settings?.emailProvider ?? "smtp",
     smtpHost: settings?.smtpHost ?? "",
     smtpPort: settings?.smtpPort ?? 587,
     smtpUser: settings?.smtpUser ?? "",
     smtpPassword: decryptConfig(settings?.smtpPasswordEncrypted ?? null),
-    emailFrom: settings?.emailFrom ?? ""
+    emailFrom: settings?.emailFrom ?? "",
+    apiKey: decryptConfig(settings?.emailApiKeyEncrypted ?? null),
+    apiSecret: decryptConfig(settings?.emailApiSecretEncrypted ?? null),
+    apiDomain: settings?.emailApiDomain ?? "",
+    apiRegion: settings?.emailApiRegion ?? ""
   };
 }
 
 export async function getRegistrationCode() {
   const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { registrationCodeEncrypted: true } });
   return decryptConfig(settings?.registrationCodeEncrypted ?? null);
+}
+
+export async function getPollinationsApiKey() {
+  const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { pollinationsApiKeyEncrypted: true } });
+  return decryptConfig(settings?.pollinationsApiKeyEncrypted ?? null) || (process.env.POLLINATIONS_API_KEY ?? "");
 }
 
 export async function getSmsSettings() {
@@ -44,5 +54,17 @@ export async function getSmsSettings() {
     accountId: settings?.smsAccountId ?? "",
     authSecret: decryptConfig(settings?.smsAuthSecretEncrypted ?? null),
     from: settings?.smsFrom ?? ""
+  };
+}
+
+export async function getPrayerRequestSettings() {
+  const settings = await db.securitySettings.findUnique({
+    where: { id: 1 },
+    select: { prayerRequestsAdminEmail: true, prayerRequestsSundayEmail: true, prayerRequestsEldersEmail: true }
+  });
+  return {
+    adminEmail: settings?.prayerRequestsAdminEmail ?? "",
+    sundayEmail: settings?.prayerRequestsSundayEmail ?? "",
+    eldersEmail: settings?.prayerRequestsEldersEmail ?? ""
   };
 }

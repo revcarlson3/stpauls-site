@@ -7,6 +7,7 @@ import { verifyCaptcha } from "@/lib/captcha";
 import { consumeRecoveryCode, createOtpChallenge, verifyOtpChallenge, verifyTotp } from "@/lib/mfa";
 import { decryptConfig } from "@/lib/app-config";
 import { sendEmailMfaCode, sendSmsMfaCode } from "@/lib/mfa-delivery";
+import { canAccessAdmin } from "@/lib/permissions";
 
 const REMEMBERED_SESSION_SECONDS = 60 * 24 * 60 * 60;
 const STANDARD_SESSION_SECONDS = 24 * 60 * 60;
@@ -26,15 +27,22 @@ export const authOptions: NextAuthOptions = {
         ,captchaAnswer: { label: "Captcha answer", type: "text" }
         ,mfaCode: { label: "Authenticator code", type: "text" }
         ,mfaChannel: { label: "MFA delivery method", type: "text" }
+        ,bridge: { label: "Bridge authentication boundary", type: "text" }
       },
       async authorize(credentials, req) {
         if (!credentials?.email || !credentials.password) return null;
+        const bridgeRequested = credentials.bridge === "true";
         const user = await db.user.findUnique({ where: { email: credentials.email.toLowerCase().trim() } });
         const settings = await db.securitySettings.findUnique({ where: { id: 1 } }) ?? { loginProtectionEnabled: true, maxFailedAttempts: 5, lockoutMinutes: 15, captchaMode: "off", authenticatorMfaEnabled: false, emailMfaEnabled: false, smsMfaEnabled: false, mfaChallengePolicy: "every-login" };
-        if (settings.captchaMode === "challenge" && !verifyCaptcha(credentials.captchaToken, credentials.captchaAnswer)) return null;
+        if (settings.captchaMode === "challenge" && !verifyCaptcha(credentials.captchaToken, credentials.captchaAnswer)) {
+          throw new Error("Human verification was not accepted. Please solve it again.");
+        }
         if (!user?.passwordHash || !user.isActive) return null;
+        if (bridgeRequested && !user.isPlatformAdmin) return null;
         const now = new Date();
-        if (settings.loginProtectionEnabled && user.lockedUntil && user.lockedUntil > now) return null;
+        if (settings.loginProtectionEnabled && user.lockedUntil && user.lockedUntil > now) {
+          throw new Error("This account is temporarily locked. Please try again later.");
+        }
         const windowMs = settings.lockoutMinutes * 60 * 1000;
         const windowExpired = !user.loginWindowStartedAt || now.getTime() - user.loginWindowStartedAt.getTime() >= windowMs;
         const failedAttempts = windowExpired ? 0 : user.failedLoginAttempts;
@@ -51,18 +59,28 @@ export const authOptions: NextAuthOptions = {
           });
           return null;
         }
-        const access = await db.groupPermission.findUnique({ where: { groupId_permission: { groupId: user.groupId ?? "", permission: "ACCESS_ADMIN" } } });
+        const groupPermissions = await db.groupPermission.findMany({ where: { groupId: user.groupId ?? "" }, select: { permission: true } });
+        const access = canAccessAdmin(groupPermissions.map(({ permission }) => permission));
         const trusted = settings.mfaChallengePolicy === "trusted-device" && await isTrustedDevice(req.headers?.cookie, user.id);
         const availableChannels = [
           settings.emailMfaEnabled && user.emailMfaEnabled && user.emailVerifiedAt ? "email" : "",
           settings.smsMfaEnabled && user.smsMfaEnabled && user.phoneVerifiedAt && user.phoneNumber ? "sms" : ""
         ].filter(Boolean) as Array<"email" | "sms">;
-        const authenticatorAvailable = Boolean(settings.authenticatorMfaEnabled && user.mfaEnabled && user.mfaSecretEncrypted);
-        const mfaRequired = Boolean(!trusted && (authenticatorAvailable || availableChannels.length));
+        const authenticatorAvailable = Boolean(user.isPlatformAdmin && user.mfaEnabled && user.mfaSecretEncrypted || settings.authenticatorMfaEnabled && user.mfaEnabled && user.mfaSecretEncrypted);
+        const mfaRequired = Boolean(bridgeRequested || (!trusted && (authenticatorAvailable || availableChannels.length)));
+        if (bridgeRequested && !authenticatorAvailable) {
+          return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: access, authBoundary: "global-admin", rememberMe: credentials.rememberMe === "true", globalAdminMfaSetupRequired: true, reauthenticatedAt: Math.floor(Date.now() / 1000) };
+        }
         if (mfaRequired) {
           const mfaCode = typeof credentials.mfaCode === "string" ? credentials.mfaCode : "";
           const requestedChannel = ["authenticator", "sms", "email"].includes(credentials.mfaChannel) ? credentials.mfaChannel as "authenticator" | "email" | "sms" : undefined;
-          const channel = requestedChannel === "authenticator" && authenticatorAvailable ? requestedChannel : requestedChannel && requestedChannel !== "authenticator" && availableChannels.includes(requestedChannel) ? requestedChannel : availableChannels[0];
+          const channel = requestedChannel === "authenticator" && authenticatorAvailable
+            ? requestedChannel
+            : requestedChannel && requestedChannel !== "authenticator" && availableChannels.includes(requestedChannel)
+              ? requestedChannel
+              : authenticatorAvailable
+                ? "authenticator"
+                : availableChannels[0];
           if (channel && channel !== "authenticator" && !mfaCode) {
             const recipient = channel === "email" ? user.email : user.phoneNumber as string;
             const challenge = await createOtpChallenge({ userId: user.id, channel, purpose: "login", recipient });
@@ -71,11 +89,14 @@ export const authOptions: NextAuthOptions = {
               else await sendSmsMfaCode(recipient, challenge.code);
             } catch {
               await db.mfaChallenge.delete({ where: { id: challenge.id } });
-              return null;
+              if (authenticatorAvailable) {
+                return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: access, authBoundary: bridgeRequested ? "global-admin" : "tenant-admin", rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: "authenticator", mfaAvailableChannels: ["authenticator"] };
+              }
+              throw new Error("The email verification code could not be sent. Check the email delivery settings or use another verification method.");
             }
-            return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: channel, mfaAvailableChannels: [...(authenticatorAvailable ? ["authenticator" as const] : []), ...availableChannels] };
+            return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: access, authBoundary: bridgeRequested ? "global-admin" : "tenant-admin", rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: channel, mfaAvailableChannels: [...(authenticatorAvailable ? ["authenticator" as const] : []), ...availableChannels] };
           }
-          if (!mfaCode) return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: "authenticator", mfaAvailableChannels: ["authenticator"] };
+          if (!mfaCode) return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: access, authBoundary: bridgeRequested ? "global-admin" : "tenant-admin", rememberMe: credentials.rememberMe === "true", mfaPending: true, mfaPendingUserId: user.id, mfaPendingChannel: "authenticator", mfaAvailableChannels: ["authenticator"] };
           let valid = Boolean(user.mfaSecretEncrypted && verifyTotp(decryptConfig(user.mfaSecretEncrypted), mfaCode));
           if (!valid && channel && channel !== "authenticator" && mfaCode) valid = (await verifyOtpChallenge({ userId: user.id, channel, purpose: "login", code: mfaCode })).valid;
           if (!valid) {
@@ -98,11 +119,11 @@ export const authOptions: NextAuthOptions = {
                 }
               });
             }
-            return null;
+            throw new Error("That verification code was not accepted.");
           }
         }
-        await db.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginWindowStartedAt: null, lockedUntil: null } });
-        return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: Boolean(access), rememberMe: credentials.rememberMe === "true" };
+        await db.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginWindowStartedAt: null, lockedUntil: null, lastAccessAt: new Date() } });
+        return { id: user.id, name: user.name, email: user.email, role: user.role, canAccessAdmin: access, authBoundary: bridgeRequested ? "global-admin" : "tenant-admin", reauthenticatedAt: Math.floor(Date.now() / 1000), rememberMe: credentials.rememberMe === "true" };
       }
     })
   ],
@@ -112,10 +133,13 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = user.role;
         token.canAccessAdmin = Boolean(user.canAccessAdmin);
+        token.authBoundary = user.authBoundary;
+        token.reauthenticatedAt = user.reauthenticatedAt;
         token.mfaPending = Boolean(user.mfaPending);
         token.mfaPendingUserId = user.mfaPendingUserId;
         token.mfaPendingChannel = user.mfaPendingChannel;
         token.mfaAvailableChannels = user.mfaAvailableChannels;
+        token.globalAdminMfaSetupRequired = Boolean(user.globalAdminMfaSetupRequired);
         token.exp = Math.floor(Date.now() / 1000) + (user.rememberMe ? REMEMBERED_SESSION_SECONDS : STANDARD_SESSION_SECONDS);
         token.sessionVersion = (await db.user.findUnique({ where: { id: user.id }, select: { sessionVersion: true } }))?.sessionVersion ?? 0;
       } else if (token.id) {
@@ -130,10 +154,13 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id;
         session.user.role = token.role;
         session.user.canAccessAdmin = token.canAccessAdmin;
+        session.user.authBoundary = token.authBoundary;
+        session.user.reauthenticatedAt = token.reauthenticatedAt;
         session.user.mfaPending = token.mfaPending;
         session.user.mfaPendingUserId = token.mfaPendingUserId;
         session.user.mfaPendingChannel = token.mfaPendingChannel;
         session.user.mfaAvailableChannels = token.mfaAvailableChannels;
+        session.user.globalAdminMfaSetupRequired = token.globalAdminMfaSetupRequired;
         if (token.invalid || token.mfaPending) session.user.id = "";
       }
       return session;
