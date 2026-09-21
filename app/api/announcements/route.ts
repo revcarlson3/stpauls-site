@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { sanitizeAnnouncementHtml, sanitizeTickerHtml } from "@/lib/announcement-content";
 
 export async function GET(request: Request) {
   const isPublic = new URL(request.url).searchParams.get("surface") === "public";
-  const surface = isPublic ? "PUBLIC_TICKER" : "AUTHENTICATED";
+  const isAdminDashboard = new URL(request.url).searchParams.get("surface") === "admin-dashboard";
+  const surface = isPublic ? "PUBLIC_TICKER" : isAdminDashboard ? "ADMIN_DASHBOARD" : "AUTHENTICATED";
   const user = await getCurrentUser();
   if (!isPublic && !user?.churchId) return NextResponse.json({ announcements: [] });
   const now = new Date();
@@ -13,7 +15,7 @@ export async function GET(request: Request) {
       isActive: true,
       startsAt: { lte: now },
       OR: [{ endsAt: null }, { endsAt: { gte: now } }],
-      placement: { in: isPublic ? ["PUBLIC_TICKER", "BOTH"] : ["AUTHENTICATED", "BOTH"] },
+      placement: { in: isPublic ? ["PUBLIC_TICKER", "BOTH"] : isAdminDashboard ? ["ADMIN_DASHBOARD"] : ["AUTHENTICATED", "BOTH"] },
       ...(isPublic
         ? { audience: "GLOBAL" }
         : { OR: [{ audience: "GLOBAL", deliveries: { some: { churchId: user!.churchId! } } }, { audience: "TENANT", churchId: user!.churchId! }] })
@@ -30,5 +32,9 @@ export async function GET(request: Request) {
       deliveries: user?.churchId ? { where: { churchId: user.churchId }, select: { acknowledgedAt: true } } : undefined
     }
   });
-  return NextResponse.json({ announcements: announcements.map((announcement) => ({ ...announcement, acknowledged: Boolean(announcement.deliveries[0]?.acknowledgedAt) })) });
+  return NextResponse.json({ announcements: announcements.map((announcement) => ({
+    ...announcement,
+    body: isAdminDashboard ? sanitizeAnnouncementHtml(announcement.body) : sanitizeTickerHtml(announcement.body),
+    acknowledged: Boolean(announcement.deliveries[0]?.acknowledgedAt)
+  })) });
 }

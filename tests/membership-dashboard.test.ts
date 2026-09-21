@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   annualDateKeys,
+  anniversaryDisplayName,
   anniversaryYears,
   missingProfileFields,
   nextAnnualOccurrence,
@@ -24,6 +25,16 @@ describe("membership dashboard date windows", () => {
     const occurrence = nextAnnualOccurrence(original, new Date("2026-12-30T00:00:00.000Z"));
     expect(occurrence.toISOString()).toBe("2027-01-02T00:00:00.000Z");
     expect(anniversaryYears(original, occurrence)).toBe(17);
+  });
+
+  it("formats anniversaries with the head of household first and a single-person fallback", () => {
+    expect(anniversaryDisplayName([
+      { id: "spouse", firstName: "Nicole", familyLastName: "Hill", familyRoleSlug: "spouse" },
+      { id: "head", firstName: "Shane", familyLastName: "Hill", familyRoleSlug: "head-of-household" }
+    ])).toBe("Shane & Nicole Hill");
+    expect(anniversaryDisplayName([
+      { id: "member", firstName: "Shane", familyLastName: "Hill", familyRoleSlug: "head-of-household" }
+    ])).toBe("Shane Hill");
   });
 });
 

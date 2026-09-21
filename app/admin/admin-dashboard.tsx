@@ -8,7 +8,7 @@ import DashboardBlocks from "./dashboard-blocks";
 import { MembershipDashboard } from "./membership/membership-dashboard";
 import { EventsDashboard } from "./events-dashboard";
 import { Card } from "@/components/ui";
-import { hasPublicWebsiteModuleAccess, PUBLIC_WEBSITE_LINKS } from "@/lib/modules";
+import { sanitizeAnnouncementHtml } from "@/lib/announcement-content";
 
 const panelLabels: Record<string, string> = {
   activity: "Recent activity",
@@ -30,8 +30,7 @@ export default function AdminDashboard() {
   const [order, setOrder] = useState(["activity", "sms", "email", "birthdays", "anniversaries", "profiles", "engagement", "volunteer", "upcoming", "attendance", "events-volunteer", "reporting"]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dashboardLocked, setDashboardLocked] = useState(false);
-  const [publicWebsitePermissions, setPublicWebsitePermissions] = useState<string[]>([]);
-  const [publicWebsiteAvailable, setPublicWebsiteAvailable] = useState(false);
+  const [dashboardAnnouncements, setDashboardAnnouncements] = useState<Array<{ id: string; title: string; body: string; severity: string }>>([]);
   const dashboardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const stored = window.localStorage.getItem("admin-dashboard-combined-layout");
@@ -56,14 +55,11 @@ export default function AdminDashboard() {
     return () => { document.removeEventListener("mousedown", closeOnOutsideClick); document.removeEventListener("keydown", closeOnEscape); };
   }, [configureOpen]);
   useEffect(() => {
-    void Promise.all([fetch("/api/modules"), fetch("/api/account")]).then(async ([modulesResponse, accountResponse]) => {
-      if (!modulesResponse.ok || !accountResponse.ok) return;
-      const modulesValue = await modulesResponse.json();
-      const accountValue = await accountResponse.json();
-      const permissions = Array.isArray(accountValue.permissions) ? accountValue.permissions.filter((permission: unknown): permission is string => typeof permission === "string") : [];
-      setPublicWebsitePermissions(permissions);
-      setPublicWebsiteAvailable(hasPublicWebsiteModuleAccess((modulesValue.modules ?? []).map((module: { slug: string }) => module.slug), permissions));
-    }).catch(() => undefined);
+    void fetch("/api/announcements?surface=admin-dashboard", { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) return;
+      const value = await response.json();
+      setDashboardAnnouncements(Array.isArray(value.announcements) ? value.announcements : []);
+    });
   }, []);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
@@ -85,7 +81,7 @@ export default function AdminDashboard() {
       <h1 className="font-serif text-4xl">Admin Dashboard</h1>
       <button type="button" className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold" aria-expanded={configureOpen} onClick={() => setConfigureOpen((open) => !open)}>Configure Dashboard</button>
     </div>
-    {publicWebsiteAvailable && <Card className="mb-8 p-6 sm:p-8"><p className="text-sm font-semibold uppercase tracking-[0.16em] text-coral">Public Website</p><p className="mt-2 text-sm text-ink/60">Manage the public-facing pages and presentation for this site.</p><div className="mt-5 flex flex-wrap gap-3">{PUBLIC_WEBSITE_LINKS.filter((link) => publicWebsitePermissions.includes(link.permission)).map((link) => <Link key={link.href} href={link.href} className="focus-ring rounded-lg border border-ink/15 bg-white px-4 py-2 text-sm font-semibold hover:border-coral hover:text-coral">{link.label}</Link>)}</div></Card>}
+    {dashboardAnnouncements.length > 0 && <Card className="mb-8 w-full border-l-4 border-coral p-6 sm:p-8"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-coral">Platform announcement</p><div className="mt-4 grid gap-4">{dashboardAnnouncements.map((announcement) => <article key={announcement.id}><h2 className="font-serif text-2xl">{announcement.title}</h2><div className="rich-text-content mt-2 text-sm leading-6 text-ink/75" dangerouslySetInnerHTML={{ __html: sanitizeAnnouncementHtml(announcement.body) }} /></article>)}</div></Card>}
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragCancel={() => setActiveId(null)} onDragEnd={(event) => { handleDragEnd(event); setActiveId(null); }}>
       <SortableContext items={order} strategy={rectSortingStrategy}>
         <div className="grid gap-8 grid-cols-1 lg:grid-cols-4">

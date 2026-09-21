@@ -4,7 +4,7 @@ import { buildGlobalAuditDetails, requireGlobalAdmin } from "@/lib/global-admin"
 const severities = ["INFO", "SUCCESS", "WARNING", "CRITICAL"] as const;
 export type AnnouncementSeverity = (typeof severities)[number];
 export const announcementAudiences = ["GLOBAL", "TENANT"] as const;
-export const announcementPlacements = ["AUTHENTICATED", "PUBLIC_TICKER", "BOTH"] as const;
+export const announcementPlacements = ["AUTHENTICATED", "PUBLIC_TICKER", "BOTH", "ADMIN_DASHBOARD"] as const;
 
 export function isAnnouncementSeverity(value: string): value is AnnouncementSeverity {
   return severities.includes(value as AnnouncementSeverity);
@@ -83,6 +83,7 @@ export function parseAnnouncementInput(input: Record<string, unknown>, options: 
   if (audience === "TENANT" && !churchId) throw new Error("A tenant must be selected for tenant announcements.");
   if (audience === "GLOBAL" && churchId) throw new Error("Global announcements cannot target a tenant.");
   if (audience === "TENANT" && !options.allowTenant) throw new Error("Tenant announcements are not allowed here.");
+  if (placement === "ADMIN_DASHBOARD" && audience !== "GLOBAL") throw new Error("Admin Dashboard announcements must be global.");
   if (placement !== "AUTHENTICATED" && audience === "TENANT") throw new Error("Tenant announcements can only target authenticated users.");
   if (Number.isNaN(startsAt.getTime()) || (endsAt && Number.isNaN(endsAt.getTime()))) throw new Error("Announcement dates are invalid.");
   if (endsAt && endsAt <= startsAt) throw new Error("The end date must be after the start date.");

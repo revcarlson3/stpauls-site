@@ -4,7 +4,10 @@ import { requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
   annualDateKeys,
+  activeMembershipIndividualSql,
+  activeMembershipIndividualWhere,
   anniversaryYears,
+  anniversaryDisplayName,
   displayMemberName,
   MEMBERSHIP_DASHBOARD_DATE_WINDOW_DAYS,
   MEMBERSHIP_DASHBOARD_DETAIL_LIMIT,
@@ -23,6 +26,7 @@ type AnnualRow = {
   firstName: string;
   lastName: string;
   familyLastName: string;
+  familyRoleSlug: string;
   date: Date;
 };
 
@@ -31,7 +35,7 @@ type VolunteerSummaryRow = { shiftCount: number; requiredSlots: number; coveredS
 type VolunteerGapRow = { id: string; title: string; groupName: string; startsAt: Date; capacity: number; assigned: number };
 type AttendanceTrendRow = { startsAt: Date; count: number };
 
-const activeMemberWhere = { status: { not: "REMOVED" as const } };
+const activeMemberWhere = activeMembershipIndividualWhere;
 
 const incompleteProfileWhere: Prisma.MembershipIndividualWhereInput = {
   ...activeMemberWhere,
@@ -96,10 +100,11 @@ export async function GET() {
       db.$queryRaw<AnnualRow[]>(Prisma.sql`
         SELECT i.id, i."familyId", i."firstName",
           COALESCE(i."lastName", f."lastName") AS "lastName",
-          f."lastName" AS "familyLastName", i.birthday AS date
+          f."lastName" AS "familyLastName", role.slug AS "familyRoleSlug", i.birthday AS date
         FROM "MembershipIndividual" i
         JOIN "MembershipFamily" f ON f.id = i."familyId"
-        WHERE i.status <> 'REMOVED'
+        JOIN "MembershipFamilyRole" role ON role.id = i."familyRoleId"
+        WHERE ${activeMembershipIndividualSql}
           AND to_char(i.birthday, 'MM-DD') IN (${Prisma.join(dateKeys)})
         ORDER BY array_position(ARRAY[${Prisma.join(dateKeys)}]::text[], to_char(i.birthday, 'MM-DD')),
           f."lastName", i."firstName"
@@ -108,13 +113,16 @@ export async function GET() {
       db.$queryRaw<AnnualRow[]>(Prisma.sql`
         SELECT i.id, i."familyId", i."firstName",
           COALESCE(i."lastName", f."lastName") AS "lastName",
-          f."lastName" AS "familyLastName", i."weddingDate" AS date
+          f."lastName" AS "familyLastName", role.slug AS "familyRoleSlug", i."weddingDate" AS date
         FROM "MembershipIndividual" i
         JOIN "MembershipFamily" f ON f.id = i."familyId"
-        WHERE i.status <> 'REMOVED' AND i."weddingDate" IS NOT NULL
+        JOIN "MembershipFamilyRole" role ON role.id = i."familyRoleId"
+        WHERE ${activeMembershipIndividualSql} AND i."weddingDate" IS NOT NULL
           AND to_char(i."weddingDate", 'MM-DD') IN (${Prisma.join(dateKeys)})
         ORDER BY array_position(ARRAY[${Prisma.join(dateKeys)}]::text[], to_char(i."weddingDate", 'MM-DD')),
-          f."lastName", i."firstName"
+          f."lastName",
+          CASE WHEN role.slug = 'head-of-household' THEN 0 WHEN role.slug = 'spouse' THEN 1 ELSE 2 END,
+          i."firstName"
         LIMIT ${detailLimit * 3}
       `),
       db.membershipIndividual.count({ where: activeMemberWhere }),
@@ -249,18 +257,21 @@ export async function GET() {
       `)
     ]);
 
-    const anniversaries = new Map<string, { id: string; familyId: string; name: string; date: string; years: number }>();
+    const anniversaryMembers = new Map<string, AnnualRow[]>();
     anniversaryRows.forEach((row) => {
-      const occurrence = nextAnnualOccurrence(row.date, today);
       const key = `${row.familyId}:${row.date.toISOString().slice(5, 10)}`;
-      const existing = anniversaries.get(key);
-      anniversaries.set(key, {
-        id: existing?.id ?? row.id,
+      anniversaryMembers.set(key, [...(anniversaryMembers.get(key) ?? []), row]);
+    });
+    const anniversaries = Array.from(anniversaryMembers.values()).map((members) => {
+      const row = members[0];
+      const occurrence = nextAnnualOccurrence(row.date, today);
+      return {
+        id: members.find((member) => member.familyRoleSlug === "head-of-household")?.id ?? row.id,
         familyId: row.familyId,
-        name: existing ? `${existing.name} & ${row.firstName}` : `${row.firstName} ${row.familyLastName}`,
+        name: anniversaryDisplayName(members),
         date: occurrence.toISOString(),
         years: anniversaryYears(row.date, occurrence)
-      });
+      };
     });
 
     const presentAttendance = attendanceByStatus.find((item) => item.status === "PRESENT")?._count._all ?? 0;

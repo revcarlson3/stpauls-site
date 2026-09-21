@@ -12,7 +12,7 @@ import {
   type MembershipDashboardBlockId,
   type MembershipDashboardBlockWidth,
   type MembershipDashboardLayout
-} from "@/lib/membership-dashboard";
+} from "@/lib/membership-dashboard-shared";
 
 type BlockId = MembershipDashboardBlockId;
 type Width = MembershipDashboardBlockWidth;

@@ -313,18 +313,30 @@ export function shouldAttemptRequestScheduler(now = Date.now(), state?: RequestS
 async function acquireRequestSchedulerLock(now: Date) {
   const lockToken = crypto.randomUUID();
   const lockUntil = new Date(now.getTime() + REQUEST_SCHEDULER_LEASE_MS);
+  const availableWhere = {
+    lockKey: REQUEST_SCHEDULER_LOCK_KEY,
+    AND: [
+      { OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }] },
+      { OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lt: new Date(now.getTime() - REQUEST_SCHEDULER_THROTTLE_MS) } }] }
+    ]
+  };
+  const existing = await db.reportAutomationSchedulerLock.findUnique({
+    where: { lockKey: REQUEST_SCHEDULER_LOCK_KEY },
+    select: { lockKey: true }
+  });
+  if (existing) {
+    const acquired = await db.reportAutomationSchedulerLock.updateMany({
+      where: availableWhere,
+      data: { lockToken, lockedUntil: lockUntil, lastCheckedAt: now }
+    });
+    return acquired.count === 1 ? lockToken : null;
+  }
   try {
     await db.reportAutomationSchedulerLock.create({ data: { lockKey: REQUEST_SCHEDULER_LOCK_KEY, lockToken, lockedUntil: lockUntil, lastCheckedAt: now } });
     return lockToken;
   } catch {
     const acquired = await db.reportAutomationSchedulerLock.updateMany({
-      where: {
-        lockKey: REQUEST_SCHEDULER_LOCK_KEY,
-        AND: [
-          { OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }] },
-          { OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lt: new Date(now.getTime() - REQUEST_SCHEDULER_THROTTLE_MS) } }] }
-        ]
-      },
+      where: availableWhere,
       data: { lockToken, lockedUntil: lockUntil, lastCheckedAt: now }
     });
     return acquired.count === 1 ? lockToken : null;

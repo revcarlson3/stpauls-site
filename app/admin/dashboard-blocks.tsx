@@ -5,7 +5,7 @@ import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card } from "@/components/ui";
-import { DEFAULT_MEMBERSHIP_DASHBOARD_LAYOUT, MEMBERSHIP_DASHBOARD_BLOCK_IDS, normalizeDashboardLayout, type MembershipDashboardLayout } from "@/lib/membership-dashboard";
+import { DEFAULT_MEMBERSHIP_DASHBOARD_LAYOUT, MEMBERSHIP_DASHBOARD_BLOCK_IDS, normalizeDashboardLayout, type MembershipDashboardLayout } from "@/lib/membership-dashboard-shared";
 
 type BlockId = "activity" | "sms" | "email";
 type AuditLog = { id: string; activityType: string; summary: string; details: string | null; createdAt: string; actor: { name: string; email: string } | null };

@@ -91,7 +91,7 @@ describe("global-admin support management", () => {
     expect(result).toMatchObject({ id: "ticket-1", status: "IN_PROGRESS", priority: "URGENT" });
     expect(db.supportTicket.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "ticket-1" }, data: expect.objectContaining({ status: "IN_PROGRESS", priority: "URGENT", assignedToId: "platform-admin-2" }) }));
     expect(db.supportTicketMessage.create).toHaveBeenCalledWith({ data: { ticketId: "ticket-1", authorId: "admin-1", body: "Investigating privately.", isInternal: true } });
-    expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({ activityType: "global-admin-support-note-added", details: expect.stringContaining('"selectedChurchId":"church-1"') }));
+    expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({ activityType: "global-admin-support-note-added", details: expect.stringContaining('"targetType":"support-ticket"') }));
     expect(logAudit.mock.calls[0][0].details).not.toContain("Investigating privately.");
   });
 
