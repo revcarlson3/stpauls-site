@@ -130,7 +130,7 @@ export async function addSelectedChurchDomain(input: { hostname?: unknown; kind:
   if (!hostname) throw new Error("Provide a valid custom hostname.");
   const isPlatform = input.kind === "PLATFORM_SUBDOMAIN";
   const provisioning = isPlatform ? await provisionPlatformDns(hostname) : null;
-  if (provisioning?.state !== "PROVISIONED") throw new Error(provisioning?.guidance ?? "Platform DNS provisioning is unavailable.");
+  if (isPlatform && provisioning?.state !== "PROVISIONED") throw new Error(provisioning?.guidance ?? "Platform DNS provisioning is unavailable.");
   const registrar = isPlatform ? { provider: "Namecheap", guidance: "Platform DNS was provisioned through Namecheap." } : await lookupRegistrar(hostname);
   const now = new Date();
   const domain = await db.siteDomain.create({
