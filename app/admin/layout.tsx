@@ -172,6 +172,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-identity">Site Identity</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings">General Settings</Link>
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/billing">Subscription Billing</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/messaging">Messaging</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/announcements">Announcements</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/cron">Cron</Link>

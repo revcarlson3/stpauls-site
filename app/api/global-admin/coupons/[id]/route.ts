@@ -1,0 +1,5 @@
+import { NextResponse } from "next/server";
+import { updateGlobalCoupon } from "@/lib/global-admin-coupons";
+export async function PATCH(request: Request, { params }: { params: { id: string } }) { try { return NextResponse.json(await updateGlobalCoupon(params.id, await request.json(), "update")); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update coupon." }, { status: 400 }); } }
+export async function POST(request: Request, { params }: { params: { id: string } }) { try { return NextResponse.json(await updateGlobalCoupon(params.id, {}, "disable")); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to disable coupon." }, { status: 400 }); } }
+export async function DELETE(_request: Request, { params }: { params: { id: string } }) { try { return NextResponse.json(await updateGlobalCoupon(params.id, {}, "delete")); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to delete coupon." }, { status: 400 }); } }

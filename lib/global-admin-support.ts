@@ -77,11 +77,11 @@ async function requireActiveSupportContext() {
   return context;
 }
 
-export async function listSelectedSiteSupportTickets(status?: string) {
-  const context = await requireGlobalAdmin({ selectedChurch: true });
+export async function listSelectedSiteSupportTickets(status?: string, platformWide = false) {
+  const context = await requireGlobalAdmin(platformWide ? {} : { selectedChurch: true });
   if (status && !assertEnum(status, supportTicketStatuses)) throw new Error("Support ticket fields are invalid.");
   const tickets = await db.supportTicket.findMany({
-    where: { churchId: context.church!.id, ...(status ? { status: status as SupportTicketStatus } : {}) },
+    where: { ...(platformWide ? {} : { churchId: context.church!.id }), ...(status ? { status: status as SupportTicketStatus } : {}) },
     orderBy: { updatedAt: "desc" },
     take: 100,
     select: ticketListSelect
@@ -89,10 +89,10 @@ export async function listSelectedSiteSupportTickets(status?: string) {
   return tickets.map(serializeSupportTicket);
 }
 
-export async function getSelectedSiteSupportTicket(ticketId: string) {
-  const context = await requireGlobalAdmin({ selectedChurch: true });
+export async function getSelectedSiteSupportTicket(ticketId: string, platformWide = false) {
+  const context = await requireGlobalAdmin(platformWide ? {} : { selectedChurch: true });
   const ticket = await db.supportTicket.findFirst({
-    where: { id: ticketId, churchId: context.church!.id },
+    where: { id: ticketId, ...(platformWide ? {} : { churchId: context.church!.id }) },
     select: {
       ...ticketListSelect,
       description: true,
@@ -104,13 +104,13 @@ export async function getSelectedSiteSupportTicket(ticketId: string) {
   return ticket ? serializeSupportTicket(ticket) : null;
 }
 
-export async function addSelectedSiteSupportReply(ticketId: string, body: string, files: File[]) {
-  const context = await requireActiveSupportContext();
+export async function addSelectedSiteSupportReply(ticketId: string, body: string, files: File[], platformWide = false) {
+  const context = platformWide ? await requireGlobalAdmin({ sensitive: true }) : await requireActiveSupportContext();
   const trimmedBody = body.trim();
   if (!trimmedBody || trimmedBody.length > 10_000) throw new Error("Support reply is invalid.");
   validateSupportFiles(files);
   const existing = await db.supportTicket.findFirst({
-    where: { id: ticketId, churchId: context.church!.id },
+    where: { id: ticketId, ...(platformWide ? {} : { churchId: context.church!.id }) },
     select: { id: true, churchId: true, status: true }
   });
   if (!existing) return null;
@@ -176,8 +176,8 @@ export async function listSupportAssignees() {
   return db.user.findMany({ where: { isActive: true, isPlatformAdmin: true }, orderBy: { name: "asc" }, select: { id: true, name: true } });
 }
 
-export async function updateSelectedSiteSupportTicket(ticketId: string, input: Record<string, unknown>) {
-  const context = await requireActiveSupportContext();
+export async function updateSelectedSiteSupportTicket(ticketId: string, input: Record<string, unknown>, platformWide = false) {
+  const context = platformWide ? await requireGlobalAdmin({ sensitive: true }) : await requireActiveSupportContext();
   const status = input.status;
   const priority = input.priority;
   const assignedToId = input.assignedToId;
@@ -190,7 +190,7 @@ export async function updateSelectedSiteSupportTicket(ticketId: string, input: R
     const assignee = await db.user.findFirst({ where: { id: assignedToId, isActive: true, isPlatformAdmin: true }, select: { id: true } });
     if (!assignee) throw new Error("The assignee must be an active platform administrator.");
   }
-  const existing = await db.supportTicket.findFirst({ where: { id: ticketId, churchId: context.church!.id }, select: { id: true, subject: true, status: true, priority: true, assignedToId: true, churchId: true } });
+  const existing = await db.supportTicket.findFirst({ where: { id: ticketId, ...(platformWide ? {} : { churchId: context.church!.id }) }, select: { id: true, subject: true, status: true, priority: true, assignedToId: true, churchId: true } });
   if (!existing) return null;
   if (status === undefined && priority === undefined && assignedToId === undefined && note === undefined) throw new Error("Support ticket fields are invalid.");
 

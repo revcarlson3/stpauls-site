@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { buildGlobalAuditDetails, requireGlobalAdmin } from "@/lib/global-admin";
 
 export const onboardingSteps = ["ACCOUNT", "SITE_IDENTITY", "MODULES", "SECURITY", "COMPLETE"] as const;
+const ONBOARDING_PAGE_SIZE = 25;
 export type OnboardingStep = (typeof onboardingSteps)[number];
 
 export function isOnboardingStep(value: unknown): value is OnboardingStep {
@@ -37,6 +38,41 @@ export function onboardingStatusForStep(step: OnboardingStep): OnboardingStatus 
 
 export function serializeOnboarding(record: { status: OnboardingStatus; currentStep: string; siteIdentityDone: boolean; modulesDone: boolean; securityDone: boolean; completedAt: Date | null }) {
   return { status: record.status, currentStep: record.currentStep, completion: { siteIdentity: record.siteIdentityDone, modules: record.modulesDone, security: record.securityDone, completedAt: record.completedAt?.toISOString() ?? null } };
+}
+
+export async function listGlobalOnboarding(input: { search?: string; status?: string; page?: number } = {}) {
+  await requireGlobalAdmin();
+  const page = Math.max(1, Math.floor(input.page ?? 1));
+  const search = input.search?.trim();
+  const churches = await db.church.findMany({
+    where: {
+      ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" as const } }, { slug: { contains: search, mode: "insensitive" as const } }] } : {}),
+      ...(input.status ? { onboardingStatus: input.status as OnboardingStatus } : {})
+    },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, slug: true, lifecycleStatus: true, onboardingStatus: true, onboardingStep: true, onboarding: { select: { status: true, currentStep: true, siteIdentityDone: true, modulesDone: true, securityDone: true, completedAt: true } } }
+  });
+  const total = churches.length;
+  return { page, pageSize: ONBOARDING_PAGE_SIZE, total, totalPages: Math.max(1, Math.ceil(total / ONBOARDING_PAGE_SIZE)), sites: churches.slice((page - 1) * ONBOARDING_PAGE_SIZE, page * ONBOARDING_PAGE_SIZE).map((site) => ({ site: { id: site.id, name: site.name, slug: site.slug, lifecycleStatus: site.lifecycleStatus }, onboarding: site.onboarding ? serializeOnboarding(site.onboarding) : null })) };
+}
+
+export async function updateGlobalOnboarding(input: { siteId: string; currentStep: unknown; siteIdentityDone: unknown; modulesDone: unknown; securityDone: unknown }) {
+  const context = await requireGlobalAdmin({ sensitive: true });
+  const current = await db.tenantOnboarding.findUnique({ where: { churchId: input.siteId }, select: { currentStep: true, siteIdentityDone: true, modulesDone: true, securityDone: true } });
+  if (!current || typeof input.siteIdentityDone !== "boolean" || typeof input.modulesDone !== "boolean" || typeof input.securityDone !== "boolean") throw new Error("Invalid onboarding details.");
+  if ((!input.siteIdentityDone && current.siteIdentityDone) || (!input.modulesDone && current.modulesDone) || (!input.securityDone && current.securityDone)) throw new Error("Completed onboarding sections cannot be cleared.");
+  const transitionError = validateOnboardingTransition({ currentStep: current.currentStep, nextStep: input.currentStep, siteIdentityDone: input.siteIdentityDone, modulesDone: input.modulesDone, securityDone: input.securityDone });
+  if (transitionError) throw new Error(transitionError);
+  const step = input.currentStep as OnboardingStep;
+  const siteIdentityDone = input.siteIdentityDone as boolean;
+  const modulesDone = input.modulesDone as boolean;
+  const securityDone = input.securityDone as boolean;
+  return db.$transaction(async (transaction) => {
+    const record = await transaction.tenantOnboarding.update({ where: { churchId: input.siteId }, data: { currentStep: step, status: onboardingStatusForStep(step), siteIdentityDone, modulesDone, securityDone, completedAt: step === "COMPLETE" ? new Date() : null }, select: { status: true, currentStep: true, siteIdentityDone: true, modulesDone: true, securityDone: true, completedAt: true } });
+    await transaction.church.update({ where: { id: input.siteId }, data: { onboardingStatus: record.status, onboardingStep: record.currentStep } });
+    await transaction.auditLog.create({ data: { activityType: "global-admin-onboarding-updated", summary: "Updated platform onboarding progress.", actorId: context.user.id, ...JSON.parse(buildGlobalAuditDetails({ churchId: input.siteId, targetType: "tenant-onboarding", targetId: input.siteId, metadata: { currentStep: record.currentStep, siteIdentityDone: record.siteIdentityDone, modulesDone: record.modulesDone, securityDone: record.securityDone } })) } });
+    return serializeOnboarding(record);
+  });
 }
 
 export async function getSelectedChurchOnboarding() {

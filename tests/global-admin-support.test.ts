@@ -68,6 +68,15 @@ describe("global-admin support management", () => {
     await expect(listSelectedSiteSupportTickets("NOT_A_STATUS")).rejects.toThrow("Support ticket fields are invalid.");
   });
 
+  it("lists platform tickets without requiring a selected site and preserves tenant identity", async () => {
+    requireGlobalAdmin.mockResolvedValue({ user: { id: "admin-1" } });
+    db.supportTicket.findMany.mockResolvedValue([{ id: "ticket-1", subject: "Help", status: "OPEN", priority: "HIGH", createdAt: new Date(), updatedAt: new Date(), closedAt: null, assignedTo: null, createdBy: { id: "user-1", name: "Tenant", email: "tenant@example.com" }, church: { id: "church-2", name: "Other Church", slug: "other" } }]);
+    const { listSelectedSiteSupportTickets } = await import("@/lib/global-admin-support");
+    const result = await listSelectedSiteSupportTickets(undefined, true);
+    expect(result[0]).toMatchObject({ originatingTenant: { id: "church-2", name: "Other Church", slug: "other" } });
+    expect(db.supportTicket.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+  });
+
   it("updates status, priority, assignment, and notes with a privacy-safe audit record", async () => {
     db.user.findFirst.mockResolvedValue({ id: "platform-admin-2" });
     db.supportTicket.findFirst

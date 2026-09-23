@@ -41,6 +41,11 @@ enum BillingProvider {
   PAYPAL
 }
 
+enum BillingEnvironment {
+  TEST
+  LIVE
+}
+
 enum BillingInterval {
   MONTHLY
   ANNUAL
@@ -1932,6 +1937,22 @@ model SubscriptionPlan {
   subscriptions Subscription[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+model BillingProviderConfiguration {
+  id                       String            @id @default(cuid())
+  provider                 BillingProvider
+  environment              BillingEnvironment @default(TEST)
+  stripeSecretKeyEncrypted String?
+  stripeWebhookSecretEncrypted String?
+  paypalClientIdEncrypted  String?
+  paypalClientSecretEncrypted String?
+  paypalWebhookIdEncrypted String?
+  paypalApiBaseUrl         String?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+
+  @@unique([provider, environment])
 }
 
 model Promotion {
