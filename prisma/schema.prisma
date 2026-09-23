@@ -259,6 +259,8 @@ model Church {
   auditLogs                            AuditLog[]
   createdAt                            DateTime                              @default(now())
   updatedAt                            DateTime                              @updatedAt
+  publicSiteEnabled                    Boolean                               @default(true)
+  maintenanceMode                      Boolean                               @default(false)
 
   @@index([status])
   @@index([lifecycleStatus])
@@ -2047,10 +2049,24 @@ model SiteDomain {
   dnsManaged        Boolean      @default(false)
   lastCheckedAt     DateTime?
   lastError         String?
+  registrarProvider String?
+  registrarDetectedAt DateTime?
+  dnsGuidance       String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
   @@index([churchId, status])
+}
+
+model NamecheapConfiguration {
+  id                    String   @id @default("platform")
+  apiUserEncrypted      String?
+  apiKeyEncrypted       String?
+  usernameEncrypted     String?
+  clientIp              String?
+  domain                String?
+  updatedAt             DateTime @updatedAt
+  createdAt             DateTime @default(now())
 }
 
 model TenantOnboarding {

@@ -39,6 +39,11 @@ export async function isMaintenanceModeEnabled() {
   return settings?.maintenanceMode === true;
 }
 
+export async function isTenantMaintenanceModeEnabled(churchId: string) {
+  const church = await db.church.findUnique({ where: { id: churchId }, select: { maintenanceMode: true } });
+  return church?.maintenanceMode === true;
+}
+
 export async function getAvailableModules(userId: string, effectivePermissions?: Permission[]) {
   const enabledSlugs = await getEnabledModuleSlugs();
   const permissions = new Set(effectivePermissions ?? (await db.user.findUnique({ where: { id: userId }, select: { group: { select: { permissions: { select: { permission: true } } } } } }))?.group?.permissions.map(({ permission }) => permission));

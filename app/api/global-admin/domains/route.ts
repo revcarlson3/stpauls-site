@@ -20,6 +20,7 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.message === "A site must be selected before continuing.") return NextResponse.json({ error: error.message }, { status: 409 });
     if (error instanceof Error && (error.message.startsWith("Unauthorized:") || error.message === "Selected site lifecycle does not allow this change.")) return NextResponse.json({ error: error.message.startsWith("Unauthorized:") ? "Bridge access is required." : error.message }, { status: 403 });
     if (error instanceof Error && (error.message.startsWith("Provide") || error.message.includes("already registered"))) return NextResponse.json({ error: error.message }, { status: 400 });
-    return NextResponse.json({ error: "Unable to add domain." }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Unable to add domain.";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -2,6 +2,8 @@ import { randomBytes } from "crypto";
 import type { DomainKind, DomainStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { buildGlobalAuditDetails, requireGlobalAdmin } from "@/lib/global-admin";
+import { provisionPlatformDns } from "@/lib/namecheap";
+import { domainDnsGuidance } from "@/lib/platform-domain";
 
 const HOSTNAME_MAX_LENGTH = 253;
 const HOST_LABEL = /^(?!-)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
@@ -46,6 +48,9 @@ export function serializeDomain(domain: {
   dnsManaged: boolean;
   lastCheckedAt: Date | null;
   lastError: string | null;
+  registrarProvider?: string | null;
+  registrarDetectedAt?: Date | null;
+  dnsGuidance?: string | null;
 }) {
   return {
     id: domain.id,
@@ -57,6 +62,9 @@ export function serializeDomain(domain: {
     tlsStatus: domain.tlsStatus,
     dnsManaged: domain.dnsManaged,
     lastCheckedAt: domain.lastCheckedAt?.toISOString() ?? null,
+    registrarProvider: domain.registrarProvider ?? null,
+    registrarDetectedAt: domain.registrarDetectedAt?.toISOString() ?? null,
+    dnsGuidance: domain.dnsGuidance ?? null,
     statusMessage: domain.kind === "PLATFORM_SUBDOMAIN"
       ? "Platform-managed hostname. DNS and TLS are managed by the platform."
       : domain.verifiedAt ? "Domain verification completed." : "Add the required DNS record and complete TLS verification manually."
@@ -72,6 +80,19 @@ export function manualDomainStatus(now = new Date()) {
   };
 }
 
+export async function lookupRegistrar(hostname: string) {
+  try {
+    const response = await fetch(`https://rdap.org/domain/${encodeURIComponent(hostname)}`, { headers: { Accept: "application/rdap+json" } });
+    if (response.ok) {
+      const body = await response.json() as { entities?: Array<{ roles?: string[]; vcardArray?: unknown[] }> };
+      const registrar = body.entities?.find((entity) => entity.roles?.includes("registrar"));
+      const text = JSON.stringify(registrar ?? "").toLowerCase();
+      return { provider: text.includes("namecheap") ? "Namecheap" : text ? "RDAP registrar" : null, guidance: domainDnsGuidance(hostname, text.includes("namecheap") ? "Namecheap" : "your registrar") };
+    }
+  } catch { /* External lookup is advisory; the domain remains unverified. */ }
+  return { provider: null, guidance: domainDnsGuidance(hostname, null) };
+}
+
 async function requireMutableSelectedChurch() {
   const context = await requireGlobalAdmin({ selectedChurch: true, sensitive: true });
   const church = await db.church.findUnique({ where: { id: context.church!.id }, select: { id: true, name: true, slug: true, lifecycleStatus: true } });
@@ -85,7 +106,7 @@ export async function listSelectedChurchDomains() {
   const domains = await db.siteDomain.findMany({
     where: { churchId: context.church!.id },
     orderBy: { createdAt: "asc" },
-    select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true }
+    select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true, registrarProvider: true, registrarDetectedAt: true, dnsGuidance: true }
   });
   return domains.map(serializeDomain);
 }
@@ -108,6 +129,9 @@ export async function addSelectedChurchDomain(input: { hostname?: unknown; kind:
   }
   if (!hostname) throw new Error("Provide a valid custom hostname.");
   const isPlatform = input.kind === "PLATFORM_SUBDOMAIN";
+  const provisioning = isPlatform ? await provisionPlatformDns(hostname) : null;
+  if (provisioning?.state !== "PROVISIONED") throw new Error(provisioning?.guidance ?? "Platform DNS provisioning is unavailable.");
+  const registrar = isPlatform ? { provider: "Namecheap", guidance: "Platform DNS was provisioned through Namecheap." } : await lookupRegistrar(hostname);
   const now = new Date();
   const domain = await db.siteDomain.create({
     data: {
@@ -120,7 +144,10 @@ export async function addSelectedChurchDomain(input: { hostname?: unknown; kind:
       verifiedAt: isPlatform ? now : null,
       tlsStatus: isPlatform ? "MANAGED" : "MANUAL_VERIFICATION_REQUIRED",
       dnsManaged: isPlatform,
-      lastCheckedAt: isPlatform ? now : null
+      lastCheckedAt: isPlatform ? now : null,
+      registrarProvider: registrar.provider,
+      registrarDetectedAt: isPlatform ? now : new Date(),
+      dnsGuidance: registrar.guidance
     },
     select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true }
   }).catch((error: unknown) => {
@@ -132,10 +159,33 @@ export async function addSelectedChurchDomain(input: { hostname?: unknown; kind:
       activityType: "global-admin-domain-added",
       summary: `Added ${hostname} to the selected site.`,
       actorId: context.user.id,
-      details: buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { hostname, kind: input.kind } })
+      details: buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { hostname, kind: input.kind, provisioning: provisioning?.state ?? "registrar-lookup" } })
     }
+
   });
   return serializeDomain(domain);
+}
+
+export async function enableSelectedChurchDomain(domainId: string) {
+  const { context, church } = await requireMutableSelectedChurch();
+  const domain = await db.siteDomain.findFirst({ where: { id: domainId, churchId: church.id }, select: { id: true, hostname: true, kind: true } });
+  if (!domain) throw new Error("Domain was not found for the selected site.");
+  if (domain.kind === "PLATFORM_SUBDOMAIN") {
+    const provisioning = await provisionPlatformDns(domain.hostname);
+    if (provisioning.state !== "PROVISIONED") throw new Error(provisioning.guidance);
+  }
+  const updated = await db.siteDomain.update({ where: { id: domain.id }, data: { status: domain.kind === "PLATFORM_SUBDOMAIN" ? "ACTIVE" : "PENDING", isPrimary: false }, select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true } });
+  await db.auditLog.create({ data: { activityType: "global-admin-domain-dns-provisioned", summary: `Enabled ${domain.hostname}.`, actorId: context.user.id, details: buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { action: "enable" } }) } });
+  return serializeDomain(updated);
+}
+
+export async function deleteSelectedChurchDomain(domainId: string) {
+  const { context, church } = await requireMutableSelectedChurch();
+  const domain = await db.siteDomain.findFirst({ where: { id: domainId, churchId: church.id }, select: { id: true, hostname: true } });
+  if (!domain) throw new Error("Domain was not found for the selected site.");
+  await db.siteDomain.delete({ where: { id: domain.id } });
+  await db.auditLog.create({ data: { activityType: "global-admin-domain-disabled", summary: `Deleted ${domain.hostname}.`, actorId: context.user.id, details: buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { action: "delete" } }) } });
+  return { id: domain.id, deleted: true };
 }
 
 export async function disableSelectedChurchDomain(domainId: string) {

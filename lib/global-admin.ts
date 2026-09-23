@@ -42,8 +42,8 @@ export function lifecycleAuditMetadata(action: LifecycleAction, from: LifecycleS
   return { action, fromLifecycleStatus: from.lifecycleStatus, toLifecycleStatus: to.lifecycleStatus, onboardingStatus: to.onboardingStatus };
 }
 
-export function buildGlobalAuditDetails(input: { churchId: string; targetType: string; targetId?: string; metadata?: Record<string, unknown> }) {
-  return JSON.stringify({ boundary: GLOBAL_ADMIN_BOUNDARY, selectedChurchId: input.churchId, targetType: input.targetType, targetId: input.targetId ?? null, metadata: input.metadata ?? {} });
+export function buildGlobalAuditDetails(input: { churchId?: string; scope?: "platform" | "site"; targetType: string; targetId?: string; metadata?: Record<string, unknown> }) {
+  return JSON.stringify({ boundary: GLOBAL_ADMIN_BOUNDARY, ...(input.scope ? { scope: input.scope } : {}), selectedChurchId: input.churchId ?? null, targetType: input.targetType, targetId: input.targetId ?? null, metadata: input.metadata ?? {} });
 }
 
 export function isGlobalAdminSession(session: { user?: { authBoundary?: string; mfaPending?: boolean; globalAdminMfaSetupRequired?: boolean } } | null) {

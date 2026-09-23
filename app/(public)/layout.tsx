@@ -9,13 +9,19 @@ import { getSiteIdentity } from "@/lib/site-identity";
 import { MaintenancePage } from "@/components/maintenance-page";
 import AdminLayout from "@/app/admin/layout";
 import { AnnouncementTicker } from "@/components/announcement-ticker";
+import { headers } from "next/headers";
+import { isPlatformHost } from "@/lib/platform-host";
+import { resolvePublicTenant } from "@/lib/platform-domain";
 
 export default async function PublicLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  if (!(await isPublicSiteEnabled())) {
+  const host = headers().get("host");
+  if (isPlatformHost(host)) return <>{children}</>;
+  const tenant = await resolvePublicTenant(host);
+  if (!(tenant?.publicSiteEnabled ?? await isPublicSiteEnabled())) {
     return <AdminLayout>{children}</AdminLayout>;
   }
   const user = await getCurrentUser();
-  if (await isMaintenanceModeEnabled() && !user?.canAccessAdmin) {
+  if ((tenant?.maintenanceMode ?? await isMaintenanceModeEnabled()) && !user?.canAccessAdmin) {
     const identity = await getSiteIdentity();
     return <MaintenancePage publicSiteName={identity.name} />;
   }

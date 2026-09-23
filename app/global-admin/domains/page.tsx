@@ -12,6 +12,8 @@ type Domain = {
   isPrimary: boolean;
   tlsStatus: string | null;
   statusMessage: string;
+  registrarProvider: string | null;
+  dnsGuidance: string | null;
 };
 
 export default function GlobalAdminDomainsPage() {
@@ -49,14 +51,14 @@ export default function GlobalAdminDomainsPage() {
       return;
     }
     setHostname("");
-    setMessage(kind === "CUSTOM_DOMAIN" ? "Custom domain added. Follow the DNS and TLS instructions below." : "Platform subdomain created and activated.");
+    setMessage(kind === "CUSTOM_DOMAIN" ? "Custom domain added. Registrar guidance was recorded; DNS/TLS verification remains pending." : "Platform subdomain provisioning completed or returned an explicit configuration error.");
     await load();
   }
 
-  async function action(id: string, actionName: "check" | "disable" | "primary") {
+  async function action(id: string, actionName: "check" | "disable" | "primary" | "enable" | "delete") {
     setError("");
     setMessage("");
-    const path = actionName === "check" ? `/api/global-admin/domains/${id}/check` : actionName === "primary" ? `/api/global-admin/domains/${id}/primary` : `/api/global-admin/domains/${id}`;
+    const path = actionName === "check" ? `/api/global-admin/domains/${id}/check` : actionName === "primary" ? `/api/global-admin/domains/${id}/primary` : actionName === "enable" ? `/api/global-admin/domains/${id}/enable` : actionName === "delete" ? `/api/global-admin/domains/${id}/delete` : `/api/global-admin/domains/${id}`;
     const response = await fetch(path, { method: actionName === "disable" ? "DELETE" : "POST" });
     const value = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -67,7 +69,7 @@ export default function GlobalAdminDomainsPage() {
       setError(value.error ?? "Unable to update domain.");
       return;
     }
-    setMessage(actionName === "primary" ? "Primary domain updated." : actionName === "check" ? "Status checked; external verification is still manual." : "Domain disabled.");
+    setMessage(actionName === "primary" ? "Primary domain updated." : actionName === "check" ? "Status checked; external verification is still manual." : actionName === "enable" ? "Domain enabled." : actionName === "delete" ? "Domain deleted." : "Domain disabled.");
     await load();
   }
 
@@ -80,16 +82,19 @@ export default function GlobalAdminDomainsPage() {
           <h3 className="font-semibold">{domain.hostname} {domain.isPrimary && <span className="ml-2 rounded-full bg-coral/10 px-2 py-1 text-xs text-coral">Primary</span>}</h3>
           <p className="mt-1 text-xs text-ink/55">{domain.status} · TLS {domain.tlsStatus ?? "not checked"}</p>
           <p className="mt-2 text-sm text-ink/60">{domain.statusMessage}</p>
+          {domain.registrarProvider && <p className="mt-1 text-xs text-ink/55">Registrar: {domain.registrarProvider}</p>}
+          {domain.dnsGuidance && <p className="mt-2 text-xs text-ink/55">{domain.dnsGuidance}</p>}
           {domain.kind === "CUSTOM_DOMAIN" && <p className="mt-2 text-xs text-ink/55">Point your DNS record to the platform and complete TLS validation before selecting this as primary.</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           {domain.status === "ACTIVE" && !domain.isPrimary && <Button type="button" onClick={() => void action(domain.id, "primary")} variant="secondary">Make primary</Button>}
           {domain.kind === "CUSTOM_DOMAIN" && <Button type="button" onClick={() => void action(domain.id, "check")} variant="secondary">Check status</Button>}
-          <Button type="button" onClick={() => void action(domain.id, "disable")} variant="secondary" disabled={domain.status === "DISABLED"}>{domain.status === "DISABLED" ? "Disabled" : "Disable"}</Button>
+          {domain.status === "DISABLED" ? <Button type="button" onClick={() => void action(domain.id, "enable")} variant="secondary">Enable</Button> : <Button type="button" onClick={() => void action(domain.id, "disable")} variant="secondary">Disable</Button>}
+          <Button type="button" onClick={() => void action(domain.id, "delete")} variant="secondary">Delete</Button>
         </div>
       </div>
     </Card>
   );
 
-  return <main className="min-h-screen bg-sand py-10 sm:py-14"><Container><div className="flex justify-end"><GlobalAdminBackLink /></div><p className="mt-8 text-sm font-semibold uppercase tracking-[0.2em] text-coral">Selected site</p><h1 className="mt-2 font-serif text-4xl">Manage domains</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-ink/60">Platform subdomains are generated and managed by mychurch.one. Custom domains remain pending until the church completes DNS and TLS verification; this console never fakes that external verification.</p>{error && <Notification variant="danger" className="mt-6">{error}</Notification>}{message && <Notification variant="success" className="mt-6">{message}</Notification>}<Card className="mt-8 grid gap-4 p-6 sm:p-8"><div><h2 className="font-serif text-2xl">Platform subdomain</h2><p className="mt-1 text-sm text-ink/60">Generate a unique active hostname using the configured platform suffix. No external DNS claim is required.</p></div><Button type="button" onClick={() => void add("PLATFORM_SUBDOMAIN")} className="w-fit">Generate platform subdomain</Button></Card><Card className="mt-6 grid gap-4 p-6 sm:p-8"><div><h2 className="font-serif text-2xl">Custom domain</h2><p className="mt-1 text-sm text-ink/60">Add a hostname owned by the church. It will remain pending until DNS and TLS are verified outside this application.</p></div><div className="flex flex-wrap gap-3"><input aria-label="Custom hostname" value={hostname} onChange={(event) => setHostname(event.target.value)} placeholder="www.example.org" className="focus-ring min-w-[260px] flex-1 rounded-lg border border-ink/15 px-3 py-2" /><Button type="button" onClick={() => void add("CUSTOM_DOMAIN")}>Add custom domain</Button></div></Card><section className="mt-8 grid gap-4"><h2 className="font-serif text-2xl">Platform subdomains</h2>{platformDomains.map(domainCard)}{!platformDomains.length && <Card className="p-6 text-sm text-ink/60">No platform subdomain has been generated for this site.</Card>}</section><section className="mt-8 grid gap-4"><h2 className="font-serif text-2xl">Custom domains</h2>{customDomains.map(domainCard)}{!customDomains.length && <Card className="p-6 text-sm text-ink/60">No custom domains are configured for this site.</Card>}</section></Container></main>;
+  return <main className="min-h-screen bg-sand py-10 sm:py-14"><Container><div className="flex justify-end"><GlobalAdminBackLink /></div><p className="mt-8 text-sm font-semibold uppercase tracking-[0.2em] text-coral">Global platform</p><h1 className="mt-2 font-serif text-4xl">Manage domains</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-ink/60">Platform subdomains and custom domains are managed across the platform. Namecheap credentials are configured separately in the global platform settings; this console never fakes external DNS or TLS verification.</p>{error && <Notification variant="danger" className="mt-6">{error}</Notification>}{message && <Notification variant="success" className="mt-6">{message}</Notification>}<Card className="mt-8 grid gap-4 p-6 sm:p-8"><div><h2 className="font-serif text-2xl">Platform subdomain</h2><p className="mt-1 text-sm text-ink/60">Generate a unique active hostname using the configured platform suffix. No external DNS claim is required.</p></div><Button type="button" onClick={() => void add("PLATFORM_SUBDOMAIN")} className="w-fit">Generate platform subdomain</Button></Card><Card className="mt-6 grid gap-4 p-6 sm:p-8"><div><h2 className="font-serif text-2xl">Custom domain</h2><p className="mt-1 text-sm text-ink/60">Add a hostname owned by the church. It will remain pending until DNS and TLS are verified outside this application.</p></div><div className="flex flex-wrap gap-3"><input aria-label="Custom hostname" value={hostname} onChange={(event) => setHostname(event.target.value)} placeholder="www.example.org" className="focus-ring min-w-[260px] flex-1 rounded-lg border border-ink/15 px-3 py-2" /><Button type="button" onClick={() => void add("CUSTOM_DOMAIN")}>Add custom domain</Button></div></Card><section className="mt-8 grid gap-4"><h2 className="font-serif text-2xl">Platform subdomains</h2>{platformDomains.map(domainCard)}{!platformDomains.length && <Card className="p-6 text-sm text-ink/60">No platform subdomain has been generated.</Card>}</section><section className="mt-8 grid gap-4"><h2 className="font-serif text-2xl">Custom domains</h2>{customDomains.map(domainCard)}{!customDomains.length && <Card className="p-6 text-sm text-ink/60">No custom domains are configured.</Card>}</section></Container></main>;
 }
