@@ -117,6 +117,8 @@ jobs:
         env:
           BACKUP_DIR: ${{ runner.temp }}/beta-backup
           SSH_DIR: ${{ runner.temp }}/beta-backup-ssh
+          LOCAL_FORWARD_HOST: 127.0.0.1
+          LOCAL_FORWARD_PORT: "15432"
         run: |
           set -euo pipefail
           umask 077
@@ -124,7 +126,32 @@ jobs:
 
           dump_path="$BACKUP_DIR/beta-postgres.dump"
           encrypted_path="$dump_path.age"
-          remote_script="$BACKUP_DIR/read-only-pg-dump.sh"
+          connection_path="$BACKUP_DIR/database-connection.json"
+          tunnel_pid_path="$BACKUP_DIR/ssh-tunnel.pid"
+          remote_script="$BACKUP_DIR/read-database-url.sh"
+          local_script="$BACKUP_DIR/runner-pg-dump.js"
+          tunnel_pid=""
+
+          cleanup_transient_files() {
+            local exit_code=$?
+            trap - EXIT INT TERM
+            set +e
+
+            if [[ -n "$tunnel_pid" ]] && kill -0 "$tunnel_pid" 2>/dev/null; then
+              kill "$tunnel_pid" 2>/dev/null
+              wait "$tunnel_pid" 2>/dev/null
+            fi
+            rm -f -- "$tunnel_pid_path"
+
+            for path in "$dump_path" "$connection_path" "$remote_script" "$local_script"; do
+              if [[ -f "$path" ]]; then
+                shred --force --iterations=1 --zero --remove "$path"
+              fi
+            done
+
+            exit "$exit_code"
+          }
+          trap cleanup_transient_files EXIT INT TERM
 
           cat > "$remote_script" <<'REMOTE_SCRIPT'
           #!/usr/bin/env bash
@@ -140,14 +167,10 @@ jobs:
             echo "Node.js is required on the remote host." >&2
             exit 1
           }
-          command -v pg_dump >/dev/null || {
-            echo "pg_dump is required on the remote host." >&2
-            exit 1
-          }
 
           node - "$env_file" <<'NODE_SCRIPT'
           const fs = require("node:fs");
-          const { spawn } = require("node:child_process");
+          const net = require("node:net");
 
           const envFile = process.argv[2];
           const contents = fs.readFileSync(envFile, { encoding: "utf8", flag: "r" });
@@ -190,14 +213,190 @@ jobs:
             console.error("DATABASE_URL must use the postgres or postgresql protocol.");
             process.exit(1);
           }
+          if (databaseUrl.hash) {
+            console.error("DATABASE_URL must not contain a URL fragment.");
+            process.exit(1);
+          }
 
+          const hostname = databaseUrl.hostname;
+          const unwrappedHostname =
+            hostname.startsWith("[") && hostname.endsWith("]")
+              ? hostname.slice(1, -1)
+              : hostname;
+          const isIpAddress = net.isIP(unwrappedHostname) !== 0;
+          const isDnsName =
+            hostname.length <= 253 &&
+            hostname.split(".").every(
+              (label) =>
+                label.length >= 1 &&
+                label.length <= 63 &&
+                /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label),
+            );
+          if (!isIpAddress && !isDnsName) {
+            console.error("DATABASE_URL contains an invalid database host.");
+            process.exit(1);
+          }
+
+          const port = databaseUrl.port || "5432";
+          if (!/^[0-9]+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
+            console.error("DATABASE_URL contains an invalid database port.");
+            process.exit(1);
+          }
+
+          const sslModes = new Set([
+            "disable",
+            "allow",
+            "prefer",
+            "require",
+            "verify-ca",
+            "verify-full",
+          ]);
+          const sslModeValues = databaseUrl.searchParams.getAll("sslmode");
+          if (sslModeValues.length > 1 || (sslModeValues[0] && !sslModes.has(sslModeValues[0]))) {
+            console.error("DATABASE_URL contains an invalid sslmode.");
+            process.exit(1);
+          }
+          databaseUrl.search = "";
+          if (sslModeValues[0]) {
+            databaseUrl.searchParams.set("sslmode", sslModeValues[0]);
+          }
+
+          process.stdout.write(JSON.stringify({ databaseUrl: databaseUrl.toString() }));
+          NODE_SCRIPT
+          REMOTE_SCRIPT
+          chmod 700 "$remote_script"
+
+          cat > "$local_script" <<'NODE_SCRIPT'
+          const fs = require("node:fs");
+          const net = require("node:net");
+          const { spawn } = require("node:child_process");
+
+          function fail(message) {
+            console.error(message);
+            process.exit(1);
+          }
+
+          function readConnection(path) {
+            let material;
+            try {
+              material = JSON.parse(fs.readFileSync(path, { encoding: "utf8", flag: "r" }));
+            } catch {
+              fail("Unable to read the transferred database connection material.");
+            }
+            if (
+              !material ||
+              typeof material !== "object" ||
+              Object.keys(material).length !== 1 ||
+              typeof material.databaseUrl !== "string"
+            ) {
+              fail("Transferred database connection material has an invalid shape.");
+            }
+
+            let databaseUrl;
+            try {
+              databaseUrl = new URL(material.databaseUrl);
+            } catch {
+              fail("Transferred DATABASE_URL is not a valid URL.");
+            }
+            if (!["postgres:", "postgresql:"].includes(databaseUrl.protocol)) {
+              fail("Transferred DATABASE_URL has an invalid protocol.");
+            }
+            if (databaseUrl.hash) {
+              fail("Transferred DATABASE_URL must not contain a URL fragment.");
+            }
+
+            const hostname = databaseUrl.hostname;
+            const unwrappedHostname =
+              hostname.startsWith("[") && hostname.endsWith("]")
+                ? hostname.slice(1, -1)
+                : hostname;
+            const ipVersion = net.isIP(unwrappedHostname);
+            const isDnsName =
+              hostname.length <= 253 &&
+              hostname.split(".").every(
+                (label) =>
+                  label.length >= 1 &&
+                  label.length <= 63 &&
+                  /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label),
+              );
+            if (ipVersion === 0 && !isDnsName) {
+              fail("Transferred DATABASE_URL has an invalid database host.");
+            }
+
+            const port = databaseUrl.port || "5432";
+            if (!/^[0-9]+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
+              fail("Transferred DATABASE_URL has an invalid database port.");
+            }
+
+            const allowedParameters = new Set(["sslmode"]);
+            for (const key of databaseUrl.searchParams.keys()) {
+              if (!allowedParameters.has(key)) {
+                fail("Transferred DATABASE_URL contains an unsupported connection parameter.");
+              }
+            }
+            const sslModes = new Set([
+              "disable",
+              "allow",
+              "prefer",
+              "require",
+              "verify-ca",
+              "verify-full",
+            ]);
+            const sslModeValues = databaseUrl.searchParams.getAll("sslmode");
+            if (sslModeValues.length > 1 || (sslModeValues[0] && !sslModes.has(sslModeValues[0]))) {
+              fail("Transferred DATABASE_URL contains an invalid sslmode.");
+            }
+
+            return { databaseUrl, hostname, unwrappedHostname, ipVersion, port };
+          }
+
+          const action = process.argv[2];
+          const connectionPath = process.argv[3];
+          const connection = readConnection(connectionPath);
+
+          if (action === "endpoint") {
+            const sshHostname =
+              connection.ipVersion === 6
+                ? `[${connection.unwrappedHostname}]`
+                : connection.hostname;
+            process.stdout.write(`${sshHostname}\n${connection.port}\n`);
+            process.exit(0);
+          }
+
+          if (action !== "dump") {
+            fail("Unknown runner database action.");
+          }
+
+          const loopbackHost = process.env.LOCAL_FORWARD_HOST;
+          const loopbackPort = process.env.LOCAL_FORWARD_PORT;
+          const dumpPath = process.argv[4];
+          if (
+            loopbackHost !== "127.0.0.1" ||
+            !/^[0-9]+$/.test(loopbackPort || "") ||
+            Number(loopbackPort) < 1 ||
+            Number(loopbackPort) > 65535
+          ) {
+            fail("The local forwarding endpoint is invalid.");
+          }
+          if (!dumpPath) {
+            fail("The database dump output path is missing.");
+          }
+
+          connection.databaseUrl.port = loopbackPort;
+          connection.databaseUrl.searchParams.set("hostaddr", loopbackHost);
+          const childEnvironment = Object.fromEntries(
+            ["HOME", "LANG", "LC_ALL", "PATH"].flatMap((key) =>
+              process.env[key] === undefined ? [] : [[key, process.env[key]]],
+            ),
+          );
+          childEnvironment.PGDATABASE = connection.databaseUrl.toString();
           const child = spawn(
             "pg_dump",
-            ["--format=custom", "--no-owner", "--no-acl"],
+            ["--format=custom", "--no-owner", "--no-acl", "--file", dumpPath],
             {
-              env: { ...process.env, PGDATABASE: value },
+              env: childEnvironment,
               shell: false,
-              stdio: ["ignore", "inherit", "inherit"],
+              stdio: ["ignore", "ignore", "inherit"],
             },
           );
           child.on("error", (error) => {
@@ -212,9 +411,19 @@ jobs:
             process.exit(code ?? 1);
           });
           NODE_SCRIPT
-          REMOTE_SCRIPT
-          chmod 700 "$remote_script"
+          chmod 700 "$local_script"
 
+          [[ "$LOCAL_FORWARD_HOST" == "127.0.0.1" ]] || {
+            echo "The SSH tunnel must bind to IPv4 loopback."
+            exit 1
+          }
+          if [[ ! "$LOCAL_FORWARD_PORT" =~ ^[0-9]+$ ]] ||
+            (( LOCAL_FORWARD_PORT < 1 || LOCAL_FORWARD_PORT > 65535 )); then
+            echo "The SSH tunnel port is invalid."
+            exit 1
+          fi
+
+          install -m 600 /dev/null "$connection_path"
           printf -v quoted_deploy_path '%q' "$DEPLOY_PATH"
           ssh \
             -p "$DEPLOY_PORT" \
@@ -227,7 +436,95 @@ jobs:
             -o "UserKnownHostsFile=$SSH_DIR/known_hosts" \
             "$DEPLOY_USER@$DEPLOY_HOST" \
             "bash -s -- $quoted_deploy_path" \
-            < "$remote_script" > "$dump_path"
+            < "$remote_script" > "$connection_path"
+
+          mapfile -t database_endpoint < <(
+            node "$local_script" endpoint "$connection_path"
+          )
+          if (( ${#database_endpoint[@]} != 2 )); then
+            echo "The database forwarding endpoint is invalid."
+            exit 1
+          fi
+          database_host="${database_endpoint[0]}"
+          database_port="${database_endpoint[1]}"
+          if [[ ! "$database_host" =~ ^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\])$ ]]; then
+            echo "The database forwarding host is invalid."
+            exit 1
+          fi
+          if [[ ! "$database_port" =~ ^[0-9]+$ ]] ||
+            (( database_port < 1 || database_port > 65535 )); then
+            echo "The database forwarding port is invalid."
+            exit 1
+          fi
+
+          forward_spec="$LOCAL_FORWARD_HOST:$LOCAL_FORWARD_PORT:$database_host:$database_port"
+          ssh \
+            -N \
+            -p "$DEPLOY_PORT" \
+            -i "$SSH_DIR/key" \
+            -L "$forward_spec" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ExitOnForwardFailure=yes \
+            -o IdentitiesOnly=yes \
+            -o LogLevel=ERROR \
+            -o ServerAliveCountMax=3 \
+            -o ServerAliveInterval=10 \
+            -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$SSH_DIR/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" &
+          tunnel_pid=$!
+          printf '%s\n' "$tunnel_pid" > "$tunnel_pid_path"
+          chmod 600 "$tunnel_pid_path"
+
+          node - "$LOCAL_FORWARD_HOST" "$LOCAL_FORWARD_PORT" "$tunnel_pid" <<'NODE_SCRIPT'
+          const net = require("node:net");
+
+          const host = process.argv[2];
+          const port = Number(process.argv[3]);
+          const tunnelPid = Number(process.argv[4]);
+          if (
+            host !== "127.0.0.1" ||
+            !Number.isInteger(port) ||
+            port < 1 ||
+            port > 65535 ||
+            !Number.isInteger(tunnelPid) ||
+            tunnelPid < 1
+          ) {
+            console.error("The SSH tunnel verification parameters are invalid.");
+            process.exit(1);
+          }
+
+          const deadline = Date.now() + 15000;
+          function probe() {
+            try {
+              process.kill(tunnelPid, 0);
+            } catch {
+              console.error("The SSH tunnel exited before becoming ready.");
+              process.exit(1);
+            }
+
+            const socket = net.createConnection({ host, port });
+            socket.setTimeout(1000);
+            socket.once("connect", () => {
+              socket.destroy();
+              process.exit(0);
+            });
+            const retry = () => {
+              socket.destroy();
+              if (Date.now() >= deadline) {
+                console.error("The SSH tunnel did not become ready in time.");
+                process.exit(1);
+              }
+              setTimeout(probe, 250);
+            };
+            socket.once("error", retry);
+            socket.once("timeout", retry);
+          }
+          probe();
+          NODE_SCRIPT
+
+          node "$local_script" dump "$connection_path" "$dump_path"
 
           [[ -s "$dump_path" ]] || {
             echo "pg_dump produced an empty file."
@@ -262,10 +559,21 @@ jobs:
           SSH_DIR: ${{ runner.temp }}/beta-backup-ssh
         run: |
           set +e
+          tunnel_pid_path="$BACKUP_DIR/ssh-tunnel.pid"
+          if [[ -f "$tunnel_pid_path" ]]; then
+            IFS= read -r tunnel_pid < "$tunnel_pid_path"
+            if [[ "$tunnel_pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$tunnel_pid" 2>/dev/null; then
+              kill "$tunnel_pid" 2>/dev/null
+              wait "$tunnel_pid" 2>/dev/null
+            fi
+          fi
           for path in \
             "$BACKUP_DIR/beta-postgres.dump" \
             "$BACKUP_DIR/beta-postgres.dump.age" \
-            "$BACKUP_DIR/read-only-pg-dump.sh" \
+            "$BACKUP_DIR/database-connection.json" \
+            "$BACKUP_DIR/ssh-tunnel.pid" \
+            "$BACKUP_DIR/read-database-url.sh" \
+            "$BACKUP_DIR/runner-pg-dump.js" \
             "$SSH_DIR/key" \
             "$SSH_DIR/known_hosts"
           do
