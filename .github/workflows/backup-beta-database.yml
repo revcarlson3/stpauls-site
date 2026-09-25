@@ -256,12 +256,65 @@ jobs:
             console.error("DATABASE_URL contains an invalid sslmode.");
             process.exit(1);
           }
-          databaseUrl.search = "";
-          if (sslModeValues[0]) {
-            databaseUrl.searchParams.set("sslmode", sslModeValues[0]);
+          const sslRootCertValues = databaseUrl.searchParams.getAll("sslrootcert");
+          if (
+            sslRootCertValues.length > 1 ||
+            (sslRootCertValues[0] && sslRootCertValues[0] !== "system")
+          ) {
+            console.error("DATABASE_URL sslrootcert must be 'system' when configured.");
+            process.exit(1);
+          }
+          if (
+            ["verify-ca", "verify-full"].includes(sslModeValues[0]) &&
+            sslRootCertValues[0] !== "system"
+          ) {
+            console.error("Verified TLS requires sslrootcert=system for runner-side backup.");
+            process.exit(1);
           }
 
-          process.stdout.write(JSON.stringify({ databaseUrl: databaseUrl.toString() }));
+          function decodeComponent(component, name) {
+            try {
+              const decoded = decodeURIComponent(component);
+              if (decoded.includes("\0")) {
+                throw new Error("NUL byte");
+              }
+              return decoded;
+            } catch {
+              console.error(`DATABASE_URL contains an invalid ${name}.`);
+              process.exit(1);
+            }
+          }
+
+          const username = decodeComponent(databaseUrl.username, "username");
+          const password = decodeComponent(databaseUrl.password, "password");
+          const database = decodeComponent(databaseUrl.pathname.slice(1), "database name");
+          if (!username || username.length > 256) {
+            console.error("DATABASE_URL must contain a valid database username.");
+            process.exit(1);
+          }
+          if (password.length > 8192) {
+            console.error("DATABASE_URL contains an invalid password.");
+            process.exit(1);
+          }
+          if (!database || database.length > 256) {
+            console.error("DATABASE_URL must contain a valid database name.");
+            process.exit(1);
+          }
+
+          process.stdout.write(
+            JSON.stringify({
+              host: unwrappedHostname,
+              port,
+              username,
+              password,
+              database,
+              sslMode:
+                sslRootCertValues[0] === "system" && !sslModeValues[0]
+                  ? "verify-full"
+                  : sslModeValues[0] || null,
+              sslRootCert: sslRootCertValues[0] || null,
+            }),
+          );
           NODE_SCRIPT
           REMOTE_SCRIPT
           chmod 700 "$remote_script"
@@ -286,54 +339,59 @@ jobs:
             if (
               !material ||
               typeof material !== "object" ||
-              Object.keys(material).length !== 1 ||
-              typeof material.databaseUrl !== "string"
+              Object.keys(material).sort().join(",") !==
+                "database,host,password,port,sslMode,sslRootCert,username"
             ) {
               fail("Transferred database connection material has an invalid shape.");
             }
 
-            let databaseUrl;
-            try {
-              databaseUrl = new URL(material.databaseUrl);
-            } catch {
-              fail("Transferred DATABASE_URL is not a valid URL.");
-            }
-            if (!["postgres:", "postgresql:"].includes(databaseUrl.protocol)) {
-              fail("Transferred DATABASE_URL has an invalid protocol.");
-            }
-            if (databaseUrl.hash) {
-              fail("Transferred DATABASE_URL must not contain a URL fragment.");
+            const {
+              host,
+              port,
+              username,
+              password,
+              database,
+              sslMode,
+              sslRootCert,
+            } = material;
+            if (
+              typeof host !== "string" ||
+              typeof port !== "string" ||
+              typeof username !== "string" ||
+              typeof password !== "string" ||
+              typeof database !== "string" ||
+              (sslMode !== null && typeof sslMode !== "string") ||
+              (sslRootCert !== null && typeof sslRootCert !== "string")
+            ) {
+              fail("Transferred database connection material has invalid field types.");
             }
 
-            const hostname = databaseUrl.hostname;
-            const unwrappedHostname =
-              hostname.startsWith("[") && hostname.endsWith("]")
-                ? hostname.slice(1, -1)
-                : hostname;
-            const ipVersion = net.isIP(unwrappedHostname);
+            const ipVersion = net.isIP(host);
             const isDnsName =
-              hostname.length <= 253 &&
-              hostname.split(".").every(
+              host.length <= 253 &&
+              host.split(".").every(
                 (label) =>
                   label.length >= 1 &&
                   label.length <= 63 &&
                   /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label),
               );
             if (ipVersion === 0 && !isDnsName) {
-              fail("Transferred DATABASE_URL has an invalid database host.");
+              fail("Transferred connection material has an invalid database host.");
             }
 
-            const port = databaseUrl.port || "5432";
             if (!/^[0-9]+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
-              fail("Transferred DATABASE_URL has an invalid database port.");
+              fail("Transferred connection material has an invalid database port.");
+            }
+            if (!username || username.length > 256 || password.length > 8192) {
+              fail("Transferred connection material has invalid credentials.");
+            }
+            if (!database || database.length > 256) {
+              fail("Transferred connection material has an invalid database name.");
+            }
+            if ([host, username, password, database].some((value) => value.includes("\0"))) {
+              fail("Transferred connection material contains a NUL byte.");
             }
 
-            const allowedParameters = new Set(["sslmode"]);
-            for (const key of databaseUrl.searchParams.keys()) {
-              if (!allowedParameters.has(key)) {
-                fail("Transferred DATABASE_URL contains an unsupported connection parameter.");
-              }
-            }
             const sslModes = new Set([
               "disable",
               "allow",
@@ -342,23 +400,89 @@ jobs:
               "verify-ca",
               "verify-full",
             ]);
-            const sslModeValues = databaseUrl.searchParams.getAll("sslmode");
-            if (sslModeValues.length > 1 || (sslModeValues[0] && !sslModes.has(sslModeValues[0]))) {
-              fail("Transferred DATABASE_URL contains an invalid sslmode.");
+            if (sslMode !== null && !sslModes.has(sslMode)) {
+              fail("Transferred connection material contains an invalid sslmode.");
+            }
+            if (sslRootCert !== null && sslRootCert !== "system") {
+              fail("Transferred connection material contains an invalid sslrootcert.");
+            }
+            if (["verify-ca", "verify-full"].includes(sslMode) && sslRootCert !== "system") {
+              fail("Verified TLS requires the runner's system certificate store.");
             }
 
-            return { databaseUrl, hostname, unwrappedHostname, ipVersion, port };
+            return { host, port, username, password, database, sslMode, sslRootCert, ipVersion };
           }
 
           const action = process.argv[2];
+          const loopbackHost = process.env.LOCAL_FORWARD_HOST;
+          const loopbackPort = process.env.LOCAL_FORWARD_PORT;
+
+          function buildChildEnvironment(connection) {
+            if (
+              loopbackHost !== "127.0.0.1" ||
+              !/^[0-9]+$/.test(loopbackPort || "") ||
+              Number(loopbackPort) < 1 ||
+              Number(loopbackPort) > 65535
+            ) {
+              fail("The local forwarding endpoint is invalid.");
+            }
+
+            const childEnvironment = Object.fromEntries(
+              ["LANG", "LC_ALL", "PATH"].flatMap((key) =>
+                process.env[key] === undefined ? [] : [[key, process.env[key]]],
+              ),
+            );
+            // libpq connects to PGHOSTADDR but uses PGHOST for TLS hostname verification.
+            Object.assign(childEnvironment, {
+              PGHOST: connection.host,
+              PGHOSTADDR: loopbackHost,
+              PGPORT: loopbackPort,
+              PGUSER: connection.username,
+              PGPASSWORD: connection.password,
+              PGDATABASE: connection.database,
+              PGCONNECT_TIMEOUT: "15",
+            });
+            if (connection.sslMode !== null) {
+              childEnvironment.PGSSLMODE = connection.sslMode;
+            }
+            if (connection.sslRootCert !== null) {
+              childEnvironment.PGSSLROOTCERT = connection.sslRootCert;
+            }
+            return childEnvironment;
+          }
+
+          if (action === "self-test") {
+            const childEnvironment = buildChildEnvironment({
+              host: "db.example.internal",
+              username: "backup_user",
+              password: "synthetic-test-value",
+              database: "app",
+              sslMode: "verify-full",
+              sslRootCert: "system",
+            });
+            if (
+              childEnvironment.PGHOST !== "db.example.internal" ||
+              childEnvironment.PGHOSTADDR !== "127.0.0.1" ||
+              childEnvironment.PGPORT !== "15432" ||
+              childEnvironment.PGDATABASE !== "app" ||
+              childEnvironment.PGSSLMODE !== "verify-full" ||
+              childEnvironment.PGSSLROOTCERT !== "system" ||
+              "DATABASE_URL" in childEnvironment ||
+              "DEPLOY_KEY" in childEnvironment
+            ) {
+              fail("Runner database environment self-test failed.");
+            }
+            process.exit(0);
+          }
+
           const connectionPath = process.argv[3];
           const connection = readConnection(connectionPath);
 
           if (action === "endpoint") {
             const sshHostname =
               connection.ipVersion === 6
-                ? `[${connection.unwrappedHostname}]`
-                : connection.hostname;
+                ? `[${connection.host}]`
+                : connection.host;
             process.stdout.write(`${sshHostname}\n${connection.port}\n`);
             process.exit(0);
           }
@@ -367,29 +491,12 @@ jobs:
             fail("Unknown runner database action.");
           }
 
-          const loopbackHost = process.env.LOCAL_FORWARD_HOST;
-          const loopbackPort = process.env.LOCAL_FORWARD_PORT;
           const dumpPath = process.argv[4];
-          if (
-            loopbackHost !== "127.0.0.1" ||
-            !/^[0-9]+$/.test(loopbackPort || "") ||
-            Number(loopbackPort) < 1 ||
-            Number(loopbackPort) > 65535
-          ) {
-            fail("The local forwarding endpoint is invalid.");
-          }
           if (!dumpPath) {
             fail("The database dump output path is missing.");
           }
 
-          connection.databaseUrl.port = loopbackPort;
-          connection.databaseUrl.searchParams.set("hostaddr", loopbackHost);
-          const childEnvironment = Object.fromEntries(
-            ["HOME", "LANG", "LC_ALL", "PATH"].flatMap((key) =>
-              process.env[key] === undefined ? [] : [[key, process.env[key]]],
-            ),
-          );
-          childEnvironment.PGDATABASE = connection.databaseUrl.toString();
+          const childEnvironment = buildChildEnvironment(connection);
           const child = spawn(
             "pg_dump",
             ["--format=custom", "--no-owner", "--no-acl", "--file", dumpPath],
@@ -412,6 +519,7 @@ jobs:
           });
           NODE_SCRIPT
           chmod 700 "$local_script"
+          node "$local_script" self-test
 
           [[ "$LOCAL_FORWARD_HOST" == "127.0.0.1" ]] || {
             echo "The SSH tunnel must bind to IPv4 loopback."
