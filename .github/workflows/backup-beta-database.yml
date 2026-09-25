@@ -77,8 +77,78 @@ jobs:
         run: |
           set -euo pipefail
 
+          pgdg_key="$RUNNER_TEMP/postgresql-pgdg.asc"
+          pgdg_keyring="$RUNNER_TEMP/postgresql-pgdg.gpg"
+          cleanup_pgdg_key() {
+            rm -f -- "$pgdg_key" "$pgdg_keyring"
+          }
+          trap cleanup_pgdg_key EXIT
+
+          # GitHub's image uses PGDG-built clients but removes the apt source after image creation.
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            --retry 3 \
+            --output "$pgdg_key" \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          pgdg_fingerprint="$(
+            gpg --batch --show-keys --with-colons "$pgdg_key" |
+              awk -F: '
+                $1 == "pub" { primary = 1; next }
+                primary && $1 == "fpr" { print $10; primary = 0 }
+              '
+          )"
+          [[ "$pgdg_fingerprint" == "B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8" ]] || {
+            echo "The PostgreSQL package signing key set is invalid."
+            exit 1
+          }
+          gpg --batch --dearmor --output "$pgdg_keyring" "$pgdg_key"
+          pgdg_keyring_fingerprint="$(
+            gpg --batch --show-keys --with-colons "$pgdg_keyring" |
+              awk -F: '
+                $1 == "pub" { primary = 1; next }
+                primary && $1 == "fpr" { print $10; primary = 0 }
+              '
+          )"
+          [[ "$pgdg_keyring_fingerprint" == "$pgdg_fingerprint" ]] || {
+            echo "The PostgreSQL package keyring fingerprint is invalid."
+            exit 1
+          }
+          sudo install -m 644 "$pgdg_keyring" /usr/share/keyrings/postgresql-pgdg.gpg
+          # shellcheck disable=SC1091
+          . /etc/os-release
+          [[ "$ID" == "ubuntu" && "$VERSION_CODENAME" =~ ^[a-z]+$ ]] || {
+            echo "The runner is not a supported Ubuntu release."
+            exit 1
+          }
+          printf '%s\n' \
+            "deb [signed-by=/usr/share/keyrings/postgresql-pgdg.gpg] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" |
+            sudo tee /etc/apt/sources.list.d/postgresql-pgdg.list >/dev/null
+
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends postgresql-client
+          sudo apt-get install --yes --no-install-recommends postgresql-client-18
+
+          pg_dump_bin="/usr/lib/postgresql/18/bin/pg_dump"
+          pg_restore_bin="/usr/lib/postgresql/18/bin/pg_restore"
+          [[ -x "$pg_dump_bin" && -x "$pg_restore_bin" ]] || {
+            echo "PostgreSQL 18 client binaries were not installed at the expected paths."
+            exit 1
+          }
+          pg_dump_version="$("$pg_dump_bin" --version)"
+          pg_restore_version="$("$pg_restore_bin" --version)"
+          [[ "$pg_dump_version" =~ ^pg_dump\ \(PostgreSQL\)\ 18([.]|[[:space:]]|$) ]] || {
+            echo "pg_dump major version 18 is required."
+            exit 1
+          }
+          [[ "$pg_restore_version" =~ ^pg_restore\ \(PostgreSQL\)\ 18([.]|[[:space:]]|$) ]] || {
+            echo "pg_restore major version 18 is required."
+            exit 1
+          }
+          echo "Using PostgreSQL client major version 18."
+          printf 'PG_DUMP_BIN=%s\n' "$pg_dump_bin" >> "$GITHUB_ENV"
+          printf 'PG_RESTORE_BIN=%s\n' "$pg_restore_bin" >> "$GITHUB_ENV"
 
           age_version="1.2.1"
           age_archive="$RUNNER_TEMP/age-v${age_version}-linux-amd64.tar.gz"
@@ -495,10 +565,14 @@ jobs:
           if (!dumpPath) {
             fail("The database dump output path is missing.");
           }
+          const pgDumpBinary = process.env.PG_DUMP_BIN;
+          if (pgDumpBinary !== "/usr/lib/postgresql/18/bin/pg_dump") {
+            fail("The PostgreSQL 18 pg_dump path is invalid.");
+          }
 
           const childEnvironment = buildChildEnvironment(connection);
           const child = spawn(
-            "pg_dump",
+            pgDumpBinary,
             ["--format=custom", "--no-owner", "--no-acl", "--file", dumpPath],
             {
               env: childEnvironment,
@@ -638,7 +712,11 @@ jobs:
             echo "pg_dump produced an empty file."
             exit 1
           }
-          pg_restore --list "$dump_path" >/dev/null
+          [[ "$PG_RESTORE_BIN" == "/usr/lib/postgresql/18/bin/pg_restore" ]] || {
+            echo "The PostgreSQL 18 pg_restore path is invalid."
+            exit 1
+          }
+          "$PG_RESTORE_BIN" --list "$dump_path" >/dev/null
 
           "$RUNNER_TEMP/age-bin/age" \
             --encrypt \
