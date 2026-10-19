@@ -10,7 +10,7 @@ import { AdminNavigation } from "@/components/admin-navigation";
 import { NotificationBell } from "@/components/notification-bell";
 import { AnnouncementTicker } from "@/components/announcement-ticker";
 
-export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function AdminLayout({ children, restrictPublicContent = false }: Readonly<{ children: React.ReactNode; restrictPublicContent?: boolean }>) {
   const pathname = usePathname();
   const [publicSiteUrl, setPublicSiteUrl] = useState<string | null>(null);
   const [publicWebsiteModuleEnabled, setPublicWebsiteModuleEnabled] = useState(false);
@@ -136,7 +136,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
       </header>
       {!isEditor && pathname !== "/admin/login" && <AnnouncementTicker />}
       <div className={`flex w-full flex-col lg:flex-row ${isEditor ? "min-h-0 flex-1" : ""}`}>
-        {!canAccessAdmin ? <div className="min-h-[calc(100vh-5rem)] flex-1">{pathname.startsWith("/admin") ? <Container className="py-16"><h1 className="font-serif text-3xl">Administration access required</h1><p className="mt-3 text-sm text-ink/60">This account can manage its Account page, but does not have access to Site Administration.</p></Container> : children}</div> : <>
+        {!canAccessAdmin ? <div className="min-h-[calc(100vh-5rem)] flex-1">{restrictPublicContent && !subscriptionExemptPath ? <Container className="py-16"><h1 className="font-serif text-3xl">Subscription required</h1><p className="mt-3 max-w-xl text-sm text-ink/60">This public website will become available after the site subscription is activated.</p><Link className="focus-ring mt-5 inline-block rounded-lg bg-coral px-4 py-2 text-sm font-semibold text-white" href="/admin/login">Log in</Link></Container> : pathname.startsWith("/admin") ? <Container className="py-16"><h1 className="font-serif text-3xl">Administration access required</h1><p className="mt-3 text-sm text-ink/60">This account can manage its Account page, but does not have access to Site Administration.</p></Container> : children}</div> : <>
         <aside className={`max-h-[2000px] overflow-hidden border-b border-ink/10 bg-white transition-[max-height,max-width,opacity,transform,width] duration-300 ease-out lg:max-w-72 lg:shrink-0 lg:border-b-0 lg:border-r ${isEditor ? "lg:min-h-0 lg:overflow-y-auto" : "lg:min-h-[calc(100vh-5rem)]"} ${isEditor && !editorChromeVisible ? "pointer-events-none max-h-0 -translate-x-2 opacity-0 lg:w-0 lg:max-w-0" : "translate-x-0 opacity-100 lg:w-72"}`}>
           <AdminNavigation permissions={permissions} publicWebsiteModuleEnabled={publicWebsiteModuleEnabled} subscriptionActive={subscriptionActive} />
         </aside>

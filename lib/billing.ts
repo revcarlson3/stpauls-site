@@ -38,8 +38,8 @@ export async function initiateBillingSubscription(input: { planId: unknown; prov
   if (existing) return { ...existing, reused: true, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" };
   const subscription = await db.subscription.create({ data: { churchId: church.id, planId: plan.id, provider, interval, status: SubscriptionStatus.INCOMPLETE }, select: { id: true, status: true, provider: true, interval: true } });
   const checkout = provider === "STRIPE"
-    ? await createStripeCheckout({ subscriptionId: subscription.id, planSlug: plan.slug, interval, siteId: church.id })
-    : await createPayPalSubscription({ subscriptionId: subscription.id, planSlug: plan.slug, interval, siteId: church.id });
+    ? await createStripeCheckout({ subscriptionId: subscription.id, planSlug: plan.slug, planName: plan.name, price: plan.price ?? plan.monthlyPrice, currency: plan.currency, interval, siteId: church.id })
+    : await createPayPalSubscription({ subscriptionId: subscription.id, planSlug: plan.slug, planName: plan.name, price: plan.price ?? plan.monthlyPrice, currency: plan.currency, interval, siteId: church.id });
   await db.subscription.update({ where: { id: subscription.id }, data: { externalSubscriptionId: checkout.externalId } });
   await logAudit({ activityType: "billing-subscription-initiation-requested", summary: `Started a ${provider} subscription checkout request for ${plan.name}.`, actorId: actor.id, details: JSON.stringify({ boundary: "tenant-billing", churchId: church.id, targetType: "subscription", targetId: subscription.id, metadata: { provider, interval, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" } }) });
   return { ...subscription, reused: false, checkoutUrl: checkout.checkoutUrl, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" };

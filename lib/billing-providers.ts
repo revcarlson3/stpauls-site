@@ -8,24 +8,38 @@ function required(name: string) {
   return value;
 }
 
-export async function createStripeCheckout(input: { subscriptionId: string; planSlug: string; interval: string; siteId: string }) {
+export async function createStripeCheckout(input: { subscriptionId: string; planSlug: string; planName: string; price: { toString(): string }; currency: string; interval: string; siteId: string }) {
   const secret = await getConfiguredSecret("STRIPE", "secretKey", "STRIPE_SECRET_KEY"); if (!secret) throw new Error("STRIPE_SECRET_KEY is not configured.");
-  const price = required(`STRIPE_PRICE_${input.planSlug.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_${input.interval}`);
-  const body = new URLSearchParams({ mode: "subscription", "line_items[0][price]": price, "line_items[0][quantity]": "1", success_url: `${required("BILLING_CHECKOUT_SUCCESS_URL")}?provider=STRIPE&session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${required("BILLING_CHECKOUT_CANCEL_URL")}?provider=STRIPE`, "metadata[localSubscriptionId]": input.subscriptionId, "metadata[siteId]": input.siteId });
+  const recurring = input.interval === "MONTHLY" ? { interval: "month", interval_count: "1" } : input.interval === "QUARTERLY" ? { interval: "month", interval_count: "3" } : input.interval === "SEMI_ANNUAL" ? { interval: "month", interval_count: "6" } : { interval: "year", interval_count: "1" };
+  const amount = Math.round(Number(input.price.toString()) * 100);
+  if (!Number.isSafeInteger(amount) || amount < 0) throw new Error("The billing plan price is invalid.");
+  const body = new URLSearchParams({ mode: "subscription", "line_items[0][price_data][currency]": input.currency.toLowerCase(), "line_items[0][price_data][unit_amount]": String(amount), "line_items[0][price_data][product_data][name]": input.planName, "line_items[0][price_data][recurring][interval]": recurring.interval, "line_items[0][price_data][recurring][interval_count]": String(recurring.interval_count), "line_items[0][quantity]": "1", success_url: `${required("BILLING_CHECKOUT_SUCCESS_URL")}?provider=STRIPE&session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${required("BILLING_CHECKOUT_CANCEL_URL")}?provider=STRIPE`, "metadata[localSubscriptionId]": input.subscriptionId, "metadata[siteId]": input.siteId });
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", { method: "POST", headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/x-www-form-urlencoded" }, body });
   const value = await response.json().catch(() => ({}));
   if (!response.ok || typeof value.id !== "string" || typeof value.url !== "string") throw new Error("Stripe checkout could not be created.");
   return { externalId: value.id, checkoutUrl: value.url };
 }
 
-export async function createPayPalSubscription(input: { subscriptionId: string; planSlug: string; interval: string; siteId: string }) {
+export async function createPayPalSubscription(input: { subscriptionId: string; planSlug: string; planName: string; price: { toString(): string }; currency: string; interval: string; siteId: string }) {
   const clientId = await getConfiguredSecret("PAYPAL", "clientId", "PAYPAL_CLIENT_ID"); const clientSecret = await getConfiguredSecret("PAYPAL", "clientSecret", "PAYPAL_CLIENT_SECRET"); if (!clientId || !clientSecret) throw new Error("PayPal credentials are not configured.");
   const auth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   const base = await getConfiguredApiBase();
   const tokenResponse = await fetch(`${base}/v1/oauth2/token`, { method: "POST", headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" }, body: "grant_type=client_credentials" });
   const token = await tokenResponse.json().catch(() => ({}));
   if (!tokenResponse.ok || typeof token.access_token !== "string") throw new Error("PayPal access token could not be obtained.");
-  const planId = required(`PAYPAL_PLAN_${input.planSlug.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_${input.interval}`);
+  const planEnvironmentKey = `PAYPAL_PLAN_${input.planSlug.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_${input.interval}`;
+  let planId = process.env[planEnvironmentKey];
+  if (!planId) {
+    const frequency = input.interval === "MONTHLY" ? { interval_unit: "MONTH", interval_count: 1 } : input.interval === "QUARTERLY" ? { interval_unit: "MONTH", interval_count: 3 } : input.interval === "SEMI_ANNUAL" ? { interval_unit: "MONTH", interval_count: 6 } : { interval_unit: "YEAR", interval_count: 1 };
+    const productResponse = await fetch(`${base}/v1/catalogs/products`, { method: "POST", headers: { Authorization: `Bearer ${token.access_token}`, "Content-Type": "application/json", "PayPal-Request-Id": `${input.subscriptionId}-product` }, body: JSON.stringify({ name: input.planName, description: `${input.planName} subscription`, type: "SERVICE", category: "SOFTWARE" }) });
+    const product = await productResponse.json().catch(() => ({}));
+    if (!productResponse.ok || typeof product.id !== "string") throw new Error("PayPal product could not be created.");
+    const price = Number(input.price.toString()).toFixed(2);
+    const planResponse = await fetch(`${base}/v1/billing/plans`, { method: "POST", headers: { Authorization: `Bearer ${token.access_token}`, "Content-Type": "application/json", "PayPal-Request-Id": `${input.subscriptionId}-plan` }, body: JSON.stringify({ product_id: product.id, name: `${input.planName} ${input.interval}`, description: `${input.planName} subscription`, status: "ACTIVE", billing_cycles: [{ frequency: frequency, tenure_type: "REGULAR", sequence: 1, total_cycles: 0, pricing_scheme: { fixed_price: { value: price, currency_code: input.currency } } }], payment_preferences: { auto_bill_outstanding: true, setup_fee: { value: "0.00", currency_code: input.currency }, setup_fee_failure_action: "CONTINUE", payment_failure_threshold: 1 } }) });
+    const plan = await planResponse.json().catch(() => ({}));
+    if (!planResponse.ok || typeof plan.id !== "string") throw new Error("PayPal billing plan could not be created.");
+    planId = plan.id;
+  }
   const response = await fetch(`${base}/v1/billing/subscriptions`, { method: "POST", headers: { Authorization: `Bearer ${token.access_token}`, "Content-Type": "application/json", "PayPal-Request-Id": input.subscriptionId }, body: JSON.stringify({ plan_id: planId, custom_id: input.subscriptionId, application_context: { return_url: `${required("BILLING_CHECKOUT_SUCCESS_URL")}?provider=PAYPAL`, cancel_url: `${required("BILLING_CHECKOUT_CANCEL_URL")}?provider=PAYPAL` } }) });
   const value = await response.json().catch(() => ({}));
   const approval = Array.isArray(value.links) ? value.links.find((link: { rel?: string }) => link.rel === "approve")?.href : null;

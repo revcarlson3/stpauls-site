@@ -21,8 +21,7 @@ export default async function PublicLayout({ children }: Readonly<{ children: Re
     return <AdminLayout>{children}</AdminLayout>;
   }
   if (tenant && tenant.subscriptions.length === 0) {
-    const identity = await getSiteIdentity();
-    return <MaintenancePage publicSiteName={identity.name} reason="subscription" />;
+    return <AdminLayout restrictPublicContent>{children}</AdminLayout>;
   }
   const user = await getCurrentUser();
   if ((tenant?.maintenanceMode ?? await isMaintenanceModeEnabled()) && !user?.canAccessAdmin) {
