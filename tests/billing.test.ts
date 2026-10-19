@@ -10,7 +10,8 @@ vi.mock("@/lib/auth", () => ({ requirePermission }));
 vi.mock("@/lib/tenant", () => ({ requireCurrentChurch }));
 vi.mock("@/lib/audit", () => ({ logAudit }));
 vi.mock("@/lib/billing-coupons", () => ({ validateTenantCoupon }));
-vi.mock("@/lib/billing-providers", () => ({ createStripeCheckout: vi.fn(async () => ({ externalId: "cs_1", checkoutUrl: "https://checkout.example/cs_1" })), createPayPalSubscription: vi.fn(async () => ({ externalId: "sub_1", checkoutUrl: "https://paypal.example/approve" })) }));
+const performProviderBillingAction = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/billing-providers", () => ({ createStripeCheckout: vi.fn(async () => ({ externalId: "cs_1", checkoutUrl: "https://checkout.example/cs_1" })), createPayPalSubscription: vi.fn(async () => ({ externalId: "sub_1", checkoutUrl: "https://paypal.example/approve" })), performProviderBillingAction }));
 
 describe("tenant billing initiation", () => {
   beforeEach(() => { vi.clearAllMocks(); requirePermission.mockResolvedValue({ id: "admin" }); requireCurrentChurch.mockResolvedValue({ user: { id: "admin" }, church: { id: "church-1" } }); });
@@ -67,5 +68,15 @@ describe("tenant billing initiation", () => {
     db.subscriptionPlan.findFirst.mockResolvedValue({ id: "plan-1", name: "Standard", currency: "USD", price: { toString: () => "20.00" }, interval: "QUARTERLY", monthlyPrice: { toString: () => "20.00" }, annualPrice: { toString: () => "80.00" }, entitlements: [{ mode: "PAID_ADD_ON", addOnMonthly: { toString: () => "3.00" }, addOnAnnual: { toString: () => "3.00" } }] });
     const { getBillingQuote } = await import("@/lib/billing");
     await expect(getBillingQuote({ planId: "plan-1", provider: "STRIPE", interval: "QUARTERLY", customDomain: true })).resolves.toMatchObject({ planPrice: 20, addOnPrice: 3, addOnSelected: true, subtotal: "23.00", total: "23.00" });
+  });
+
+  it("schedules active subscription cancellation at period end", async () => {
+    db.subscription.findFirst.mockResolvedValue({ id: "sub-1", provider: "STRIPE", externalSubscriptionId: "stripe-sub-1", cancelAtPeriodEnd: false, plan: { name: "Standard" } });
+    db.subscription.update.mockResolvedValue({ cancelAtPeriodEnd: true, currentPeriodEnd: new Date("2027-01-01T00:00:00.000Z") });
+    performProviderBillingAction.mockResolvedValue({ status: "ACTIVE", cancelAtPeriodEnd: true });
+    const { cancelCurrentBillingSubscription } = await import("@/lib/billing");
+    await expect(cancelCurrentBillingSubscription()).resolves.toMatchObject({ cancelAtPeriodEnd: true, currentPeriodEnd: "2027-01-01T00:00:00.000Z" });
+    expect(performProviderBillingAction).toHaveBeenCalledWith("STRIPE", "stripe-sub-1", "CANCEL_AT_PERIOD_END");
+    expect(db.subscription.update).toHaveBeenCalledWith(expect.objectContaining({ data: { cancelAtPeriodEnd: true } }));
   });
 });

@@ -6,6 +6,58 @@ import { createPayPalSubscription, createStripeCheckout } from "@/lib/billing-pr
 import { providerConfiguredWithStored } from "@/lib/billing-config";
 import { validateTenantCoupon } from "@/lib/billing-coupons";
 
+export async function getCurrentBillingSubscription() {
+  const { church } = await requireCurrentChurch({ allowUnsubscribed: true });
+  const subscription = await db.subscription.findFirst({
+    where: { churchId: church.id, status: SubscriptionStatus.ACTIVE },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true, provider: true, interval: true, status: true, currentPeriodStart: true,
+      currentPeriodEnd: true, cancelAtPeriodEnd: true, canceledAt: true,
+      plan: { select: { name: true, currency: true, price: true, monthlyPrice: true, annualPrice: true } }
+    }
+  });
+  if (!subscription) return null;
+  return {
+    ...subscription,
+    currentPeriodStart: subscription.currentPeriodStart?.toISOString() ?? null,
+    currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
+    canceledAt: subscription.canceledAt?.toISOString() ?? null,
+    plan: {
+      ...subscription.plan,
+      price: (subscription.plan.price ?? (subscription.interval === "ANNUAL" ? subscription.plan.annualPrice : subscription.plan.monthlyPrice)).toString()
+    }
+  };
+}
+
+export async function cancelCurrentBillingSubscription() {
+  const { user: actor, church } = await requireCurrentChurch({ allowUnsubscribed: true });
+  const subscription = await db.subscription.findFirst({
+    where: { churchId: church.id, status: SubscriptionStatus.ACTIVE },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, provider: true, externalSubscriptionId: true, cancelAtPeriodEnd: true, plan: { select: { name: true } } }
+  });
+  if (!subscription) throw new Error("No active subscription was found.");
+  if (subscription.cancelAtPeriodEnd) return { cancelAtPeriodEnd: true };
+  if (!subscription.externalSubscriptionId) {
+    throw new Error("This subscription does not have a provider cancellation schedule.");
+  }
+  const { performProviderBillingAction } = await import("@/lib/billing-providers");
+  const providerState = await performProviderBillingAction(subscription.provider, subscription.externalSubscriptionId, "CANCEL_AT_PERIOD_END");
+  const updated = await db.subscription.update({
+    where: { id: subscription.id },
+    data: { cancelAtPeriodEnd: true },
+    select: { cancelAtPeriodEnd: true, currentPeriodEnd: true }
+  });
+  await logAudit({
+    activityType: "billing-subscription-action",
+    summary: `Scheduled cancellation of the ${subscription.plan.name} subscription at period end.`,
+    actorId: actor.id,
+    details: JSON.stringify({ boundary: "tenant-billing", churchId: church.id, targetType: "subscription", targetId: subscription.id, metadata: { provider: subscription.provider, providerStatus: providerState.status } })
+  });
+  return { cancelAtPeriodEnd: updated.cancelAtPeriodEnd, currentPeriodEnd: updated.currentPeriodEnd?.toISOString() ?? null };
+}
+
 export function providerConfigured(provider: BillingProvider) {
   return provider === "STRIPE" ? Boolean(process.env.STRIPE_SECRET_KEY) : Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
 }
