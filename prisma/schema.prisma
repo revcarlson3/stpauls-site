@@ -48,6 +48,8 @@ enum BillingEnvironment {
 
 enum BillingInterval {
   MONTHLY
+  QUARTERLY
+  SEMI_ANNUAL
   ANNUAL
 }
 
@@ -58,6 +60,12 @@ enum SubscriptionStatus {
   CANCELED
   UNPAID
   PAUSED
+}
+
+enum PlanEntitlementMode {
+  DISABLED
+  INCLUDED
+  PAID_ADD_ON
 }
 
 enum PromotionDiscountType {
@@ -1931,14 +1939,33 @@ model SubscriptionPlan {
   description   String?
   monthlyPrice  Decimal        @db.Decimal(12, 2)
   annualPrice   Decimal        @db.Decimal(12, 2)
+  price         Decimal?       @db.Decimal(12, 2)
+  interval      BillingInterval?
   currency      String         @default("USD")
+  trialDays     Int?
   stripeEnabled Boolean        @default(true)
   paypalEnabled Boolean        @default(true)
   isActive      Boolean        @default(true)
   sortOrder     Int            @default(0)
   subscriptions Subscription[]
+  entitlements  SubscriptionPlanEntitlement[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+model SubscriptionPlanEntitlement {
+  id             String             @id @default(cuid())
+  planId         String
+  moduleSlug     String
+  mode           PlanEntitlementMode @default(INCLUDED)
+  addOnMonthly   Decimal?           @db.Decimal(12, 2)
+  addOnAnnual    Decimal?           @db.Decimal(12, 2)
+  plan           SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([planId, moduleSlug])
+  @@index([moduleSlug, mode])
 }
 
 model BillingProviderConfiguration {
@@ -1968,6 +1995,8 @@ model Promotion {
   currency        String                @default("USD")
   durationMonths  Int?
   appliesMonthly  Boolean               @default(true)
+  appliesQuarterly Boolean              @default(true)
+  appliesSemiAnnual Boolean             @default(true)
   appliesAnnual   Boolean               @default(true)
   startsAt        DateTime              @default(now())
   endsAt          DateTime?
@@ -2067,6 +2096,38 @@ model NamecheapConfiguration {
   domain                String?
   updatedAt             DateTime @updatedAt
   createdAt             DateTime @default(now())
+}
+
+model OnePanelConfiguration {
+  id              String   @id @default("platform")
+  baseUrl         String
+  apiKeyEncrypted String
+  version         String?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
+model DomainProviderRequest {
+  id                 String   @id @default(cuid())
+  churchId           String
+  requesterId        String
+  hostname           String
+  operation          String
+  status             String   @default("REQUESTED")
+  idempotencyKey     String
+  confirmationHash   String   @unique
+  externalId         String?
+  externalStatus     String?
+  lastError          String?
+  approvedBy         String?
+  approvedAt         DateTime?
+  expiresAt          DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([churchId, operation, idempotencyKey])
+  @@index([churchId, status])
+  @@index([externalId])
 }
 
 model TenantOnboarding {

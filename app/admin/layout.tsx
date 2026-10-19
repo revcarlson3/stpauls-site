@@ -167,16 +167,22 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/users">Edit Users</Link>
               </div>
             </details>}
-            {can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/site-settings") || pathname.startsWith("/admin/site-identity") || pathname.startsWith("/admin/report-automations")} className="group">
+            {can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/site-settings") || pathname.startsWith("/admin/site-identity") || pathname.startsWith("/admin/report-automations") || pathname.startsWith("/admin/billing") || pathname.startsWith("/admin/domains")} className="group">
               <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="settings" />Site Settings <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
               <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-identity">Site Identity</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings">General Settings</Link>
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/billing">Subscription Billing</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/messaging">Messaging</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/announcements">Announcements</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/cron">Cron</Link>
                 <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/report-automations">Report Automations</Link>
+              </div>
+            </details>}
+            {can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/billing") || pathname.startsWith("/admin/domains")} className="group">
+              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="settings" />Billing and Domains <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
+              <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/billing">Billing</Link>
+                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/domains">Domains</Link>
               </div>
             </details>}
             <p className="mt-4 border-t border-ink/10 px-4 pt-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Modules</p>

@@ -18,8 +18,16 @@ describe("billing configuration and coupons", () => {
   });
   it("rejects invalid or mutually exclusive coupon discounts and dates", async () => {
     const { validateCouponInput } = await import("@/lib/global-admin-coupons");
+    const { couponDiscountLabel } = await import("@/lib/coupon-ui");
+    expect(couponDiscountLabel("PERCENTAGE", "EUR")).toBe("Percentage off");
+    expect(couponDiscountLabel("FIXED_AMOUNT", "EUR")).toBe("Amount off (EUR)");
     expect(() => validateCouponInput({ code: "BAD", discountType: "PERCENTAGE", percentageOff: 10, amountOff: 2 })).toThrow();
     expect(() => validateCouponInput({ code: "GOOD", discountType: "PERCENTAGE", percentageOff: 101 })).toThrow();
+    expect(validateCouponInput({ code: "FULL", discountType: "PERCENTAGE", percentageOff: 100 })).toMatchObject({ percentageOff: 100, amountOff: null });
+    expect(() => validateCouponInput({ code: "GOOD", discountType: "PERCENTAGE", percentageOff: -10 })).toThrow();
+    expect(() => validateCouponInput({ code: "GOOD", discountType: "PERCENTAGE", percentageOff: 0 })).toThrow();
+    expect(() => validateCouponInput({ code: "GOOD", discountType: "FIXED_AMOUNT", amountOff: -5 })).toThrow();
+    expect(() => validateCouponInput({ code: "GOOD", discountType: "FIXED_AMOUNT", amountOff: 0 })).toThrow();
     expect(() => validateCouponInput({ code: "GOOD", discountType: "FIXED_AMOUNT", amountOff: 5, startsAt: "2026-02-01", endsAt: "2026-01-01" })).toThrow();
     expect(validateCouponInput({ code: "good-code", discountType: "FIXED_AMOUNT", amountOff: "5.00" })).toMatchObject({ code: "GOOD-CODE", currency: "USD" });
   });

@@ -5,6 +5,7 @@ import { requireCurrentChurch } from "@/lib/tenant";
 import { requirePermission } from "@/lib/auth";
 import { createPayPalSubscription, createStripeCheckout } from "@/lib/billing-providers";
 import { providerConfiguredWithStored } from "@/lib/billing-config";
+import { validateTenantCoupon } from "@/lib/billing-coupons";
 
 export function providerConfigured(provider: BillingProvider) {
   return provider === "STRIPE" ? Boolean(process.env.STRIPE_SECRET_KEY) : Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
@@ -12,23 +13,27 @@ export function providerConfigured(provider: BillingProvider) {
 
 export async function listAvailableBillingPlans() {
   await requirePermission("MANAGE_SETTINGS");
-  const plans = await db.subscriptionPlan.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, slug: true, description: true, monthlyPrice: true, annualPrice: true, currency: true, stripeEnabled: true, paypalEnabled: true } });
+  const plans = await db.subscriptionPlan.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, slug: true, description: true, price: true, interval: true, monthlyPrice: true, annualPrice: true, currency: true, stripeEnabled: true, paypalEnabled: true } });
   const [stripeConfigured, paypalConfigured] = await Promise.all([providerConfiguredWithStored("STRIPE"), providerConfiguredWithStored("PAYPAL")]);
-  return plans.map((plan) => ({ ...plan, monthlyPrice: plan.monthlyPrice.toString(), annualPrice: plan.annualPrice.toString(), providers: { STRIPE: plan.stripeEnabled && stripeConfigured, PAYPAL: plan.paypalEnabled && paypalConfigured } }));
+  return plans.map((plan) => ({ ...plan, price: (plan.price ?? plan.monthlyPrice).toString(), interval: plan.interval ?? "MONTHLY", monthlyPrice: plan.monthlyPrice.toString(), annualPrice: plan.annualPrice.toString(), providers: { STRIPE: plan.stripeEnabled && stripeConfigured, PAYPAL: plan.paypalEnabled && paypalConfigured } }));
 }
 
-export async function initiateBillingSubscription(input: { planId: unknown; provider: unknown; interval: unknown }) {
+export async function initiateBillingSubscription(input: { planId: unknown; provider: unknown; interval?: unknown; couponCode?: unknown }) {
   const actor = await requirePermission("MANAGE_SETTINGS");
   const { church } = await requireCurrentChurch();
   if (input.provider !== "STRIPE" && input.provider !== "PAYPAL") throw new Error("Unsupported billing provider.");
-  if (input.interval !== "MONTHLY" && input.interval !== "ANNUAL") throw new Error("Unsupported billing interval.");
   const provider = input.provider as BillingProvider;
-  const interval = input.interval as BillingInterval;
   if (!await providerConfiguredWithStored(provider)) throw new Error(`${provider} billing is not configured.`);
   if (typeof input.planId !== "string" || !input.planId) throw new Error("A billing plan is required.");
-  const plan = await db.subscriptionPlan.findFirst({ where: { id: input.planId, isActive: true }, select: { id: true, slug: true, name: true, stripeEnabled: true, paypalEnabled: true } });
+  const plan = await db.subscriptionPlan.findFirst({ where: { id: input.planId, isActive: true }, select: { id: true, slug: true, name: true, currency: true, price: true, interval: true, monthlyPrice: true, annualPrice: true, stripeEnabled: true, paypalEnabled: true } });
   if (!plan) throw new Error("Billing plan is unavailable.");
+  const interval = (plan.interval ?? "MONTHLY") as BillingInterval;
+  if (input.interval && input.interval !== interval) throw new Error("The selected plan has a fixed billing interval.");
   if ((provider === "STRIPE" && !plan.stripeEnabled) || (provider === "PAYPAL" && !plan.paypalEnabled)) throw new Error("The selected provider is unavailable for this plan.");
+  if (input.couponCode) {
+    await validateTenantCoupon({ code: input.couponCode, planId: plan.id, interval });
+    throw new Error("This coupon was validated, but provider coupon checkout is not enabled yet. No checkout was started.");
+  }
   const existing = await db.subscription.findFirst({ where: { churchId: church.id, planId: plan.id, provider, interval, status: SubscriptionStatus.INCOMPLETE }, select: { id: true, status: true, provider: true, interval: true } });
   if (existing) return { ...existing, reused: true, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" };
   const subscription = await db.subscription.create({ data: { churchId: church.id, planId: plan.id, provider, interval, status: SubscriptionStatus.INCOMPLETE }, select: { id: true, status: true, provider: true, interval: true } });

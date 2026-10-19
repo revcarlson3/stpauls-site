@@ -6,6 +6,7 @@ import { logAudit } from "@/lib/audit";
 import { buildRecurringDates } from "@/lib/event-scheduling";
 import { requireTenantScope } from "@/lib/tenant";
 import { apiErrorResponse } from "@/lib/api-errors";
+import { DEFAULT_EVENT_TYPES } from "@/lib/event-validation";
 
 export async function GET(request: Request) {
   try {
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
       recurrence?: { enabled?: unknown; frequency?: unknown; interval?: unknown; endMode?: unknown; endDate?: unknown; occurrences?: unknown };
     };
     const eventSettings = await db.membershipEventSettings.findUnique({ where: { churchId: scope.church.id }, select: { eventTypes: true } });
-    const eventTypes = Array.isArray(eventSettings?.eventTypes) ? eventSettings.eventTypes.filter((value): value is string => typeof value === "string") : ["Worship", "Class", "Fellowship", "Outreach", "Meeting", "Other"];
+    const eventTypes: readonly string[] = Array.isArray(eventSettings?.eventTypes) ? eventSettings.eventTypes.filter((value): value is string => typeof value === "string") : DEFAULT_EVENT_TYPES;
     if (
       typeof input.title !== "string" || !input.title.trim() ||
       (input.eventType !== undefined && !eventTypes.includes(String(input.eventType))) ||
@@ -136,7 +137,7 @@ export async function PATCH(request: Request) {
     const scope = await requireTenantScope();
     const input = await request.json() as { id?: unknown; applyToSeries?: unknown; title?: unknown; eventType?: unknown; category?: unknown; status?: unknown; timeZone?: unknown; description?: unknown; location?: unknown; readingsUrl?: unknown; startsAt?: unknown; endsAt?: unknown; allDay?: unknown; published?: unknown; attendanceEnabled?: unknown; attendanceAudienceType?: unknown; attendanceAudienceId?: unknown };
     const eventSettings = await db.membershipEventSettings.findUnique({ where: { churchId: scope.church.id }, select: { eventTypes: true } });
-    const eventTypes = Array.isArray(eventSettings?.eventTypes) ? eventSettings.eventTypes.filter((value): value is string => typeof value === "string") : ["Worship", "Class", "Fellowship", "Outreach", "Meeting", "Other"];
+    const eventTypes: readonly string[] = Array.isArray(eventSettings?.eventTypes) ? eventSettings.eventTypes.filter((value): value is string => typeof value === "string") : DEFAULT_EVENT_TYPES;
     if (
       typeof input.id !== "string" || !input.id ||
       typeof input.title !== "string" || !input.title.trim() ||

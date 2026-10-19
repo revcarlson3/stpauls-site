@@ -8,14 +8,15 @@ function parseDate(value: unknown, name: string) {
   return new Date(value);
 }
 
+
 export function validateCouponInput(input: Record<string, unknown>) {
   const code = typeof input.code === "string" ? input.code.trim().toUpperCase() : "";
   if (!/^[A-Z0-9][A-Z0-9_-]{2,63}$/.test(code)) throw new Error("Coupon code must be 3-64 letters, numbers, underscores, or hyphens.");
   if (input.discountType !== "PERCENTAGE" && input.discountType !== "FIXED_AMOUNT") throw new Error("Choose a percentage or fixed-dollar discount.");
   const percentage = input.percentageOff === null || input.percentageOff === undefined || input.percentageOff === "" ? null : Number(input.percentageOff);
   const amount = input.amountOff === null || input.amountOff === undefined || input.amountOff === "" ? null : Number(input.amountOff);
-  if (input.discountType === "PERCENTAGE" && (percentage === null || !Number.isInteger(percentage) || percentage < 0 || percentage > 100 || amount !== null)) throw new Error("Percentage discounts require a whole-number percentage from 0 to 100 and no fixed amount.");
-  if (input.discountType === "FIXED_AMOUNT" && (amount === null || !Number.isFinite(amount) || amount < 0 || percentage !== null)) throw new Error("Fixed discounts require a nonnegative amount and no percentage.");
+  if (input.discountType === "PERCENTAGE" && (percentage === null || !Number.isInteger(percentage) || percentage <= 0 || percentage > 100 || amount !== null)) throw new Error("Percentage discounts require a whole-number percentage from 1 to 100 and no fixed amount.");
+  if (input.discountType === "FIXED_AMOUNT" && (amount === null || !Number.isFinite(amount) || amount <= 0 || percentage !== null)) throw new Error("Fixed discounts require a positive amount and no percentage.");
   const startsAt = input.startsAt ? parseDate(input.startsAt, "Start date") : new Date();
   const endsAt = input.endsAt ? parseDate(input.endsAt, "Expiration date") : null;
   if (endsAt && endsAt <= startsAt) throw new Error("Expiration date must be after the start date.");
@@ -45,8 +46,9 @@ export async function updateGlobalCoupon(id: string, input: Record<string, unkno
   return coupon;
 }
 
-export async function findApplicablePromotion(code: string, interval: "MONTHLY" | "ANNUAL", currency: string, at = new Date()) {
+export async function findApplicablePromotion(code: string, interval: "MONTHLY" | "QUARTERLY" | "SEMI_ANNUAL" | "ANNUAL", currency: string, at = new Date()) {
   const coupon = await db.promotion.findUnique({ where: { code: code.trim().toUpperCase() } });
-  if (!coupon || !coupon.isActive || coupon.currency !== currency || coupon.startsAt > at || (coupon.endsAt && coupon.endsAt <= at) || (interval === "MONTHLY" ? !coupon.appliesMonthly : !coupon.appliesAnnual)) return null;
+  const applicable = interval === "MONTHLY" ? coupon?.appliesMonthly : interval === "QUARTERLY" ? coupon?.appliesQuarterly : interval === "SEMI_ANNUAL" ? coupon?.appliesSemiAnnual : coupon?.appliesAnnual;
+  if (!coupon || !coupon.isActive || coupon.currency !== currency || coupon.startsAt > at || (coupon.endsAt && coupon.endsAt <= at) || !applicable) return null;
   return coupon;
 }
