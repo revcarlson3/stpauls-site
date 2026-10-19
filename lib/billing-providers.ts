@@ -19,26 +19,28 @@ export function checkoutReturnUrl(name: "BILLING_CHECKOUT_SUCCESS_URL" | "BILLIN
   return url.toString().replace(/\/$/, "");
 }
 
-export async function createStripeCheckout(input: { subscriptionId: string; planSlug: string; planName: string; price: string | { toString(): string }; currency: string; interval: string; siteId: string }) {
+export async function createStripeCheckout(input: { subscriptionId: string; planSlug: string; planName: string; price: string | { toString(): string }; currency: string; interval: string; siteId: string; component?: "BASE" | "DOMAIN_ADD_ON" }) {
   const secret = await getConfiguredSecret("STRIPE", "secretKey", "STRIPE_SECRET_KEY"); if (!secret) throw new Error("STRIPE_SECRET_KEY is not configured.");
   const recurring = input.interval === "MONTHLY" ? { interval: "month", interval_count: "1" } : input.interval === "QUARTERLY" ? { interval: "month", interval_count: "3" } : input.interval === "SEMI_ANNUAL" ? { interval: "month", interval_count: "6" } : { interval: "year", interval_count: "1" };
   const amount = Math.round(Number(input.price.toString()) * 100);
   if (!Number.isSafeInteger(amount) || amount < 0) throw new Error("The billing plan price is invalid.");
-  const body = new URLSearchParams({ mode: "subscription", "line_items[0][price_data][currency]": input.currency.toLowerCase(), "line_items[0][price_data][unit_amount]": String(amount), "line_items[0][price_data][product_data][name]": input.planName, "line_items[0][price_data][recurring][interval]": recurring.interval, "line_items[0][price_data][recurring][interval_count]": String(recurring.interval_count), "line_items[0][quantity]": "1", success_url: `${checkoutReturnUrl("BILLING_CHECKOUT_SUCCESS_URL")}?provider=STRIPE&session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${checkoutReturnUrl("BILLING_CHECKOUT_CANCEL_URL")}?provider=STRIPE`, "metadata[localSubscriptionId]": input.subscriptionId, "metadata[siteId]": input.siteId });
+  const component = input.component ?? "BASE";
+  const body = new URLSearchParams({ mode: "subscription", "line_items[0][price_data][currency]": input.currency.toLowerCase(), "line_items[0][price_data][unit_amount]": String(amount), "line_items[0][price_data][product_data][name]": component === "DOMAIN_ADD_ON" ? `${input.planName} annual domain add-on` : input.planName, "line_items[0][price_data][recurring][interval]": recurring.interval, "line_items[0][price_data][recurring][interval_count]": String(recurring.interval_count), "line_items[0][quantity]": "1", success_url: `${checkoutReturnUrl("BILLING_CHECKOUT_SUCCESS_URL")}?provider=STRIPE&session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${checkoutReturnUrl("BILLING_CHECKOUT_CANCEL_URL")}?provider=STRIPE`, "metadata[localSubscriptionId]": input.subscriptionId, "metadata[siteId]": input.siteId, "metadata[billingComponent]": component });
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", { method: "POST", headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/x-www-form-urlencoded" }, body });
   const value = await response.json().catch(() => ({}));
   if (!response.ok || typeof value.id !== "string" || typeof value.url !== "string") throw new Error("Stripe checkout could not be created.");
   return { externalId: value.id, checkoutUrl: value.url };
 }
 
-export async function createPayPalSubscription(input: { subscriptionId: string; planSlug: string; planName: string; price: string | { toString(): string }; currency: string; interval: string; siteId: string }) {
+export async function createPayPalSubscription(input: { subscriptionId: string; planSlug: string; planName: string; price: string | { toString(): string }; currency: string; interval: string; siteId: string; component?: "BASE" | "DOMAIN_ADD_ON" }) {
   const clientId = await getConfiguredSecret("PAYPAL", "clientId", "PAYPAL_CLIENT_ID"); const clientSecret = await getConfiguredSecret("PAYPAL", "clientSecret", "PAYPAL_CLIENT_SECRET"); if (!clientId || !clientSecret) throw new Error("PayPal credentials are not configured.");
   const auth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   const base = await getConfiguredApiBase();
   const tokenResponse = await fetch(`${base}/v1/oauth2/token`, { method: "POST", headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" }, body: "grant_type=client_credentials" });
   const token = await tokenResponse.json().catch(() => ({}));
   if (!tokenResponse.ok || typeof token.access_token !== "string") throw new Error("PayPal access token could not be obtained.");
-  const planEnvironmentKey = `PAYPAL_PLAN_${input.planSlug.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_${input.interval}`;
+  const component = input.component ?? "BASE";
+  const planEnvironmentKey = `PAYPAL_PLAN_${input.planSlug.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_${input.interval}${component === "DOMAIN_ADD_ON" ? "_DOMAIN_ADD_ON" : ""}`;
   let planId = process.env[planEnvironmentKey];
   if (!planId) {
     const frequency = input.interval === "MONTHLY" ? { interval_unit: "MONTH", interval_count: 1 } : input.interval === "QUARTERLY" ? { interval_unit: "MONTH", interval_count: 3 } : input.interval === "SEMI_ANNUAL" ? { interval_unit: "MONTH", interval_count: 6 } : { interval_unit: "YEAR", interval_count: 1 };
@@ -75,6 +77,10 @@ export async function applyVerifiedStripeEvent(event: { type: string; data?: { o
   const externalId = typeof object.subscription === "string" ? object.subscription : typeof object.id === "string" ? object.id : null;
   if (!localId || !externalId) return false;
   const status = event.type.includes("completed") || event.type.includes("active") ? "ACTIVE" : event.type.includes("deleted") || event.type.includes("canceled") ? "CANCELED" : "PAST_DUE";
+  if (metadata?.billingComponent === "DOMAIN_ADD_ON") {
+    await db.subscription.update({ where: { id: localId }, data: { domainAddonExternalId: externalId, domainAddonStatus: status } });
+    return true;
+  }
   await db.subscription.update({ where: { id: localId }, data: { externalSubscriptionId: externalId, status } });
   if (status === "ACTIVE") {
     const subscription = await db.subscription.findUnique({ where: { id: localId }, select: { churchId: true } });

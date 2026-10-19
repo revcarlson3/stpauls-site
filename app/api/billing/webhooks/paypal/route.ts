@@ -46,19 +46,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid PayPal webhook signature." }, { status: 400 });
   }
 
-  const localId = event.resource?.custom_id;
+  const customId = event.resource?.custom_id;
   const externalId = event.resource?.id;
+  let [localId, component] = customId?.split(":") ?? [];
+  if (externalId && component !== "DOMAIN_ADD_ON") {
+    const domainSubscription = await db.subscription.findFirst({ where: { domainAddonExternalId: externalId }, select: { id: true } });
+    if (domainSubscription) {
+      localId = domainSubscription.id;
+      component = "DOMAIN_ADD_ON";
+    }
+  }
   if (localId && externalId) {
     const status = event.event_type?.includes("ACTIVATED") || event.event_type?.includes("PAYMENT.SALE.COMPLETED")
       ? "ACTIVE"
       : event.event_type?.includes("CANCEL") ? "CANCELED" : "PAST_DUE";
     await db.subscription.update({
       where: { id: localId },
-      data: {
-        externalSubscriptionId: externalId,
-        status
-      }
+      data: component === "DOMAIN_ADD_ON"
+        ? { domainAddonExternalId: externalId, domainAddonStatus: status }
+        : { externalSubscriptionId: externalId, status }
     });
+    if (component === "DOMAIN_ADD_ON") return NextResponse.json({ received: true });
     if (status === "ACTIVE") {
       const subscription = await db.subscription.findUnique({ where: { id: localId }, select: { churchId: true } });
       if (subscription) await db.church.update({ where: { id: subscription.churchId }, data: { lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE", status: "ACTIVE" } });

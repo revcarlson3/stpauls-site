@@ -5,6 +5,24 @@ import { requireCurrentChurch } from "@/lib/tenant";
 import { createPayPalSubscription, createStripeCheckout } from "@/lib/billing-providers";
 import { providerConfiguredWithStored } from "@/lib/billing-config";
 import { validateTenantCoupon } from "@/lib/billing-coupons";
+import { normalizeHostname } from "@/lib/global-admin-domains";
+
+export type BillingDomainChoice = "PLATFORM_SUBDOMAIN" | "OWN_DOMAIN" | "NEW_DOMAIN";
+
+function resolveDomainChoice(input: { domainChoice?: unknown; domainHostname?: unknown; customDomain?: unknown }, customDomain: { available: boolean; included: boolean }) {
+  const legacyChoice = input.domainChoice === undefined;
+  const choice: BillingDomainChoice = input.domainChoice === undefined
+    ? input.customDomain === true ? "NEW_DOMAIN" : "PLATFORM_SUBDOMAIN"
+    : input.domainChoice as BillingDomainChoice;
+  if (!["PLATFORM_SUBDOMAIN", "OWN_DOMAIN", "NEW_DOMAIN"].includes(choice)) throw new Error("Choose a valid domain option.");
+  if (!legacyChoice && (choice === "OWN_DOMAIN" || choice === "NEW_DOMAIN") && !normalizeHostname(input.domainHostname)) {
+    throw new Error("Provide a valid domain name for the selected domain option.");
+  }
+  if (choice === "NEW_DOMAIN" && !customDomain.available) {
+    throw new Error("New domain registration is not available for the selected plan.");
+  }
+  return { choice, hostname: choice === "PLATFORM_SUBDOMAIN" ? null : normalizeHostname(input.domainHostname) };
+}
 
 export async function getCurrentBillingSubscription() {
   const { church } = await requireCurrentChurch({ allowUnsubscribed: true });
@@ -77,7 +95,7 @@ export async function listAvailableBillingPlans() {
   return plans.map((plan) => ({ ...plan, price: (plan.price ?? plan.monthlyPrice).toString(), interval: plan.interval ?? "MONTHLY", monthlyPrice: plan.monthlyPrice.toString(), annualPrice: plan.annualPrice.toString(), customDomain: customDomainOption(plan), providers: { STRIPE: plan.stripeEnabled && stripeConfigured, PAYPAL: plan.paypalEnabled && paypalConfigured } }));
 }
 
-export async function getBillingQuote(input: { planId: unknown; provider: unknown; interval?: unknown; couponCode?: unknown; customDomain?: unknown }) {
+export async function getBillingQuote(input: { planId: unknown; provider: unknown; interval?: unknown; couponCode?: unknown; customDomain?: unknown; domainChoice?: unknown; domainHostname?: unknown; domainRegistrationPrice?: unknown }) {
   await requireCurrentChurch({ allowUnsubscribed: true });
   if (input.provider !== "STRIPE" && input.provider !== "PAYPAL") throw new Error("Unsupported billing provider.");
   if (typeof input.planId !== "string" || !input.planId) throw new Error("A billing plan is required.");
@@ -86,14 +104,18 @@ export async function getBillingQuote(input: { planId: unknown; provider: unknow
   const interval = (plan.interval ?? "MONTHLY") as BillingInterval;
   if (input.interval && input.interval !== interval) throw new Error("The selected plan has a fixed billing interval.");
   const customDomain = customDomainOption(plan);
-  const addOnSelected = customDomain.available && input.customDomain === true && !customDomain.included;
-  const addOnPrice = addOnSelected ? Number(customDomain.price) : 0;
-  const subtotal = Number((plan.price ?? (interval === "MONTHLY" ? plan.monthlyPrice : plan.annualPrice)).toString()) + addOnPrice;
-  const coupon = input.couponCode ? await validateTenantCoupon({ code: input.couponCode, planId: plan.id, interval, additionalPrice: addOnPrice }) : null;
-  return { planId: plan.id, planName: plan.name, provider: input.provider, interval, currency: plan.currency, planPrice: subtotal - addOnPrice, addOnPrice, addOnSelected, subtotal: subtotal.toFixed(2), discount: coupon?.discount ?? "0.00", total: coupon?.total ?? subtotal.toFixed(2), couponCode: coupon?.code ?? null, customDomain };
+  const domain = resolveDomainChoice(input, customDomain);
+  const addOnSelected = domain.choice === "NEW_DOMAIN" && customDomain.available && !customDomain.included;
+  const registrationPrice = typeof input.domainRegistrationPrice === "number" && Number.isFinite(input.domainRegistrationPrice) && input.domainRegistrationPrice >= 0 ? input.domainRegistrationPrice : 0;
+  const addOnPrice = addOnSelected ? Math.max(Number(customDomain.price), registrationPrice) : 0;
+  const planPrice = Number((plan.price ?? (interval === "MONTHLY" ? plan.monthlyPrice : plan.annualPrice)).toString());
+  const subtotal = planPrice + addOnPrice;
+  const coupon = input.couponCode ? await validateTenantCoupon({ code: input.couponCode, planId: plan.id, interval, additionalPrice: 0 }) : null;
+  const total = coupon ? (Number(coupon.total) + addOnPrice).toFixed(2) : subtotal.toFixed(2);
+  return { planId: plan.id, planName: plan.name, provider: input.provider, interval, currency: plan.currency, planPrice, addOnPrice, addOnSelected, domainChoice: domain.choice, domainHostname: domain.hostname, subtotal: subtotal.toFixed(2), discount: coupon?.discount ?? "0.00", total, couponCode: coupon?.code ?? null, customDomain };
 }
 
-export async function initiateBillingSubscription(input: { planId: unknown; provider: unknown; interval?: unknown; couponCode?: unknown; customDomain?: unknown }) {
+export async function initiateBillingSubscription(input: { planId: unknown; provider: unknown; interval?: unknown; couponCode?: unknown; customDomain?: unknown; domainChoice?: unknown; domainHostname?: unknown; domainRegistrationPrice?: unknown }) {
   const { user: actor, church } = await requireCurrentChurch({ allowUnsubscribed: true });
   if (input.provider !== "STRIPE" && input.provider !== "PAYPAL") throw new Error("Unsupported billing provider.");
   const provider = input.provider as BillingProvider;
@@ -105,29 +127,89 @@ export async function initiateBillingSubscription(input: { planId: unknown; prov
   if (input.interval && input.interval !== interval) throw new Error("The selected plan has a fixed billing interval.");
   if ((provider === "STRIPE" && !plan.stripeEnabled) || (provider === "PAYPAL" && !plan.paypalEnabled)) throw new Error("The selected provider is unavailable for this plan.");
   const customDomain = customDomainOption(plan);
-  const addOnSelected = customDomain.available && input.customDomain === true && !customDomain.included;
-  const addOnPrice = addOnSelected ? Number(customDomain.price) : 0;
-  let checkoutPrice: string | { toString(): string } = (Number((plan.price ?? plan.monthlyPrice).toString()) + addOnPrice).toFixed(2);
+  const domain = resolveDomainChoice(input, customDomain);
+  const addOnSelected = domain.choice === "NEW_DOMAIN" && customDomain.available && !customDomain.included;
+  const registrationPrice = typeof input.domainRegistrationPrice === "number" && Number.isFinite(input.domainRegistrationPrice) && input.domainRegistrationPrice >= 0 ? input.domainRegistrationPrice : 0;
+  const addOnPrice = addOnSelected ? Math.max(Number(customDomain.price), registrationPrice) : 0;
+  let checkoutPrice: string | { toString(): string } = Number((plan.price ?? plan.monthlyPrice).toString()).toFixed(2);
   let coupon: Awaited<ReturnType<typeof validateTenantCoupon>> | null = null;
   if (input.couponCode) {
-    coupon = await validateTenantCoupon({ code: input.couponCode, planId: plan.id, interval, additionalPrice: addOnPrice });
+    coupon = await validateTenantCoupon({ code: input.couponCode, planId: plan.id, interval, additionalPrice: 0 });
     checkoutPrice = coupon.total;
   }
   const existing = await db.subscription.findFirst({ where: { churchId: church.id, planId: plan.id, interval, status: SubscriptionStatus.INCOMPLETE }, orderBy: { updatedAt: "desc" }, select: { id: true, status: true, provider: true, interval: true, externalSubscriptionId: true } });
   if (existing) await db.subscription.update({ where: { id: existing.id }, data: { status: SubscriptionStatus.CANCELED, canceledAt: new Date() } });
   if (coupon && Number(coupon.total) === 0) {
-    const subscription = await db.subscription.create({ data: { churchId: church.id, planId: plan.id, provider, interval, status: SubscriptionStatus.ACTIVE }, select: { id: true, status: true, provider: true, interval: true } });
+    const subscription = await db.subscription.create({ data: { churchId: church.id, planId: plan.id, provider, interval, status: SubscriptionStatus.ACTIVE, domainAddonPrice: addOnSelected ? addOnPrice : null, domainAddonHostname: addOnSelected ? domain.hostname : null, domainAddonProvider: addOnSelected ? provider : null, domainAddonStatus: addOnSelected ? "INCOMPLETE" : null }, select: { id: true, status: true, provider: true, interval: true } });
     await db.church.update({ where: { id: church.id }, data: { lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE", status: "ACTIVE" } });
     await db.promotionRedemption.create({ data: { promotionId: coupon.couponId, churchId: church.id, subscriptionId: subscription.id } });
     await db.promotion.update({ where: { id: coupon.couponId }, data: { redemptionCount: { increment: 1 } } });
-    await logAudit({ activityType: "billing-subscription-initiation-requested", summary: `Activated a ${provider} subscription for ${plan.name} using a 100% coupon.`, actorId: actor.id, details: JSON.stringify({ boundary: "tenant-billing", churchId: church.id, targetType: "subscription", targetId: subscription.id, metadata: { provider, interval, paymentStatus: "NO_PAYMENT_REQUIRED", couponId: coupon.couponId } }) });
-    return { ...subscription, reused: false, checkoutUrl: null, paymentStatus: "NO_PAYMENT_REQUIRED", couponApplied: true };
+    const domainCheckout = addOnSelected
+      ? provider === "STRIPE"
+        ? await createStripeCheckout({ subscriptionId: subscription.id, planSlug: `${plan.slug}-domain-addon`, planName: plan.name, price: addOnPrice.toFixed(2), currency: plan.currency, interval: "ANNUAL", siteId: church.id, component: "DOMAIN_ADD_ON" })
+        : await createPayPalSubscription({ subscriptionId: subscription.id, planSlug: `${plan.slug}-domain-addon`, planName: plan.name, price: addOnPrice.toFixed(2), currency: plan.currency, interval: "ANNUAL", siteId: church.id, component: "DOMAIN_ADD_ON" })
+      : null;
+    if (domainCheckout) await db.subscription.update({ where: { id: subscription.id }, data: { domainAddonExternalId: domainCheckout.externalId } });
+    await logAudit({ activityType: "billing-subscription-initiation-requested", summary: `Activated a ${provider} subscription for ${plan.name} using a 100% coupon.`, actorId: actor.id, details: JSON.stringify({ boundary: "tenant-billing", churchId: church.id, targetType: "subscription", targetId: subscription.id, metadata: { provider, interval, paymentStatus: "NO_PAYMENT_REQUIRED", couponId: coupon.couponId, domainChoice: domain.choice, domainHostname: domain.hostname } }) });
+    return { ...subscription, reused: false, checkoutUrl: null, domainCheckoutUrl: domainCheckout?.checkoutUrl ?? null, paymentStatus: "NO_PAYMENT_REQUIRED", couponApplied: true };
   }
-  const subscription = await db.subscription.create({ data: { churchId: church.id, planId: plan.id, provider, interval, status: SubscriptionStatus.INCOMPLETE }, select: { id: true, status: true, provider: true, interval: true } });
+  const subscription = await db.subscription.create({ data: { churchId: church.id, planId: plan.id, provider, interval, status: SubscriptionStatus.INCOMPLETE, domainAddonPrice: addOnSelected ? addOnPrice : null, domainAddonHostname: addOnSelected ? domain.hostname : null, domainAddonProvider: addOnSelected ? provider : null, domainAddonStatus: addOnSelected ? "INCOMPLETE" : null }, select: { id: true, status: true, provider: true, interval: true } });
   const checkout = provider === "STRIPE"
-    ? await createStripeCheckout({ subscriptionId: subscription.id, planSlug: plan.slug, planName: plan.name, price: checkoutPrice, currency: plan.currency, interval, siteId: church.id })
-    : await createPayPalSubscription({ subscriptionId: subscription.id, planSlug: plan.slug, planName: plan.name, price: checkoutPrice, currency: plan.currency, interval, siteId: church.id });
-  await db.subscription.update({ where: { id: subscription.id }, data: { externalSubscriptionId: checkout.externalId } });
-  await logAudit({ activityType: "billing-subscription-initiation-requested", summary: `Started a ${provider} subscription checkout request for ${plan.name}.`, actorId: actor.id, details: JSON.stringify({ boundary: "tenant-billing", churchId: church.id, targetType: "subscription", targetId: subscription.id, metadata: { provider, interval, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" } }) });
-  return { ...subscription, reused: false, checkoutUrl: checkout.checkoutUrl, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" };
+    ? await createStripeCheckout({ subscriptionId: subscription.id, planSlug: plan.slug, planName: plan.name, price: checkoutPrice, currency: plan.currency, interval, siteId: church.id, component: "BASE" })
+    : await createPayPalSubscription({ subscriptionId: subscription.id, planSlug: plan.slug, planName: plan.name, price: checkoutPrice, currency: plan.currency, interval, siteId: church.id, component: "BASE" });
+  const domainCheckout = addOnSelected
+    ? provider === "STRIPE"
+      ? await createStripeCheckout({ subscriptionId: subscription.id, planSlug: `${plan.slug}-domain-addon`, planName: plan.name, price: addOnPrice.toFixed(2), currency: plan.currency, interval: "ANNUAL", siteId: church.id, component: "DOMAIN_ADD_ON" })
+      : await createPayPalSubscription({ subscriptionId: subscription.id, planSlug: `${plan.slug}-domain-addon`, planName: plan.name, price: addOnPrice.toFixed(2), currency: plan.currency, interval: "ANNUAL", siteId: church.id, component: "DOMAIN_ADD_ON" })
+    : null;
+  await db.subscription.update({ where: { id: subscription.id }, data: { externalSubscriptionId: checkout.externalId, ...(domainCheckout ? { domainAddonExternalId: domainCheckout.externalId } : {}) } });
+  await logAudit({ activityType: "billing-subscription-initiation-requested", summary: `Started a ${provider} subscription checkout request for ${plan.name}.`, actorId: actor.id, details: JSON.stringify({ boundary: "tenant-billing", churchId: church.id, targetType: "subscription", targetId: subscription.id, metadata: { provider, interval, paymentStatus: "PENDING_PROVIDER_CONFIRMATION", domainChoice: domain.choice, domainHostname: domain.hostname } }) });
+  return { ...subscription, reused: false, checkoutUrl: checkout.checkoutUrl, domainCheckoutUrl: domainCheckout?.checkoutUrl ?? null, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" };
+}
+
+export async function initiateExistingSubscriptionDomainAddon(input: { hostname: unknown; registrationPrice?: unknown }) {
+  const { user: actor, church } = await requireCurrentChurch({ allowUnsubscribed: false });
+  const hostname = normalizeHostname(input.hostname);
+  if (!hostname) throw new Error("Provide a valid domain name.");
+  const subscription = await db.subscription.findFirst({
+    where: { churchId: church.id, status: SubscriptionStatus.ACTIVE },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true, provider: true, interval: true, domainAddonStatus: true,
+      plan: { select: { id: true, slug: true, name: true, currency: true, stripeEnabled: true, paypalEnabled: true, entitlements: { where: { moduleSlug: "custom-domains" }, select: { mode: true, addOnMonthly: true, addOnAnnual: true } } } }
+    }
+  });
+  if (!subscription) throw new Error("An active subscription is required to purchase a new domain.");
+  if (subscription.domainAddonStatus === "ACTIVE" || subscription.domainAddonStatus === "INCOMPLETE") throw new Error("A domain add-on authorization is already active or pending.");
+  const customDomain = customDomainOption({ interval: subscription.interval, entitlements: subscription.plan.entitlements });
+  if (!customDomain.available) throw new Error("New domain registration is not available on this plan.");
+  const registrationPrice = typeof input.registrationPrice === "number" && Number.isFinite(input.registrationPrice) && input.registrationPrice >= 0 ? input.registrationPrice : 0;
+  const price = customDomain.included ? 0 : Math.max(Number(customDomain.price), registrationPrice);
+  if (price === 0) {
+    await db.subscription.update({ where: { id: subscription.id }, data: { domainAddonPrice: 0, domainAddonHostname: hostname, domainAddonProvider: subscription.provider, domainAddonStatus: "ACTIVE" } });
+    return { subscriptionId: subscription.id, checkoutUrl: null, price: "0.00", currency: subscription.plan.currency, included: true };
+  }
+  const provider = subscription.provider;
+  if ((provider === "STRIPE" && !subscription.plan.stripeEnabled) || (provider === "PAYPAL" && !subscription.plan.paypalEnabled) || !await providerConfiguredWithStored(provider)) throw new Error(`${provider} billing is not configured for this plan.`);
+  const checkout = provider === "STRIPE"
+    ? await createStripeCheckout({ subscriptionId: subscription.id, planSlug: `${subscription.plan.slug}-domain-addon`, planName: subscription.plan.name, price: price.toFixed(2), currency: subscription.plan.currency, interval: "ANNUAL", siteId: church.id, component: "DOMAIN_ADD_ON" })
+    : await createPayPalSubscription({ subscriptionId: subscription.id, planSlug: `${subscription.plan.slug}-domain-addon`, planName: subscription.plan.name, price: price.toFixed(2), currency: subscription.plan.currency, interval: "ANNUAL", siteId: church.id, component: "DOMAIN_ADD_ON" });
+  await db.subscription.update({ where: { id: subscription.id }, data: { domainAddonPrice: price, domainAddonHostname: hostname, domainAddonExternalId: checkout.externalId, domainAddonProvider: provider, domainAddonStatus: "INCOMPLETE" } });
+  await logAudit({ activityType: "billing-subscription-initiation-requested", summary: `Started annual domain add-on authorization for ${hostname}.`, actorId: actor.id, details: JSON.stringify({ boundary: "tenant-billing", churchId: church.id, targetType: "subscription", targetId: subscription.id, metadata: { provider, hostname, price, currency: subscription.plan.currency, component: "DOMAIN_ADD_ON" } }) });
+  return { subscriptionId: subscription.id, checkoutUrl: checkout.checkoutUrl, price: price.toFixed(2), currency: subscription.plan.currency, included: false };
+}
+
+export async function getExistingSubscriptionDomainAddonPricing() {
+  const { church } = await requireCurrentChurch({ allowUnsubscribed: false });
+  const subscription = await db.subscription.findFirst({
+    where: { churchId: church.id, status: SubscriptionStatus.ACTIVE },
+    orderBy: { updatedAt: "desc" },
+    select: { interval: true, domainAddonHostname: true, domainAddonStatus: true, plan: { select: { currency: true, entitlements: { where: { moduleSlug: "custom-domains" }, select: { mode: true, addOnMonthly: true, addOnAnnual: true } } } } }
+  });
+  if (!subscription) return { available: false, included: false, price: "0.00", currency: "USD", purchasedDomain: null };
+  const option = customDomainOption({ interval: subscription.interval, entitlements: subscription.plan.entitlements });
+  const purchasedDomain = subscription.domainAddonHostname && ["ACTIVE", "INCOMPLETE"].includes(subscription.domainAddonStatus ?? "")
+    ? { hostname: subscription.domainAddonHostname, status: subscription.domainAddonStatus }
+    : null;
+  return { available: option.available, included: option.included, price: option.price, currency: subscription.plan.currency, purchasedDomain };
 }

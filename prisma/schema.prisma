@@ -2041,6 +2041,11 @@ model Subscription {
   cancelAtPeriodEnd      Boolean               @default(false)
   canceledAt             DateTime?
   gracePeriodEndsAt      DateTime?
+  domainAddonPrice       Decimal?              @db.Decimal(12, 2)
+  domainAddonHostname    String?
+  domainAddonExternalId  String?
+  domainAddonStatus      String?
+  domainAddonProvider    BillingProvider?
   promotionRedemptions   PromotionRedemption[]
   events                 SubscriptionEvent[]
   createdAt              DateTime              @default(now())
