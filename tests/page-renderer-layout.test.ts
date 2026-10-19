@@ -28,5 +28,7 @@ describe("public page headline layout", () => {
     expect(markup).toContain("text-left");
     expect(markup).toContain("text-5xl");
     expect(markup).toContain("text-4xl");
+    expect(markup).toContain("grid-auto-rows:max-content");
+    expect(markup).toContain("align-content:start");
   });
 });

@@ -496,7 +496,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
   }));
 
   return (
-    <div className="site-block-stack grid" style={columns ? { display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: "1.5rem" } : undefined}>
+    <div className="site-block-stack grid" style={{ display: "grid", gridAutoRows: "max-content", alignContent: "start", ...(columns ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: "1.5rem" } : { gap: 0 }) }}>
       {renderedBlocks}
     </div>
   );

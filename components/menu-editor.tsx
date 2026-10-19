@@ -19,7 +19,7 @@ export function MenuEditor({ id }: { id: string }) {
   const [message, setMessage] = useState("Loading menu...");
 
   useEffect(() => {
-    void Promise.all([fetch(`/api/menus/${id}`), fetch("/api/menus/options")])
+    void Promise.all([fetch(`/api/menus/${id}`), fetch("/api/pages/options")])
       .then(async ([menuResponse, pagesResponse]) => {
         if (!menuResponse.ok || !pagesResponse.ok) throw new Error("Unable to load menu.");
         const loaded = await menuResponse.json() as Menu;
