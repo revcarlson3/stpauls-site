@@ -8,12 +8,23 @@ function required(name: string) {
   return value;
 }
 
+export function checkoutReturnUrl(name: "BILLING_CHECKOUT_SUCCESS_URL" | "BILLING_CHECKOUT_CANCEL_URL") {
+  const configured = process.env[name];
+  if (configured) return configured;
+  const base = process.env.NEXTAUTH_URL;
+  if (!base) throw new Error(`${name} is not configured.`);
+  const url = new URL(base);
+  if (url.pathname === "/" || !url.pathname) url.pathname = "/admin/billing";
+  url.search = "";
+  return url.toString().replace(/\/$/, "");
+}
+
 export async function createStripeCheckout(input: { subscriptionId: string; planSlug: string; planName: string; price: string | { toString(): string }; currency: string; interval: string; siteId: string }) {
   const secret = await getConfiguredSecret("STRIPE", "secretKey", "STRIPE_SECRET_KEY"); if (!secret) throw new Error("STRIPE_SECRET_KEY is not configured.");
   const recurring = input.interval === "MONTHLY" ? { interval: "month", interval_count: "1" } : input.interval === "QUARTERLY" ? { interval: "month", interval_count: "3" } : input.interval === "SEMI_ANNUAL" ? { interval: "month", interval_count: "6" } : { interval: "year", interval_count: "1" };
   const amount = Math.round(Number(input.price.toString()) * 100);
   if (!Number.isSafeInteger(amount) || amount < 0) throw new Error("The billing plan price is invalid.");
-  const body = new URLSearchParams({ mode: "subscription", "line_items[0][price_data][currency]": input.currency.toLowerCase(), "line_items[0][price_data][unit_amount]": String(amount), "line_items[0][price_data][product_data][name]": input.planName, "line_items[0][price_data][recurring][interval]": recurring.interval, "line_items[0][price_data][recurring][interval_count]": String(recurring.interval_count), "line_items[0][quantity]": "1", success_url: `${required("BILLING_CHECKOUT_SUCCESS_URL")}?provider=STRIPE&session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${required("BILLING_CHECKOUT_CANCEL_URL")}?provider=STRIPE`, "metadata[localSubscriptionId]": input.subscriptionId, "metadata[siteId]": input.siteId });
+  const body = new URLSearchParams({ mode: "subscription", "line_items[0][price_data][currency]": input.currency.toLowerCase(), "line_items[0][price_data][unit_amount]": String(amount), "line_items[0][price_data][product_data][name]": input.planName, "line_items[0][price_data][recurring][interval]": recurring.interval, "line_items[0][price_data][recurring][interval_count]": String(recurring.interval_count), "line_items[0][quantity]": "1", success_url: `${checkoutReturnUrl("BILLING_CHECKOUT_SUCCESS_URL")}?provider=STRIPE&session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${checkoutReturnUrl("BILLING_CHECKOUT_CANCEL_URL")}?provider=STRIPE`, "metadata[localSubscriptionId]": input.subscriptionId, "metadata[siteId]": input.siteId });
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", { method: "POST", headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/x-www-form-urlencoded" }, body });
   const value = await response.json().catch(() => ({}));
   if (!response.ok || typeof value.id !== "string" || typeof value.url !== "string") throw new Error("Stripe checkout could not be created.");
@@ -40,7 +51,7 @@ export async function createPayPalSubscription(input: { subscriptionId: string; 
     if (!planResponse.ok || typeof plan.id !== "string") throw new Error("PayPal billing plan could not be created.");
     planId = plan.id;
   }
-  const response = await fetch(`${base}/v1/billing/subscriptions`, { method: "POST", headers: { Authorization: `Bearer ${token.access_token}`, "Content-Type": "application/json", "PayPal-Request-Id": input.subscriptionId }, body: JSON.stringify({ plan_id: planId, custom_id: input.subscriptionId, application_context: { return_url: `${required("BILLING_CHECKOUT_SUCCESS_URL")}?provider=PAYPAL`, cancel_url: `${required("BILLING_CHECKOUT_CANCEL_URL")}?provider=PAYPAL` } }) });
+  const response = await fetch(`${base}/v1/billing/subscriptions`, { method: "POST", headers: { Authorization: `Bearer ${token.access_token}`, "Content-Type": "application/json", "PayPal-Request-Id": input.subscriptionId }, body: JSON.stringify({ plan_id: planId, custom_id: input.subscriptionId, application_context: { return_url: `${checkoutReturnUrl("BILLING_CHECKOUT_SUCCESS_URL")}?provider=PAYPAL`, cancel_url: `${checkoutReturnUrl("BILLING_CHECKOUT_CANCEL_URL")}?provider=PAYPAL` } }) });
   const value = await response.json().catch(() => ({}));
   const approval = Array.isArray(value.links) ? value.links.find((link: { rel?: string }) => link.rel === "approve")?.href : null;
   if (!response.ok || typeof value.id !== "string" || typeof approval !== "string") throw new Error("PayPal subscription could not be created.");
