@@ -105,7 +105,11 @@ export async function performProviderBillingAction(provider: string, externalId:
     const tokenResponse = await fetch(`${base}/v1/oauth2/token`, { method: "POST", headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" }, body: "grant_type=client_credentials" });
     const token = await tokenResponse.json().catch(() => ({}));
     if (!tokenResponse.ok || typeof token.access_token !== "string") throw new Error("PayPal access token could not be obtained.");
-    const response = await fetch(`${base}/v1/billing/subscriptions/${encodeURIComponent(externalId)}`, { headers: { Authorization: `Bearer ${token.access_token}` } });
+    const response = await fetch(`${base}/v1/billing/subscriptions/${encodeURIComponent(externalId)}${action === "CANCEL_AT_PERIOD_END" ? "/cancel" : ""}`, { method: action === "CANCEL_AT_PERIOD_END" ? "POST" : "GET", headers: { Authorization: `Bearer ${token.access_token}`, "Content-Type": "application/json" }, ...(action === "CANCEL_AT_PERIOD_END" ? { body: JSON.stringify({ reason: "Customer requested cancellation at the end of the current billing period." }) } : {}) });
+    if (action === "CANCEL_AT_PERIOD_END") {
+      if (!response.ok && response.status !== 204) throw new Error("PayPal subscription cancellation failed.");
+      return { status: "ACTIVE", cancelAtPeriodEnd: true };
+    }
     const value = await response.json().catch(() => ({}));
     if (!response.ok || typeof value.status !== "string") throw new Error("PayPal subscription refresh failed.");
     return { status: value.status === "ACTIVE" ? "ACTIVE" : value.status === "CANCELLED" ? "CANCELED" : "PAST_DUE", cancelAtPeriodEnd: false };
