@@ -11,7 +11,15 @@ export async function GET(request: Request) {
   const sessionToken = await createPublicSiteSessionToken(token, request.headers.get("host"));
   if (!sessionToken) return NextResponse.json({ error: "The sign-in handoff is invalid or expired." }, { status: 401 });
 
-  const response = NextResponse.redirect(new URL("/", request.url));
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0].trim();
+  const host = forwardedHost || request.headers.get("host");
+  if (!host) return NextResponse.json({ error: "The public site host is unavailable." }, { status: 500 });
+
+  const forwardedProtocol = request.headers.get("x-forwarded-proto")?.split(",")[0].trim();
+  const protocol = forwardedProtocol === "http" || forwardedProtocol === "https"
+    ? forwardedProtocol
+    : new URL(request.url).protocol.replace(":", "");
+  const response = NextResponse.redirect(new URL("/", `${protocol}://${host}`));
   response.cookies.set({
     name: process.env.NODE_ENV === "production" ? "__Secure-next-auth.session-token" : "next-auth.session-token",
     value: sessionToken,
