@@ -95,4 +95,24 @@ describe("1Panel API compatibility", () => {
       httpConfig: "HTTPToHTTPS"
     });
   });
+
+  it("accepts string and alternate certificate ID fields from 1Panel", async () => {
+    db.onePanelConfiguration.findUnique.mockResolvedValue({
+      baseUrl: "https://panel.example.test",
+      apiKeyEncrypted: "encrypted",
+      version: "1.10.34-lts",
+      websiteId: "7",
+      acmeAccountId: "11",
+      wildcardSslId: null,
+      platformSuffix: "mychurch.one"
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response('{"data":{"sslId":"42"}}'))
+      .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
+      .mockResolvedValueOnce(response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { provisionCustomDomainTls } = await import("@/lib/onepanel");
+    await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 7 });
+  });
 });

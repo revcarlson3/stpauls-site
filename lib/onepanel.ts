@@ -53,11 +53,22 @@ function responseMessage(body: unknown): string {
   }
 }
 
-function numericId(body: unknown) {
+function numericId(body: unknown): number | null {
   const data = responseData(body);
+  if (typeof data === "number") {
+    return Number.isSafeInteger(data) && data > 0 ? data : null;
+  }
+  if (typeof data === "string" && /^\d+$/.test(data.trim())) {
+    const parsed = Number(data);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  }
   if (!data || typeof data !== "object") return null;
-  const value = "id" in data ? (data as { id: unknown }).id : "ID" in data ? (data as { ID: unknown }).ID : null;
-  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+  const record = data as Record<string, unknown>;
+  for (const key of ["id", "ID", "certificateId", "sslId", "websiteSSLId"]) {
+    const value = numericId(record[key]);
+    if (value !== null) return value;
+  }
+  return null;
 }
 
 async function panelRequest<T>(config: NonNullable<Awaited<ReturnType<typeof configuration>>>, path: string, body: Record<string, unknown>) {
