@@ -31,6 +31,25 @@ export function dnsTxtRecordMatches(records: string[][], token: string) {
   return records.some((chunks) => chunks.join("") === token);
 }
 
+export function dnsLookupErrorMessage(error: unknown) {
+  const code = error && typeof error === "object" && "code" in error ? String(error.code).toUpperCase() : "";
+  if (code === "ENOTFOUND" || code === "ENODATA") {
+    return "The DNS verification record was not found yet. Add the TXT record and wait for DNS propagation.";
+  }
+  if (code === "EAI_AGAIN" || code === "ETIMEOUT" || code === "ETIMEDOUT") {
+    return "DNS lookup timed out while checking the verification record. Wait a moment and retry.";
+  }
+  if (code === "SERVFAIL") {
+    return "The authoritative DNS servers returned SERVFAIL while checking the verification record. Check DNSSEC and nameserver configuration, then retry.";
+  }
+  if (code === "REFUSED" || code === "ECONNREFUSED") {
+    return "The DNS resolver refused the verification lookup. Check the domain's authoritative nameservers, then retry.";
+  }
+  return code
+    ? `The DNS resolver returned ${code} while checking the verification record.`
+    : "The DNS resolver could not complete the verification lookup.";
+}
+
 async function resolveVerificationTxt(name: string) {
   const resolvers = [
     async () => resolveTxt(name),
@@ -115,9 +134,7 @@ export async function verifyTenantDomain(domainId: string) {
   try {
     records = await resolveVerificationTxt(record.name);
   } catch (error) {
-    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
-    if (code === "ENOTFOUND" || code === "ENODATA" || code === "EAI_AGAIN") throw new Error("The DNS verification record was not found yet. Add the TXT record and wait for DNS propagation.");
-    throw new Error("DNS verification could not be checked right now.");
+    throw new Error(dnsLookupErrorMessage(error));
   }
 
   if (!dnsTxtRecordMatches(records, domain.verificationToken)) throw new Error("The DNS TXT record does not match the verification value shown above.");
