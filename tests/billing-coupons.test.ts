@@ -19,6 +19,7 @@ describe("tenant coupon validation", () => {
     const base = { id: "promo-1", code: "FULL", isActive: true, discountType: "PERCENTAGE", percentageOff: 100, amountOff: null, currency: "USD", startsAt: new Date(Date.now() - 1000), endsAt: null, appliesMonthly: true, appliesQuarterly: true, appliesSemiAnnual: true, appliesAnnual: true, maxRedemptions: null, redemptionCount: 0, maxPerAccount: 1, redemptions: [] };
     db.promotion.findUnique.mockResolvedValue(base);
     await expect(validateTenantCoupon({ code: "full", planId: "plan-1", interval: "QUARTERLY" })).resolves.toMatchObject({ couponId: "promo-1", discount: "20.00", total: "0.00" });
+    expect(requirePermission).toHaveBeenCalledWith("ACCESS_ADMIN", { allowUnsubscribed: true });
     db.promotion.findUnique.mockResolvedValue({ ...base, endsAt: new Date(Date.now() - 1000) });
     await expect(validateTenantCoupon({ code: "full", planId: "plan-1", interval: "QUARTERLY" })).rejects.toThrow("invalid or expired");
     db.promotion.findUnique.mockResolvedValue({ ...base, endsAt: null, maxRedemptions: 1, redemptionCount: 1 });

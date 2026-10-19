@@ -16,6 +16,7 @@ describe("tenant billing initiation", () => {
     db.subscriptionPlan.findMany.mockResolvedValue([{ id: "plan-1", name: "Standard", slug: "standard", description: null, monthlyPrice: { toString: () => "10.00" }, annualPrice: { toString: () => "100.00" }, currency: "USD", stripeEnabled: true, paypalEnabled: true }]);
     const { listAvailableBillingPlans } = await import("@/lib/billing");
     const plans = await listAvailableBillingPlans();
+    expect(requirePermission).toHaveBeenCalledWith("ACCESS_ADMIN", { allowUnsubscribed: true });
     expect(plans[0]).toMatchObject({ monthlyPrice: "10.00", providers: { STRIPE: false, PAYPAL: false } });
     expect(JSON.stringify(plans)).not.toContain("SECRET");
   });
@@ -25,6 +26,7 @@ describe("tenant billing initiation", () => {
     db.subscription.findFirst.mockResolvedValue({ id: "sub-1", status: "INCOMPLETE", provider: "STRIPE", interval: "MONTHLY" });
     const { initiateBillingSubscription } = await import("@/lib/billing");
     await expect(initiateBillingSubscription({ planId: "plan-1", provider: "STRIPE", interval: "MONTHLY" })).resolves.toMatchObject({ id: "sub-1", reused: true, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" });
+    expect(requirePermission).toHaveBeenCalledWith("ACCESS_ADMIN", { allowUnsubscribed: true });
     expect(db.subscription.create).not.toHaveBeenCalled();
     delete process.env.STRIPE_SECRET_KEY;
   });

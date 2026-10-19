@@ -12,14 +12,14 @@ export function providerConfigured(provider: BillingProvider) {
 }
 
 export async function listAvailableBillingPlans() {
-  await requirePermission("MANAGE_SETTINGS", { allowUnsubscribed: true });
+  await requirePermission("ACCESS_ADMIN", { allowUnsubscribed: true });
   const plans = await db.subscriptionPlan.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, slug: true, description: true, price: true, interval: true, monthlyPrice: true, annualPrice: true, currency: true, stripeEnabled: true, paypalEnabled: true } });
   const [stripeConfigured, paypalConfigured] = await Promise.all([providerConfiguredWithStored("STRIPE"), providerConfiguredWithStored("PAYPAL")]);
   return plans.map((plan) => ({ ...plan, price: (plan.price ?? plan.monthlyPrice).toString(), interval: plan.interval ?? "MONTHLY", monthlyPrice: plan.monthlyPrice.toString(), annualPrice: plan.annualPrice.toString(), providers: { STRIPE: plan.stripeEnabled && stripeConfigured, PAYPAL: plan.paypalEnabled && paypalConfigured } }));
 }
 
 export async function initiateBillingSubscription(input: { planId: unknown; provider: unknown; interval?: unknown; couponCode?: unknown }) {
-  const actor = await requirePermission("MANAGE_SETTINGS", { allowUnsubscribed: true });
+  const actor = await requirePermission("ACCESS_ADMIN", { allowUnsubscribed: true });
   const { church } = await requireCurrentChurch({ allowUnsubscribed: true });
   if (input.provider !== "STRIPE" && input.provider !== "PAYPAL") throw new Error("Unsupported billing provider.");
   const provider = input.provider as BillingProvider;
