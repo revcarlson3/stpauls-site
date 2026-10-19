@@ -24,6 +24,15 @@ function isRenderBlock(value: unknown): value is RenderBlock {
   return typeof block.id === "string" && typeof block.type === "string";
 }
 
+function textDecorationStyle(props: Record<string, unknown>): CSSProperties {
+  const shape = props.textShape;
+  return shape === "highlight" ? { backgroundColor: "rgba(230,111,81,.2)", borderRadius: "0.25rem", padding: "0.05em 0.2em" }
+    : shape === "pill" ? { backgroundColor: "rgba(230,111,81,.16)", borderRadius: "999px", padding: "0.1em 0.55em" }
+      : shape === "outline" ? { border: "2px solid currentColor", borderRadius: "0.25rem", padding: "0.05em 0.25em" }
+        : shape === "badge" ? { backgroundColor: "rgb(23,50,77)", color: "#fff", borderRadius: "0.35rem", padding: "0.1em 0.45em" }
+          : {};
+}
+
 function childBlocks(block: RenderBlock) {
   return Array.isArray(block.props?.children) ? block.props.children : [];
 }
@@ -80,6 +89,13 @@ function cssPixel(value: unknown) {
   return Number.isFinite(numericValue) ? `${numericValue}px` : undefined;
 }
 
+function cssFontSize(value: unknown) {
+  if (typeof value !== "string" || value.trim() === "") return undefined;
+  const trimmed = value.trim();
+  if (/^-?(?:\d+|\d*\.\d+)$/.test(trimmed)) return `${trimmed}px`;
+  return /^-?(?:\d+|\d*\.\d+)(?:px|em|rem|%|pt|pc|in|cm|mm|ex|ch|vw|vh|vmin|vmax)$/i.test(trimmed) ? trimmed : undefined;
+}
+
 function responsiveSettings(props: Record<string, unknown>, device: typeof responsiveDevices[number]) {
   const value = props.responsive;
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -98,10 +114,10 @@ function responsiveContentClass(props: Record<string, unknown>, key: string) {
 
 function responsiveText({ props, name, fallback, className = "", id }: { props: Record<string, unknown>; name: string; fallback: string; className?: string; id?: string }) {
   return <div id={id} className={`${className} ${responsiveContentClass(props, name)}`}>
-    <div className="responsive-content-base" dangerouslySetInnerHTML={{ __html: safeRichText(props[name]) || fallback }} />
+    <div className="responsive-content-base" style={textDecorationStyle(props)} dangerouslySetInnerHTML={{ __html: safeRichText(props[name]) || fallback }} />
     {responsiveDevices.map((device) => {
       const value = responsiveString(props, name, device);
-      return value === undefined ? null : <div key={device} className={`responsive-content-variant responsive-content-${device}`} dangerouslySetInnerHTML={{ __html: safeRichText(value) }} />;
+      return value === undefined ? null : <div key={device} className={`responsive-content-variant responsive-content-${device}`} style={textDecorationStyle({ ...props, ...(props.responsive as Record<string, unknown> | undefined)?.[device] as Record<string, unknown> | undefined })} dangerouslySetInnerHTML={{ __html: safeRichText(value) }} />;
     })}
   </div>;
 }
@@ -210,7 +226,7 @@ function responsiveStyle(props: Record<string, unknown>): CSSProperties {
   const responsive = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
   const basePadding = props.padding === "none" ? "0" : props.padding === "sm" ? "0.75rem" : props.padding === "lg" ? "2.5rem" : "1.5rem";
   const baseAlignment = props.alignment === "center" ? "center" : props.alignment === "right" ? "right" : "left";
-  const baseFontSize = cssPixel(props.fontSize);
+  const baseFontSize = cssFontSize(props.fontSize);
   const baseLetterSpacing = cssPixel(props.letterSpacing);
   if (props.hidden === true) style["--desktop-display"] = "none";
   if (baseFontSize) style["--desktop-font-size"] = baseFontSize;
@@ -218,6 +234,11 @@ function responsiveStyle(props: Record<string, unknown>): CSSProperties {
   if (typeof props.lineHeight === "string" && props.lineHeight) style["--desktop-line-height"] = props.lineHeight;
   if (baseLetterSpacing) style["--desktop-letter-spacing"] = baseLetterSpacing;
   if (typeof props.fontColor === "string" && props.fontColor) style["--desktop-font-color"] = props.fontColor;
+  style["--desktop-vertical-align"] = props.verticalAlign === "center" ? "center" : props.verticalAlign === "bottom" ? "flex-end" : "flex-start";
+  if (props.textItalic === true) style["--desktop-font-style"] = "italic";
+  if (props.textUnderline === true || props.textStrikethrough === true) style["--desktop-text-decoration"] = [props.textUnderline === true ? "underline" : "", props.textStrikethrough === true ? "line-through" : ""].filter(Boolean).join(" ");
+  if (typeof props.textTransform === "string" && props.textTransform !== "none") style["--desktop-text-transform"] = props.textTransform;
+  if (typeof props.textShadow === "string" && props.textShadow !== "none") style["--desktop-text-shadow"] = props.textShadow === "soft" ? "2px 2px 5px rgba(23,50,77,.25)" : props.textShadow === "strong" ? "3px 3px 0 rgba(23,50,77,.35)" : props.textShadow === "glow" ? "0 0 12px currentColor" : "1px 0 0 currentColor, -1px 0 0 currentColor, 0 1px 0 currentColor, 0 -1px 0 currentColor";
   if (props.flexDirection === "column" || props.flexDirection === "row") style["--desktop-flex-direction"] = props.flexDirection;
   if (props.flexWrap === "nowrap" || props.flexWrap === "wrap") style["--desktop-flex-wrap"] = props.flexWrap;
   if (typeof props.flexGap === "string" && /^\d+$/.test(props.flexGap)) style["--desktop-flex-gap"] = `${props.flexGap}px`;
@@ -242,13 +263,17 @@ function responsiveStyle(props: Record<string, unknown>): CSSProperties {
     if (typeof item.overlayHidden === "boolean") style[`--${device}-overlay-display`] = item.overlayHidden ? "none" : "block";
     style[`--${device}-alignment`] = typeof item.alignment === "string" ? item.alignment === "center" ? "center" : item.alignment === "right" ? "right" : "left" : baseAlignment;
     style[`--${device}-padding`] = typeof item.padding === "string" ? item.padding === "none" ? "0" : item.padding === "sm" ? "0.75rem" : item.padding === "lg" ? "2.5rem" : "1.5rem" : basePadding;
-    const fontSize = cssPixel(item.fontSize ?? props.fontSize);
+    const fontSize = cssFontSize(item.fontSize ?? props.fontSize);
     const letterSpacing = cssPixel(item.letterSpacing ?? props.letterSpacing);
     if (fontSize) style[`--${device}-font-size`] = fontSize;
     if (typeof (item.fontWeight ?? props.fontWeight) === "string") style[`--${device}-font-weight`] = String(item.fontWeight ?? props.fontWeight);
     if (typeof (item.lineHeight ?? props.lineHeight) === "string") style[`--${device}-line-height`] = String(item.lineHeight ?? props.lineHeight);
     if (letterSpacing) style[`--${device}-letter-spacing`] = letterSpacing;
     if (typeof item.fontColor === "string" && item.fontColor) style[`--${device}-font-color`] = item.fontColor;
+    if (typeof item.textItalic === "boolean") style[`--${device}-font-style`] = item.textItalic ? "italic" : "normal";
+    if (item.textUnderline === true || item.textStrikethrough === true) style[`--${device}-text-decoration`] = [item.textUnderline === true ? "underline" : "", item.textStrikethrough === true ? "line-through" : ""].filter(Boolean).join(" ");
+    if (typeof item.textTransform === "string" && item.textTransform !== "none") style[`--${device}-text-transform`] = item.textTransform;
+    if (typeof item.textShadow === "string" && item.textShadow !== "none") style[`--${device}-text-shadow`] = item.textShadow === "soft" ? "2px 2px 5px rgba(23,50,77,.25)" : item.textShadow === "strong" ? "3px 3px 0 rgba(23,50,77,.35)" : item.textShadow === "glow" ? "0 0 12px currentColor" : "1px 0 0 currentColor, -1px 0 0 currentColor, 0 1px 0 currentColor, 0 -1px 0 currentColor";
     for (const side of ["Top", "Right", "Bottom", "Left"] as const) {
       const margin = cssPixel(item[`margin${side}`] ?? props[`margin${side}`]);
       const padding = cssPixel(item[`padding${side}`] ?? props[`padding${side}`]);
@@ -297,7 +322,7 @@ function buttonGroup(config: ReturnType<typeof buttonsConfig>, headingId?: strin
 
 function BlockSurface({ as, children, className = "", style, background, overlay, overlayOpacity: opacity }: { as: "section" | "aside" | "footer"; labelledBy: string; children: ReactNode; className?: string; style?: CSSProperties; background?: ReactNode; overlay?: CSSProperties; overlayOpacity?: number }) {
   const surfaceClass = `responsive-block relative overflow-hidden bg-transparent p-6 ${className}`;
-  const content = <>{background}{overlay && <div aria-hidden="true" className="responsive-overlay pointer-events-none absolute inset-0 z-0" style={{ ...overlay, opacity }} />}<div className="relative z-10">{children}</div></>;
+  const content = <>{background}{overlay && <div aria-hidden="true" className="responsive-overlay pointer-events-none absolute inset-0 z-0" style={{ ...overlay, opacity }} />}<div className="relative z-10 flex min-h-full flex-col" style={{ justifyContent: "var(--desktop-vertical-align, flex-start)" }}>{children}</div></>;
   if (as === "aside") return <aside className={surfaceClass} style={style}>{content}</aside>;
   if (as === "footer") return <footer className={surfaceClass} style={style}>{content}</footer>;
   return <section className={surfaceClass} style={style}>{content}</section>;
@@ -424,7 +449,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
       const quoteStyle = block.props?.blockquoteStyle === "centered" || block.props?.blockquoteStyle === "boxed" || block.props?.blockquoteStyle === "quotation" || block.props?.blockquoteStyle === "minimal" ? block.props.blockquoteStyle : "classic";
       const quoteClass = quoteStyle === "centered" ? "text-center font-serif text-xl italic" : quoteStyle === "boxed" ? "rounded-xl border border-ink/10 bg-sand/60 p-6 font-serif text-xl italic shadow-sm" : quoteStyle === "quotation" ? "relative border-t-2 border-coral/40 pt-8 font-serif text-2xl italic before:absolute before:left-0 before:top-0 before:text-7xl before:font-normal before:not-italic before:leading-none before:text-coral before:content-['“']" : quoteStyle === "minimal" ? "border-y border-ink/15 py-5 font-serif text-xl italic" : "border-l-4 border-coral pl-5 font-serif text-2xl italic";
       const quoteAlignment = quoteStyle === "centered" ? "text-center" : "text-left";
-      return <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}><blockquote id={headingId} className={`responsive-typography blockquote-content blockquote-style-${quoteStyle} ${quoteAlignment} ${quoteClass} ${responsiveContentClass(block.props ?? {}, "content")}`}>{responsivePlainText(block.props ?? {}, "content", "Add a quote in the element content.")}</blockquote>{(block.props?.quoteCitation || responsiveString(block.props ?? {}, "quoteCitation", "tablet") !== undefined || responsiveString(block.props ?? {}, "quoteCitation", "mobile") !== undefined) && <cite className={`mt-3 block ${quoteAlignment} text-sm not-italic text-ink/60 ${responsiveContentClass(block.props ?? {}, "quoteCitation")}`}>— {responsivePlainText(block.props ?? {}, "quoteCitation", "")}</cite>}</BlockSurface>;
+      return <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}><blockquote id={headingId} style={textDecorationStyle(block.props ?? {})} className={`responsive-typography blockquote-content blockquote-style-${quoteStyle} ${quoteAlignment} ${quoteClass} ${responsiveContentClass(block.props ?? {}, "content")}`}>{responsivePlainText(block.props ?? {}, "content", "Add a quote in the element content.")}</blockquote>{(block.props?.quoteCitation || responsiveString(block.props ?? {}, "quoteCitation", "tablet") !== undefined || responsiveString(block.props ?? {}, "quoteCitation", "mobile") !== undefined) && <cite className={`mt-3 block ${quoteAlignment} text-sm not-italic text-ink/60 ${responsiveContentClass(block.props ?? {}, "quoteCitation")}`}>— {responsivePlainText(block.props ?? {}, "quoteCitation", "")}</cite>}</BlockSurface>;
     }
     if (block.type === "list") {
       const renderList = (value: unknown, suffix: string) => {
@@ -432,7 +457,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
         const ordered = block.props?.listStyle === "ordered";
         const gap = config.gap === "sm" ? "gap-1" : config.gap === "lg" ? "gap-4" : "gap-2";
         const markerWidth = config.markerSize === "lg" ? "w-7" : config.markerSize === "sm" ? "w-5" : "w-6";
-        return <div className={`mt-2 grid ${gap} text-left ${config.indent === "comfortable" ? "pl-2" : ""}`} style={{ color: config.textColor }} role={ordered ? "list" : undefined}>{config.items.length ? config.items.map((item, index) => {
+        return <div className={`mt-2 grid ${gap} text-left ${config.indent === "comfortable" ? "pl-2" : ""}`} style={{ ...textDecorationStyle(block.props ?? {}), color: config.textColor }} role={ordered ? "list" : undefined}>{config.items.length ? config.items.map((item, index) => {
           const number = config.reversed ? config.start + config.items.length - index - 1 : config.start + index;
           return <div key={`${block.id}-${suffix}-${item.id}`} className="flex items-start gap-2" role="listitem"><span className={`${markerWidth} flex shrink-0 justify-end font-semibold`} style={{ color: config.bulletColor }}>{ordered ? <>{formatListNumber(number, config.numberStyle)}.</> : listMarker(config.bullet, config.bulletColor, config.markerSize)}</span><span>{item.text}</span></div>;
         }) : <div className="text-ink/50">Add list items in the element settings.</div>}</div>;
@@ -456,7 +481,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
     }
     return (
       <BlockSurface key={block.id} as={surfaceType} labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}>
-        {block.type === "headline" ? (() => { const Heading = headingLevel; return <Heading id={headingId} className={`responsive-typography mt-2 font-serif text-3xl ${responsiveContentClass(block.props ?? {}, "title")}`}>{responsivePlainText(block.props ?? {}, "title", title)}</Heading>; })() : <h2 id={headingId} className={`responsive-typography mt-2 font-serif text-3xl ${responsiveContentClass(block.props ?? {}, "title")}`}>{responsivePlainText(block.props ?? {}, "title", title)}</h2>}
+        {block.type === "headline" ? (() => { const Heading = headingLevel; return <Heading id={headingId} style={textDecorationStyle(block.props ?? {})} className={`responsive-typography mt-2 font-serif text-3xl ${responsiveContentClass(block.props ?? {}, "title")}`}>{responsivePlainText(block.props ?? {}, "title", title)}</Heading>; })() : <h2 id={headingId} style={textDecorationStyle(block.props ?? {})} className={`responsive-typography mt-2 font-serif text-3xl ${responsiveContentClass(block.props ?? {}, "title")}`}>{responsivePlainText(block.props ?? {}, "title", title)}</h2>}
         {block.type !== "headline" && <p className="mt-3 text-ink/60">This {label.toLowerCase()} block is ready for its content fields.</p>}
         {menu && <nav aria-label={`${label} navigation`} className={`mt-5 border-t border-ink/10 pt-4 text-sm font-semibold ${block.type === "hero" ? "rounded-lg bg-sand/60 p-4" : ""}`}><MenuLinks items={menu.items} /></nav>}
       </BlockSurface>
