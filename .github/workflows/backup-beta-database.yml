@@ -1,0 +1,771 @@
+name: Backup beta database
+
+on:
+  workflow_dispatch:
+    inputs:
+      age_recipient:
+        description: Public age X25519 recipient (age1...), never a private key or passphrase
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beta-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.ref == 'refs/heads/beta'
+    runs-on: ubuntu-latest
+    environment: beta
+    timeout-minutes: 20
+    env:
+      AGE_RECIPIENT: ${{ inputs.age_recipient }}
+      DEPLOY_HOST: ${{ secrets.BETA_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.BETA_DEPLOY_USER }}
+      DEPLOY_KEY: ${{ secrets.BETA_DEPLOY_KEY }}
+      DEPLOY_PORT: ${{ secrets.BETA_DEPLOY_PORT }}
+      DEPLOY_PATH: ${{ secrets.BETA_DEPLOY_PATH }}
+      KNOWN_HOSTS: ${{ secrets.BETA_DEPLOY_KNOWN_HOSTS }}
+    steps:
+      - name: Validate backup configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          [[ "$GITHUB_REF" == "refs/heads/beta" ]] || {
+            echo "This workflow must be dispatched from the beta branch."
+            exit 1
+          }
+
+          [[ -n "$DEPLOY_HOST" ]] || { echo "BETA_DEPLOY_HOST is not configured in the beta environment."; exit 1; }
+          [[ -n "$DEPLOY_USER" ]] || { echo "BETA_DEPLOY_USER is not configured in the beta environment."; exit 1; }
+          [[ -n "$DEPLOY_KEY" ]] || { echo "BETA_DEPLOY_KEY is not configured in the beta environment."; exit 1; }
+          [[ -n "$KNOWN_HOSTS" ]] || { echo "BETA_DEPLOY_KNOWN_HOSTS is not configured in the beta environment."; exit 1; }
+
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          DEPLOY_PATH="${DEPLOY_PATH:-/var/www/mychurch}"
+
+          [[ "$DEPLOY_HOST" =~ ^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\])$ ]] || {
+            echo "BETA_DEPLOY_HOST contains unsupported characters."
+            exit 1
+          }
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || {
+            echo "BETA_DEPLOY_USER contains unsupported characters."
+            exit 1
+          }
+          if [[ ! "$DEPLOY_PORT" =~ ^[0-9]+$ ]] || (( DEPLOY_PORT < 1 || DEPLOY_PORT > 65535 )); then
+            echo "BETA_DEPLOY_PORT must be an integer from 1 through 65535."
+            exit 1
+          fi
+          if [[ ! "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]] || [[ "$DEPLOY_PATH" =~ (^|/)\.\.(/|$) ]]; then
+            echo "BETA_DEPLOY_PATH must be an absolute path without whitespace or parent traversal."
+            exit 1
+          fi
+          [[ "$AGE_RECIPIENT" =~ ^age1[023456789acdefghjklmnpqrstuvwxyz]{58}$ ]] || {
+            echo "age_recipient must be a public age X25519 recipient beginning with age1."
+            exit 1
+          }
+
+          printf 'DEPLOY_PORT=%s\n' "$DEPLOY_PORT" >> "$GITHUB_ENV"
+          printf 'DEPLOY_PATH=%s\n' "$DEPLOY_PATH" >> "$GITHUB_ENV"
+
+      - name: Install backup tools
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pgdg_key="$RUNNER_TEMP/postgresql-pgdg.asc"
+          pgdg_keyring="$RUNNER_TEMP/postgresql-pgdg.gpg"
+          cleanup_pgdg_key() {
+            rm -f -- "$pgdg_key" "$pgdg_keyring"
+          }
+          trap cleanup_pgdg_key EXIT
+
+          # GitHub's image uses PGDG-built clients but removes the apt source after image creation.
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            --retry 3 \
+            --output "$pgdg_key" \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          pgdg_fingerprint="$(
+            gpg --batch --show-keys --with-colons "$pgdg_key" |
+              awk -F: '
+                $1 == "pub" { primary = 1; next }
+                primary && $1 == "fpr" { print $10; primary = 0 }
+              '
+          )"
+          [[ "$pgdg_fingerprint" == "B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8" ]] || {
+            echo "The PostgreSQL package signing key set is invalid."
+            exit 1
+          }
+          gpg --batch --dearmor --output "$pgdg_keyring" "$pgdg_key"
+          pgdg_keyring_fingerprint="$(
+            gpg --batch --show-keys --with-colons "$pgdg_keyring" |
+              awk -F: '
+                $1 == "pub" { primary = 1; next }
+                primary && $1 == "fpr" { print $10; primary = 0 }
+              '
+          )"
+          [[ "$pgdg_keyring_fingerprint" == "$pgdg_fingerprint" ]] || {
+            echo "The PostgreSQL package keyring fingerprint is invalid."
+            exit 1
+          }
+          sudo install -m 644 "$pgdg_keyring" /usr/share/keyrings/postgresql-pgdg.gpg
+          # shellcheck disable=SC1091
+          . /etc/os-release
+          [[ "$ID" == "ubuntu" && "$VERSION_CODENAME" =~ ^[a-z]+$ ]] || {
+            echo "The runner is not a supported Ubuntu release."
+            exit 1
+          }
+          printf '%s\n' \
+            "deb [signed-by=/usr/share/keyrings/postgresql-pgdg.gpg] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" |
+            sudo tee /etc/apt/sources.list.d/postgresql-pgdg.list >/dev/null
+
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends postgresql-client-18
+
+          pg_dump_bin="/usr/lib/postgresql/18/bin/pg_dump"
+          pg_restore_bin="/usr/lib/postgresql/18/bin/pg_restore"
+          [[ -x "$pg_dump_bin" && -x "$pg_restore_bin" ]] || {
+            echo "PostgreSQL 18 client binaries were not installed at the expected paths."
+            exit 1
+          }
+          pg_dump_version="$("$pg_dump_bin" --version)"
+          pg_restore_version="$("$pg_restore_bin" --version)"
+          [[ "$pg_dump_version" =~ ^pg_dump\ \(PostgreSQL\)\ 18([.]|[[:space:]]|$) ]] || {
+            echo "pg_dump major version 18 is required."
+            exit 1
+          }
+          [[ "$pg_restore_version" =~ ^pg_restore\ \(PostgreSQL\)\ 18([.]|[[:space:]]|$) ]] || {
+            echo "pg_restore major version 18 is required."
+            exit 1
+          }
+          echo "Using PostgreSQL client major version 18."
+          printf 'PG_DUMP_BIN=%s\n' "$pg_dump_bin" >> "$GITHUB_ENV"
+          printf 'PG_RESTORE_BIN=%s\n' "$pg_restore_bin" >> "$GITHUB_ENV"
+
+          age_version="1.2.1"
+          age_archive="$RUNNER_TEMP/age-v${age_version}-linux-amd64.tar.gz"
+          age_url="https://github.com/FiloSottile/age/releases/download/v${age_version}/age-v${age_version}-linux-amd64.tar.gz"
+          age_sha256="7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50"
+
+          curl --fail --silent --show-error --location --retry 3 --output "$age_archive" "$age_url"
+          printf '%s  %s\n' "$age_sha256" "$age_archive" | sha256sum --check --strict
+
+          install -m 700 -d "$RUNNER_TEMP/age-bin"
+          tar -xzf "$age_archive" -C "$RUNNER_TEMP/age-bin" --strip-components=1 age/age
+          chmod 700 "$RUNNER_TEMP/age-bin/age"
+          printf '%s\n' "$RUNNER_TEMP/age-bin" >> "$GITHUB_PATH"
+
+      - name: Validate age recipient
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'recipient validation' |
+            "$RUNNER_TEMP/age-bin/age" --encrypt --recipient "$AGE_RECIPIENT" --output /dev/null
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_DIR: ${{ runner.temp }}/beta-backup-ssh
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$SSH_DIR"
+          printf '%s\n' "$DEPLOY_KEY" > "$SSH_DIR/key"
+          chmod 600 "$SSH_DIR/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$SSH_DIR/known_hosts"
+          chmod 600 "$SSH_DIR/known_hosts"
+
+      - name: Stream, validate, and encrypt beta backup
+        shell: bash
+        env:
+          BACKUP_DIR: ${{ runner.temp }}/beta-backup
+          SSH_DIR: ${{ runner.temp }}/beta-backup-ssh
+          LOCAL_FORWARD_HOST: 127.0.0.1
+          LOCAL_FORWARD_PORT: "15432"
+        run: |
+          set -euo pipefail
+          umask 077
+          install -m 700 -d "$BACKUP_DIR"
+
+          dump_path="$BACKUP_DIR/beta-postgres.dump"
+          encrypted_path="$dump_path.age"
+          connection_path="$BACKUP_DIR/database-connection.json"
+          tunnel_pid_path="$BACKUP_DIR/ssh-tunnel.pid"
+          remote_script="$BACKUP_DIR/read-database-url.sh"
+          local_script="$BACKUP_DIR/runner-pg-dump.js"
+          tunnel_pid=""
+
+          cleanup_transient_files() {
+            local exit_code=$?
+            trap - EXIT INT TERM
+            set +e
+
+            if [[ -n "$tunnel_pid" ]] && kill -0 "$tunnel_pid" 2>/dev/null; then
+              kill "$tunnel_pid" 2>/dev/null
+              wait "$tunnel_pid" 2>/dev/null
+            fi
+            rm -f -- "$tunnel_pid_path"
+
+            for path in "$dump_path" "$connection_path" "$remote_script" "$local_script"; do
+              if [[ -f "$path" ]]; then
+                shred --force --iterations=1 --zero --remove "$path"
+              fi
+            done
+
+            exit "$exit_code"
+          }
+          trap cleanup_transient_files EXIT INT TERM
+
+          cat > "$remote_script" <<'REMOTE_SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          readonly deploy_path="$1"
+          readonly env_file="$deploy_path/.env"
+
+          [[ -r "$env_file" ]] || {
+            echo "The remote deployment .env file is not readable." >&2
+            exit 1
+          }
+          command -v node >/dev/null || {
+            echo "Node.js is required on the remote host." >&2
+            exit 1
+          }
+
+          node - "$env_file" <<'NODE_SCRIPT'
+          const fs = require("node:fs");
+          const net = require("node:net");
+
+          const envFile = process.argv[2];
+          const contents = fs.readFileSync(envFile, { encoding: "utf8", flag: "r" });
+          const assignment = contents
+            .replace(/^\uFEFF/, "")
+            .split(/\r?\n/)
+            .find((line) => /^\s*(?:export\s+)?DATABASE_URL\s*=/.test(line));
+
+          if (!assignment) {
+            console.error("DATABASE_URL is not defined in the remote deployment .env file.");
+            process.exit(1);
+          }
+
+          let value = assignment.replace(/^\s*(?:export\s+)?DATABASE_URL\s*=\s*/, "").trim();
+          if (value.startsWith('"')) {
+            try {
+              value = JSON.parse(value);
+            } catch {
+              console.error("DATABASE_URL has invalid double-quoted syntax.");
+              process.exit(1);
+            }
+          } else if (value.startsWith("'")) {
+            if (value.length < 2 || !value.endsWith("'")) {
+              console.error("DATABASE_URL has invalid single-quoted syntax.");
+              process.exit(1);
+            }
+            value = value.slice(1, -1);
+          } else {
+            value = value.replace(/\s+#.*$/, "").trim();
+          }
+
+          let databaseUrl;
+          try {
+            databaseUrl = new URL(value);
+          } catch {
+            console.error("DATABASE_URL is not a valid URL.");
+            process.exit(1);
+          }
+          if (!["postgres:", "postgresql:"].includes(databaseUrl.protocol)) {
+            console.error("DATABASE_URL must use the postgres or postgresql protocol.");
+            process.exit(1);
+          }
+          if (databaseUrl.hash) {
+            console.error("DATABASE_URL must not contain a URL fragment.");
+            process.exit(1);
+          }
+
+          const hostname = databaseUrl.hostname;
+          const unwrappedHostname =
+            hostname.startsWith("[") && hostname.endsWith("]")
+              ? hostname.slice(1, -1)
+              : hostname;
+          const isIpAddress = net.isIP(unwrappedHostname) !== 0;
+          const isDnsName =
+            hostname.length <= 253 &&
+            hostname.split(".").every(
+              (label) =>
+                label.length >= 1 &&
+                label.length <= 63 &&
+                /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label),
+            );
+          if (!isIpAddress && !isDnsName) {
+            console.error("DATABASE_URL contains an invalid database host.");
+            process.exit(1);
+          }
+
+          const port = databaseUrl.port || "5432";
+          if (!/^[0-9]+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
+            console.error("DATABASE_URL contains an invalid database port.");
+            process.exit(1);
+          }
+
+          const sslModes = new Set([
+            "disable",
+            "allow",
+            "prefer",
+            "require",
+            "verify-ca",
+            "verify-full",
+          ]);
+          const sslModeValues = databaseUrl.searchParams.getAll("sslmode");
+          if (sslModeValues.length > 1 || (sslModeValues[0] && !sslModes.has(sslModeValues[0]))) {
+            console.error("DATABASE_URL contains an invalid sslmode.");
+            process.exit(1);
+          }
+          const sslRootCertValues = databaseUrl.searchParams.getAll("sslrootcert");
+          if (
+            sslRootCertValues.length > 1 ||
+            (sslRootCertValues[0] && sslRootCertValues[0] !== "system")
+          ) {
+            console.error("DATABASE_URL sslrootcert must be 'system' when configured.");
+            process.exit(1);
+          }
+          if (
+            ["verify-ca", "verify-full"].includes(sslModeValues[0]) &&
+            sslRootCertValues[0] !== "system"
+          ) {
+            console.error("Verified TLS requires sslrootcert=system for runner-side backup.");
+            process.exit(1);
+          }
+
+          function decodeComponent(component, name) {
+            try {
+              const decoded = decodeURIComponent(component);
+              if (decoded.includes("\0")) {
+                throw new Error("NUL byte");
+              }
+              return decoded;
+            } catch {
+              console.error(`DATABASE_URL contains an invalid ${name}.`);
+              process.exit(1);
+            }
+          }
+
+          const username = decodeComponent(databaseUrl.username, "username");
+          const password = decodeComponent(databaseUrl.password, "password");
+          const database = decodeComponent(databaseUrl.pathname.slice(1), "database name");
+          if (!username || username.length > 256) {
+            console.error("DATABASE_URL must contain a valid database username.");
+            process.exit(1);
+          }
+          if (password.length > 8192) {
+            console.error("DATABASE_URL contains an invalid password.");
+            process.exit(1);
+          }
+          if (!database || database.length > 256) {
+            console.error("DATABASE_URL must contain a valid database name.");
+            process.exit(1);
+          }
+
+          process.stdout.write(
+            JSON.stringify({
+              host: unwrappedHostname,
+              port,
+              username,
+              password,
+              database,
+              sslMode:
+                sslRootCertValues[0] === "system" && !sslModeValues[0]
+                  ? "verify-full"
+                  : sslModeValues[0] || null,
+              sslRootCert: sslRootCertValues[0] || null,
+            }),
+          );
+          NODE_SCRIPT
+          REMOTE_SCRIPT
+          chmod 700 "$remote_script"
+
+          cat > "$local_script" <<'NODE_SCRIPT'
+          const fs = require("node:fs");
+          const net = require("node:net");
+          const { spawn } = require("node:child_process");
+
+          function fail(message) {
+            console.error(message);
+            process.exit(1);
+          }
+
+          function readConnection(path) {
+            let material;
+            try {
+              material = JSON.parse(fs.readFileSync(path, { encoding: "utf8", flag: "r" }));
+            } catch {
+              fail("Unable to read the transferred database connection material.");
+            }
+            if (
+              !material ||
+              typeof material !== "object" ||
+              Object.keys(material).sort().join(",") !==
+                "database,host,password,port,sslMode,sslRootCert,username"
+            ) {
+              fail("Transferred database connection material has an invalid shape.");
+            }
+
+            const {
+              host,
+              port,
+              username,
+              password,
+              database,
+              sslMode,
+              sslRootCert,
+            } = material;
+            if (
+              typeof host !== "string" ||
+              typeof port !== "string" ||
+              typeof username !== "string" ||
+              typeof password !== "string" ||
+              typeof database !== "string" ||
+              (sslMode !== null && typeof sslMode !== "string") ||
+              (sslRootCert !== null && typeof sslRootCert !== "string")
+            ) {
+              fail("Transferred database connection material has invalid field types.");
+            }
+
+            const ipVersion = net.isIP(host);
+            const isDnsName =
+              host.length <= 253 &&
+              host.split(".").every(
+                (label) =>
+                  label.length >= 1 &&
+                  label.length <= 63 &&
+                  /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label),
+              );
+            if (ipVersion === 0 && !isDnsName) {
+              fail("Transferred connection material has an invalid database host.");
+            }
+
+            if (!/^[0-9]+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
+              fail("Transferred connection material has an invalid database port.");
+            }
+            if (!username || username.length > 256 || password.length > 8192) {
+              fail("Transferred connection material has invalid credentials.");
+            }
+            if (!database || database.length > 256) {
+              fail("Transferred connection material has an invalid database name.");
+            }
+            if ([host, username, password, database].some((value) => value.includes("\0"))) {
+              fail("Transferred connection material contains a NUL byte.");
+            }
+
+            const sslModes = new Set([
+              "disable",
+              "allow",
+              "prefer",
+              "require",
+              "verify-ca",
+              "verify-full",
+            ]);
+            if (sslMode !== null && !sslModes.has(sslMode)) {
+              fail("Transferred connection material contains an invalid sslmode.");
+            }
+            if (sslRootCert !== null && sslRootCert !== "system") {
+              fail("Transferred connection material contains an invalid sslrootcert.");
+            }
+            if (["verify-ca", "verify-full"].includes(sslMode) && sslRootCert !== "system") {
+              fail("Verified TLS requires the runner's system certificate store.");
+            }
+
+            return { host, port, username, password, database, sslMode, sslRootCert, ipVersion };
+          }
+
+          const action = process.argv[2];
+          const loopbackHost = process.env.LOCAL_FORWARD_HOST;
+          const loopbackPort = process.env.LOCAL_FORWARD_PORT;
+
+          function buildChildEnvironment(connection) {
+            if (
+              loopbackHost !== "127.0.0.1" ||
+              !/^[0-9]+$/.test(loopbackPort || "") ||
+              Number(loopbackPort) < 1 ||
+              Number(loopbackPort) > 65535
+            ) {
+              fail("The local forwarding endpoint is invalid.");
+            }
+
+            const childEnvironment = Object.fromEntries(
+              ["LANG", "LC_ALL", "PATH"].flatMap((key) =>
+                process.env[key] === undefined ? [] : [[key, process.env[key]]],
+              ),
+            );
+            // libpq connects to PGHOSTADDR but uses PGHOST for TLS hostname verification.
+            Object.assign(childEnvironment, {
+              PGHOST: connection.host,
+              PGHOSTADDR: loopbackHost,
+              PGPORT: loopbackPort,
+              PGUSER: connection.username,
+              PGPASSWORD: connection.password,
+              PGDATABASE: connection.database,
+              PGCONNECT_TIMEOUT: "15",
+            });
+            if (connection.sslMode !== null) {
+              childEnvironment.PGSSLMODE = connection.sslMode;
+            }
+            if (connection.sslRootCert !== null) {
+              childEnvironment.PGSSLROOTCERT = connection.sslRootCert;
+            }
+            return childEnvironment;
+          }
+
+          if (action === "self-test") {
+            const childEnvironment = buildChildEnvironment({
+              host: "db.example.internal",
+              username: "backup_user",
+              password: "synthetic-test-value",
+              database: "app",
+              sslMode: "verify-full",
+              sslRootCert: "system",
+            });
+            if (
+              childEnvironment.PGHOST !== "db.example.internal" ||
+              childEnvironment.PGHOSTADDR !== "127.0.0.1" ||
+              childEnvironment.PGPORT !== "15432" ||
+              childEnvironment.PGDATABASE !== "app" ||
+              childEnvironment.PGSSLMODE !== "verify-full" ||
+              childEnvironment.PGSSLROOTCERT !== "system" ||
+              "DATABASE_URL" in childEnvironment ||
+              "DEPLOY_KEY" in childEnvironment
+            ) {
+              fail("Runner database environment self-test failed.");
+            }
+            process.exit(0);
+          }
+
+          const connectionPath = process.argv[3];
+          const connection = readConnection(connectionPath);
+
+          if (action === "endpoint") {
+            const sshHostname =
+              connection.ipVersion === 6
+                ? `[${connection.host}]`
+                : connection.host;
+            process.stdout.write(`${sshHostname}\n${connection.port}\n`);
+            process.exit(0);
+          }
+
+          if (action !== "dump") {
+            fail("Unknown runner database action.");
+          }
+
+          const dumpPath = process.argv[4];
+          if (!dumpPath) {
+            fail("The database dump output path is missing.");
+          }
+          const pgDumpBinary = process.env.PG_DUMP_BIN;
+          if (pgDumpBinary !== "/usr/lib/postgresql/18/bin/pg_dump") {
+            fail("The PostgreSQL 18 pg_dump path is invalid.");
+          }
+
+          const childEnvironment = buildChildEnvironment(connection);
+          const child = spawn(
+            pgDumpBinary,
+            ["--format=custom", "--no-owner", "--no-acl", "--file", dumpPath],
+            {
+              env: childEnvironment,
+              shell: false,
+              stdio: ["ignore", "ignore", "inherit"],
+            },
+          );
+          child.on("error", (error) => {
+            console.error(`Unable to start pg_dump: ${error.message}`);
+            process.exit(1);
+          });
+          child.on("exit", (code, signal) => {
+            if (signal) {
+              console.error(`pg_dump terminated by signal ${signal}.`);
+              process.exit(1);
+            }
+            process.exit(code ?? 1);
+          });
+          NODE_SCRIPT
+          chmod 700 "$local_script"
+          node "$local_script" self-test
+
+          [[ "$LOCAL_FORWARD_HOST" == "127.0.0.1" ]] || {
+            echo "The SSH tunnel must bind to IPv4 loopback."
+            exit 1
+          }
+          if [[ ! "$LOCAL_FORWARD_PORT" =~ ^[0-9]+$ ]] ||
+            (( LOCAL_FORWARD_PORT < 1 || LOCAL_FORWARD_PORT > 65535 )); then
+            echo "The SSH tunnel port is invalid."
+            exit 1
+          fi
+
+          install -m 600 /dev/null "$connection_path"
+          printf -v quoted_deploy_path '%q' "$DEPLOY_PATH"
+          ssh \
+            -p "$DEPLOY_PORT" \
+            -i "$SSH_DIR/key" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes \
+            -o LogLevel=ERROR \
+            -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$SSH_DIR/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash -s -- $quoted_deploy_path" \
+            < "$remote_script" > "$connection_path"
+
+          mapfile -t database_endpoint < <(
+            node "$local_script" endpoint "$connection_path"
+          )
+          if (( ${#database_endpoint[@]} != 2 )); then
+            echo "The database forwarding endpoint is invalid."
+            exit 1
+          fi
+          database_host="${database_endpoint[0]}"
+          database_port="${database_endpoint[1]}"
+          if [[ ! "$database_host" =~ ^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\])$ ]]; then
+            echo "The database forwarding host is invalid."
+            exit 1
+          fi
+          if [[ ! "$database_port" =~ ^[0-9]+$ ]] ||
+            (( database_port < 1 || database_port > 65535 )); then
+            echo "The database forwarding port is invalid."
+            exit 1
+          fi
+
+          forward_spec="$LOCAL_FORWARD_HOST:$LOCAL_FORWARD_PORT:$database_host:$database_port"
+          ssh \
+            -N \
+            -p "$DEPLOY_PORT" \
+            -i "$SSH_DIR/key" \
+            -L "$forward_spec" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ExitOnForwardFailure=yes \
+            -o IdentitiesOnly=yes \
+            -o LogLevel=ERROR \
+            -o ServerAliveCountMax=3 \
+            -o ServerAliveInterval=10 \
+            -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$SSH_DIR/known_hosts" \
+            "$DEPLOY_USER@$DEPLOY_HOST" &
+          tunnel_pid=$!
+          printf '%s\n' "$tunnel_pid" > "$tunnel_pid_path"
+          chmod 600 "$tunnel_pid_path"
+
+          node - "$LOCAL_FORWARD_HOST" "$LOCAL_FORWARD_PORT" "$tunnel_pid" <<'NODE_SCRIPT'
+          const net = require("node:net");
+
+          const host = process.argv[2];
+          const port = Number(process.argv[3]);
+          const tunnelPid = Number(process.argv[4]);
+          if (
+            host !== "127.0.0.1" ||
+            !Number.isInteger(port) ||
+            port < 1 ||
+            port > 65535 ||
+            !Number.isInteger(tunnelPid) ||
+            tunnelPid < 1
+          ) {
+            console.error("The SSH tunnel verification parameters are invalid.");
+            process.exit(1);
+          }
+
+          const deadline = Date.now() + 15000;
+          function probe() {
+            try {
+              process.kill(tunnelPid, 0);
+            } catch {
+              console.error("The SSH tunnel exited before becoming ready.");
+              process.exit(1);
+            }
+
+            const socket = net.createConnection({ host, port });
+            socket.setTimeout(1000);
+            socket.once("connect", () => {
+              socket.destroy();
+              process.exit(0);
+            });
+            const retry = () => {
+              socket.destroy();
+              if (Date.now() >= deadline) {
+                console.error("The SSH tunnel did not become ready in time.");
+                process.exit(1);
+              }
+              setTimeout(probe, 250);
+            };
+            socket.once("error", retry);
+            socket.once("timeout", retry);
+          }
+          probe();
+          NODE_SCRIPT
+
+          node "$local_script" dump "$connection_path" "$dump_path"
+
+          [[ -s "$dump_path" ]] || {
+            echo "pg_dump produced an empty file."
+            exit 1
+          }
+          [[ "$PG_RESTORE_BIN" == "/usr/lib/postgresql/18/bin/pg_restore" ]] || {
+            echo "The PostgreSQL 18 pg_restore path is invalid."
+            exit 1
+          }
+          "$PG_RESTORE_BIN" --list "$dump_path" >/dev/null
+
+          "$RUNNER_TEMP/age-bin/age" \
+            --encrypt \
+            --recipient "$AGE_RECIPIENT" \
+            --output "$encrypted_path" \
+            "$dump_path"
+          [[ -s "$encrypted_path" ]] || {
+            echo "age produced an empty encrypted backup."
+            exit 1
+          }
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: beta-postgres-backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/beta-backup/beta-postgres.dump.age
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Securely remove transient files
+        if: always()
+        shell: bash
+        env:
+          BACKUP_DIR: ${{ runner.temp }}/beta-backup
+          SSH_DIR: ${{ runner.temp }}/beta-backup-ssh
+        run: |
+          set +e
+          tunnel_pid_path="$BACKUP_DIR/ssh-tunnel.pid"
+          if [[ -f "$tunnel_pid_path" ]]; then
+            IFS= read -r tunnel_pid < "$tunnel_pid_path"
+            if [[ "$tunnel_pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$tunnel_pid" 2>/dev/null; then
+              kill "$tunnel_pid" 2>/dev/null
+              wait "$tunnel_pid" 2>/dev/null
+            fi
+          fi
+          for path in \
+            "$BACKUP_DIR/beta-postgres.dump" \
+            "$BACKUP_DIR/beta-postgres.dump.age" \
+            "$BACKUP_DIR/database-connection.json" \
+            "$BACKUP_DIR/ssh-tunnel.pid" \
+            "$BACKUP_DIR/read-database-url.sh" \
+            "$BACKUP_DIR/runner-pg-dump.js" \
+            "$SSH_DIR/key" \
+            "$SSH_DIR/known_hosts"
+          do
+            if [[ -f "$path" ]]; then
+              shred --force --iterations=1 --zero --remove "$path"
+            fi
+          done
+          rm -rf -- "$BACKUP_DIR" "$SSH_DIR" "$RUNNER_TEMP/age-bin"
+          rm -f -- "$RUNNER_TEMP/age-v1.2.1-linux-amd64.tar.gz"
