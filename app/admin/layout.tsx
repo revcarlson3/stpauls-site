@@ -14,7 +14,7 @@ import { AnnouncementTicker } from "@/components/announcement-ticker";
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
-  const [publicSiteEnabled, setPublicSiteEnabled] = useState(true);
+  const [publicSiteUrl, setPublicSiteUrl] = useState<string | null>(null);
   const [publicWebsiteModuleEnabled, setPublicWebsiteModuleEnabled] = useState(false);
   const [membershipLinked, setMembershipLinked] = useState(false);
   const [onlineGivingEnabled, setOnlineGivingEnabled] = useState(false);
@@ -67,15 +67,12 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
       setIsAdministrator(value.isAdministrator === true);
       setPermissions(value.permissions ?? []);
       setIsPlatformAdmin(value.isPlatformAdmin === true);
+      setPublicSiteUrl(typeof value.publicSiteUrl === "string" ? value.publicSiteUrl : null);
     }).catch(() => undefined);
     void fetch("/api/modules").then(async (response) => {
-      if (!response.ok) {
-        setPublicSiteEnabled(false);
-        return;
-      }
+      if (!response.ok) return;
 
       const value = await response.json();
-      setPublicSiteEnabled(value.publicSiteEnabled !== false);
       setPublicWebsiteModuleEnabled(Array.isArray(value.modules) && value.modules.some((module: { slug?: string }) => module.slug === "public-site"));
     });
     void fetch("/api/account/membership").then(async (response) => {
@@ -133,7 +130,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
             {!isPlatformAdmin && permissions.includes("CREATE_SUPPORT_TICKETS") && <Link className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href="/account/support">Support</Link>}
             <NotificationBell />
             {membershipLinked && <div className="relative"><button ref={membershipButtonRef} type="button" aria-expanded={membershipMenuOpen} aria-controls="admin-member-navigation" className="focus-ring rounded-full border border-coral px-3 py-2 text-sm font-semibold text-coral hover:bg-coral hover:text-white" onClick={() => setMembershipMenuOpen((current) => !current)}>My membership <span aria-hidden="true">{membershipMenuOpen ? "⌃" : "⌄"}</span></button>{membershipMenuOpen && mounted && createPortal(<div id="admin-member-navigation" className="fixed right-6 top-20 z-[100] grid min-w-56 gap-1 rounded-xl border border-ink/10 bg-white p-2 text-ink shadow-lg"><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership">Member center</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/profile">Member profile</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/prayer-requests">Prayer requests</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/scheduling">Scheduling</Link>{onlineGivingEnabled && <Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving">Online giving</Link>}<Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving-history">Giving history and pledges</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/documents">Documents and forms</Link></div>, document.body)}</div>}
-            {publicSiteEnabled && <Link className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href="/">View site</Link>}
+            {publicSiteUrl && <a className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href={publicSiteUrl}>View site</a>}
           </div>
         </Container>
       </header>
@@ -187,7 +184,6 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
             </details>}
             <p className="mt-4 border-t border-ink/10 px-4 pt-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Modules</p>
             <ModuleNavigation />
-            {publicSiteEnabled && <Link className="focus-ring flex items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist" href="/"><AdminNavIcon name="site" />View site</Link>}
             <AdminLogout />
           </nav>
         </aside>

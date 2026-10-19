@@ -12,6 +12,10 @@ export function securityGroupScope(churchId: string) {
   return { churchId };
 }
 
+export function buildPublicSiteUrl(hostname: string | null) {
+  return hostname ? `https://${hostname}` : null;
+}
+
 export async function createUser(input: { email: string; name: string; password: string; role: Role; groupId?: string | null }) {
   const actor = await requirePermission("MANAGE_USERS");
   const { church } = await requireCurrentChurch();
@@ -110,7 +114,23 @@ export async function deleteUser(id: string) {
 
 export async function getOwnAccount() {
   const actor = await requireOwnAccount();
-  return db.user.findUnique({ where: { id: actor.id }, select: { id: true, email: true, name: true, emailVerifiedAt: true, isPlatformAdmin: true } }).then((account) => account ? { ...account, canAccessAdmin: actor.canAccessAdmin, isAdministrator: actor.role === "admin", permissions: actor.permissions } : account);
+  const [account, publicDomain] = await Promise.all([
+    db.user.findUnique({ where: { id: actor.id }, select: { id: true, email: true, name: true, emailVerifiedAt: true, isPlatformAdmin: true } }),
+    actor.churchId
+      ? db.siteDomain.findFirst({
+          where: { churchId: actor.churchId, status: "ACTIVE" },
+          orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+          select: { hostname: true }
+        })
+      : Promise.resolve(null)
+  ]);
+  return account ? {
+    ...account,
+    publicSiteUrl: buildPublicSiteUrl(publicDomain?.hostname ?? null),
+    canAccessAdmin: actor.canAccessAdmin,
+    isAdministrator: actor.role === "admin",
+    permissions: actor.permissions
+  } : account;
 }
 
 export async function signOutAllSessions() {
