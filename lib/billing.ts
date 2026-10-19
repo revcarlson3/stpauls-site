@@ -30,16 +30,19 @@ export async function initiateBillingSubscription(input: { planId: unknown; prov
   const interval = (plan.interval ?? "MONTHLY") as BillingInterval;
   if (input.interval && input.interval !== interval) throw new Error("The selected plan has a fixed billing interval.");
   if ((provider === "STRIPE" && !plan.stripeEnabled) || (provider === "PAYPAL" && !plan.paypalEnabled)) throw new Error("The selected provider is unavailable for this plan.");
+  let checkoutPrice: string | { toString(): string } = plan.price ?? plan.monthlyPrice;
   if (input.couponCode) {
-    await validateTenantCoupon({ code: input.couponCode, planId: plan.id, interval });
-    throw new Error("This coupon was validated, but provider coupon checkout is not enabled yet. No checkout was started.");
+    const coupon = await validateTenantCoupon({ code: input.couponCode, planId: plan.id, interval });
+    checkoutPrice = coupon.total;
   }
-  const existing = await db.subscription.findFirst({ where: { churchId: church.id, planId: plan.id, provider, interval, status: SubscriptionStatus.INCOMPLETE }, select: { id: true, status: true, provider: true, interval: true } });
-  if (existing) return { ...existing, reused: true, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" };
+  const existing = await db.subscription.findFirst({ where: { churchId: church.id, planId: plan.id, interval, status: SubscriptionStatus.INCOMPLETE }, orderBy: { updatedAt: "desc" }, select: { id: true, status: true, provider: true, interval: true, externalSubscriptionId: true } });
+  if (existing?.provider === provider) return { ...existing, reused: true, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" };
+  if (existing?.externalSubscriptionId) throw new Error("Another provider checkout is already pending for this plan.");
+  if (existing) await db.subscription.update({ where: { id: existing.id }, data: { status: SubscriptionStatus.CANCELED, canceledAt: new Date() } });
   const subscription = await db.subscription.create({ data: { churchId: church.id, planId: plan.id, provider, interval, status: SubscriptionStatus.INCOMPLETE }, select: { id: true, status: true, provider: true, interval: true } });
   const checkout = provider === "STRIPE"
-    ? await createStripeCheckout({ subscriptionId: subscription.id, planSlug: plan.slug, planName: plan.name, price: plan.price ?? plan.monthlyPrice, currency: plan.currency, interval, siteId: church.id })
-    : await createPayPalSubscription({ subscriptionId: subscription.id, planSlug: plan.slug, planName: plan.name, price: plan.price ?? plan.monthlyPrice, currency: plan.currency, interval, siteId: church.id });
+    ? await createStripeCheckout({ subscriptionId: subscription.id, planSlug: plan.slug, planName: plan.name, price: checkoutPrice, currency: plan.currency, interval, siteId: church.id })
+    : await createPayPalSubscription({ subscriptionId: subscription.id, planSlug: plan.slug, planName: plan.name, price: checkoutPrice, currency: plan.currency, interval, siteId: church.id });
   await db.subscription.update({ where: { id: subscription.id }, data: { externalSubscriptionId: checkout.externalId } });
   await logAudit({ activityType: "billing-subscription-initiation-requested", summary: `Started a ${provider} subscription checkout request for ${plan.name}.`, actorId: actor.id, details: JSON.stringify({ boundary: "tenant-billing", churchId: church.id, targetType: "subscription", targetId: subscription.id, metadata: { provider, interval, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" } }) });
   return { ...subscription, reused: false, checkoutUrl: checkout.checkoutUrl, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" };

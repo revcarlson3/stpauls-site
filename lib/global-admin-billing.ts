@@ -37,8 +37,17 @@ export async function getGlobalBillingOverview(query: BillingQuery = {}) {
     db.subscription.groupBy({ by: ["cancelAtPeriodEnd"], _count: { _all: true } }),
     db.church.count()
   ]);
+  const statusPriority: Record<string, number> = { ACTIVE: 5, PAST_DUE: 4, INCOMPLETE: 3, UNPAID: 2, PAUSED: 1, CANCELED: 0 };
+  const currentByChurch = new Map<string, (typeof subscriptions)[number]>();
+  for (const subscription of subscriptions) {
+    const current = currentByChurch.get(subscription.church.id);
+    if (!current || (statusPriority[subscription.status] ?? 0) > (statusPriority[current.status] ?? 0) || ((statusPriority[subscription.status] ?? 0) === (statusPriority[current.status] ?? 0) && subscription.updatedAt > current.updatedAt)) {
+      currentByChurch.set(subscription.church.id, subscription);
+    }
+  }
+  const currentSubscriptions = Array.from(currentByChurch.values());
   const rows = [
-    ...subscriptions.map(({ id, provider, interval, status, currentPeriodEnd, cancelAtPeriodEnd, canceledAt, gracePeriodEndsAt, updatedAt, church, plan }) => ({ id, site: church, plan, provider, interval, status, currentPeriodEnd, cancelAtPeriodEnd, canceledAt, gracePeriodEndsAt, updatedAt })),
+    ...currentSubscriptions.map(({ id, provider, interval, status, currentPeriodEnd, cancelAtPeriodEnd, canceledAt, gracePeriodEndsAt, updatedAt, church, plan }) => ({ id, site: church, plan, provider, interval, status, currentPeriodEnd, cancelAtPeriodEnd, canceledAt, gracePeriodEndsAt, updatedAt })),
     ...sitesWithoutSubscriptions.map((site) => ({ id: `site:${site.id}`, site, plan: null, provider: null, interval: null, status: "NO_SUBSCRIPTION", currentPeriodEnd: null, cancelAtPeriodEnd: false, canceledAt: null, gracePeriodEndsAt: null, updatedAt: null }))
   ];
   const total = rows.length;
@@ -47,7 +56,7 @@ export async function getGlobalBillingOverview(query: BillingQuery = {}) {
     pageSize: PAGE_SIZE,
     total,
     totalSites,
-    totalSubscriptions: subscriptions.length,
+    totalSubscriptions: currentSubscriptions.length,
     totalSitesWithoutSubscriptions: sitesWithoutSubscriptions.length,
     totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
     subscriptions: rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),

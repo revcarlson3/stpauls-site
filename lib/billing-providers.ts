@@ -8,7 +8,7 @@ function required(name: string) {
   return value;
 }
 
-export async function createStripeCheckout(input: { subscriptionId: string; planSlug: string; planName: string; price: { toString(): string }; currency: string; interval: string; siteId: string }) {
+export async function createStripeCheckout(input: { subscriptionId: string; planSlug: string; planName: string; price: string | { toString(): string }; currency: string; interval: string; siteId: string }) {
   const secret = await getConfiguredSecret("STRIPE", "secretKey", "STRIPE_SECRET_KEY"); if (!secret) throw new Error("STRIPE_SECRET_KEY is not configured.");
   const recurring = input.interval === "MONTHLY" ? { interval: "month", interval_count: "1" } : input.interval === "QUARTERLY" ? { interval: "month", interval_count: "3" } : input.interval === "SEMI_ANNUAL" ? { interval: "month", interval_count: "6" } : { interval: "year", interval_count: "1" };
   const amount = Math.round(Number(input.price.toString()) * 100);
@@ -20,7 +20,7 @@ export async function createStripeCheckout(input: { subscriptionId: string; plan
   return { externalId: value.id, checkoutUrl: value.url };
 }
 
-export async function createPayPalSubscription(input: { subscriptionId: string; planSlug: string; planName: string; price: { toString(): string }; currency: string; interval: string; siteId: string }) {
+export async function createPayPalSubscription(input: { subscriptionId: string; planSlug: string; planName: string; price: string | { toString(): string }; currency: string; interval: string; siteId: string }) {
   const clientId = await getConfiguredSecret("PAYPAL", "clientId", "PAYPAL_CLIENT_ID"); const clientSecret = await getConfiguredSecret("PAYPAL", "clientSecret", "PAYPAL_CLIENT_SECRET"); if (!clientId || !clientSecret) throw new Error("PayPal credentials are not configured.");
   const auth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   const base = await getConfiguredApiBase();
