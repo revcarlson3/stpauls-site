@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PageRenderer } from "@/components/page-renderer";
+import fs from "node:fs";
+import path from "node:path";
 
 describe("public page headline layout", () => {
+  it("does not add page-shell padding between the header and first page block", () => {
+    const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8");
+    expect(css.replace(/\r\n/g, "\n")).toContain(".site-public-content.site-section {\n  padding-block: 0;\n}");
+  });
+
   it("preserves headline typography and placement inside a full-height container", async () => {
     const markup = renderToStaticMarkup(await PageRenderer({
       blocks: [

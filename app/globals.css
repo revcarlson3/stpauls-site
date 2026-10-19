@@ -633,6 +633,10 @@ body[data-theme-radius="soft"] {
   padding-block: 0;
 }
 
+.site-public-content.site-section {
+  padding-block: 0;
+}
+
 .min-h-screen:has(.page-chrome-hide-header) > .site-header,
 .site-public-frame:has(.page-chrome-hide-header) > .site-header {
   display: none;
