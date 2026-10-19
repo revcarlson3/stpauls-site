@@ -148,7 +148,7 @@ export async function verifyTenantDomain(domainId: string) {
     const tls = await provisionCustomDomainTls(domain.hostname);
     const provisioned = await db.siteDomain.update({
       where: { id: domain.id },
-      data: { tlsStatus: "ACTIVE", tlsCertificateId: tls.certificateId, lastError: null, dnsGuidance: "DNS verification completed and Let’s Encrypt SSL is installed." },
+      data: { tlsStatus: "ACTIVE", tlsCertificateId: String(tls.certificateId), lastError: null, dnsGuidance: "DNS verification completed and Let’s Encrypt SSL is installed." },
       select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true, dnsGuidance: true, verificationToken: true }
     });
     await logAudit({ activityType: "domain-tls-provisioned", summary: `Installed SSL for external domain ${domain.hostname}.`, actorId: actor.id, details: JSON.stringify({ domainId: domain.id, hostname: domain.hostname, certificateId: tls.certificateId }) });
@@ -178,7 +178,7 @@ export async function retryTenantDomainTls(domainId: string) {
     const tls = await provisionCustomDomainTls(domain.hostname);
     const updated = await db.siteDomain.update({
       where: { id: domain.id },
-      data: { tlsStatus: "ACTIVE", tlsCertificateId: tls.certificateId, lastError: null, dnsGuidance: "DNS verification completed and Let’s Encrypt SSL is installed." },
+      data: { tlsStatus: "ACTIVE", tlsCertificateId: String(tls.certificateId), lastError: null, dnsGuidance: "DNS verification completed and Let’s Encrypt SSL is installed." },
       select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true, dnsGuidance: true, verificationToken: true }
     });
     await logAudit({ activityType: "domain-tls-provisioned", summary: `Installed SSL for external domain ${domain.hostname}.`, actorId: actor.id, details: JSON.stringify({ domainId: domain.id, hostname: domain.hostname, certificateId: tls.certificateId, retry: true }) });

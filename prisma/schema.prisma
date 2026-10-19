@@ -2080,7 +2080,7 @@ model SiteDomain {
   verificationToken String?
   verifiedAt        DateTime?
   tlsStatus         String?
-  tlsCertificateId  Int?
+  tlsCertificateId  String?
   dnsManaged        Boolean      @default(false)
   lastCheckedAt     DateTime?
   lastError         String?
@@ -2109,9 +2109,9 @@ model OnePanelConfiguration {
   baseUrl         String
   apiKeyEncrypted String
   version         String?
-  websiteId       Int?
-  acmeAccountId   Int?
-  wildcardSslId   Int?
+  websiteId       String?
+  acmeAccountId   String?
+  wildcardSslId   String?
   platformSuffix  String   @default("mychurch.one")
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())

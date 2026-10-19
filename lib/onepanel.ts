@@ -105,7 +105,7 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
     primaryDomain: hostname,
     otherDomains: "",
     provider: "http",
-    acmeAccountId: config.acmeAccountId,
+    acmeAccountId: Number(config.acmeAccountId),
     autoRenew: true,
     keyType: "EC256",
     skipDNS: true,
@@ -121,16 +121,16 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
     if (attempt === 59) throw new Error("1Panel Let’s Encrypt certificate issuance timed out.");
   }
   await panelRequest(config, "/websites/batch/ssl", {
-    ids: [config.websiteId],
+    ids: [Number(config.websiteId)],
     taskID: crypto.randomUUID(),
     websiteSSLId: certificateId,
     type: "existed",
     httpConfig: "HTTPToHTTPS"
   });
-  return { certificateId, websiteId: config.websiteId };
+  return { certificateId, websiteId: Number(config.websiteId) };
 }
 
-export function platformTlsStatus(config: { wildcardSslId: number | null } | null) {
+export function platformTlsStatus(config: { wildcardSslId: string | null } | null) {
   return config?.wildcardSslId ? "WILDCARD_ACTIVE" : "PENDING_WILDCARD_CONFIGURATION";
 }
 
@@ -159,9 +159,9 @@ export async function saveOnePanelConfig(input: Record<string, unknown>) {
   const baseUrl = typeof input.baseUrl === "string" ? input.baseUrl.trim().replace(/\/+$/, "") : "";
   const apiKey = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
   const version = typeof input.version === "string" ? input.version.trim() : null;
-  const websiteId = typeof input.websiteId === "number" && Number.isInteger(input.websiteId) && input.websiteId > 0 ? input.websiteId : null;
-  const acmeAccountId = typeof input.acmeAccountId === "number" && Number.isInteger(input.acmeAccountId) && input.acmeAccountId > 0 ? input.acmeAccountId : null;
-  const wildcardSslId = typeof input.wildcardSslId === "number" && Number.isInteger(input.wildcardSslId) && input.wildcardSslId > 0 ? input.wildcardSslId : null;
+  const websiteId = typeof input.websiteId === "number" && Number.isInteger(input.websiteId) && input.websiteId > 0 ? String(input.websiteId) : null;
+  const acmeAccountId = typeof input.acmeAccountId === "number" && Number.isInteger(input.acmeAccountId) && input.acmeAccountId > 0 ? String(input.acmeAccountId) : null;
+  const wildcardSslId = typeof input.wildcardSslId === "number" && Number.isInteger(input.wildcardSslId) && input.wildcardSslId > 0 ? String(input.wildcardSslId) : null;
   const platformSuffix = typeof input.platformSuffix === "string" && input.platformSuffix.trim() ? input.platformSuffix.trim().toLowerCase() : "mychurch.one";
   if (!/^https?:\/\//i.test(baseUrl)) throw new Error("1Panel base URL must include http:// or https://.");
   const existing = await db.onePanelConfiguration.findUnique({ where: { id: "platform" }, select: { apiKeyEncrypted: true } });
