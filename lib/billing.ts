@@ -2,7 +2,6 @@ import { BillingInterval, BillingProvider, SubscriptionStatus } from "@prisma/cl
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { requireCurrentChurch } from "@/lib/tenant";
-import { requirePermission } from "@/lib/auth";
 import { createPayPalSubscription, createStripeCheckout } from "@/lib/billing-providers";
 import { providerConfiguredWithStored } from "@/lib/billing-config";
 import { validateTenantCoupon } from "@/lib/billing-coupons";
@@ -12,15 +11,14 @@ export function providerConfigured(provider: BillingProvider) {
 }
 
 export async function listAvailableBillingPlans() {
-  await requirePermission("ACCESS_ADMIN", { allowUnsubscribed: true });
+  await requireCurrentChurch({ allowUnsubscribed: true });
   const plans = await db.subscriptionPlan.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true, slug: true, description: true, price: true, interval: true, monthlyPrice: true, annualPrice: true, currency: true, stripeEnabled: true, paypalEnabled: true } });
   const [stripeConfigured, paypalConfigured] = await Promise.all([providerConfiguredWithStored("STRIPE"), providerConfiguredWithStored("PAYPAL")]);
   return plans.map((plan) => ({ ...plan, price: (plan.price ?? plan.monthlyPrice).toString(), interval: plan.interval ?? "MONTHLY", monthlyPrice: plan.monthlyPrice.toString(), annualPrice: plan.annualPrice.toString(), providers: { STRIPE: plan.stripeEnabled && stripeConfigured, PAYPAL: plan.paypalEnabled && paypalConfigured } }));
 }
 
 export async function initiateBillingSubscription(input: { planId: unknown; provider: unknown; interval?: unknown; couponCode?: unknown }) {
-  const actor = await requirePermission("ACCESS_ADMIN", { allowUnsubscribed: true });
-  const { church } = await requireCurrentChurch({ allowUnsubscribed: true });
+  const { user: actor, church } = await requireCurrentChurch({ allowUnsubscribed: true });
   if (input.provider !== "STRIPE" && input.provider !== "PAYPAL") throw new Error("Unsupported billing provider.");
   const provider = input.provider as BillingProvider;
   if (!await providerConfiguredWithStored(provider)) throw new Error(`${provider} billing is not configured.`);

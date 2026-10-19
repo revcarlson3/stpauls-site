@@ -13,12 +13,12 @@ vi.mock("@/lib/billing-coupons", () => ({ validateTenantCoupon }));
 vi.mock("@/lib/billing-providers", () => ({ createStripeCheckout: vi.fn(async () => ({ externalId: "cs_1", checkoutUrl: "https://checkout.example/cs_1" })), createPayPalSubscription: vi.fn(async () => ({ externalId: "sub_1", checkoutUrl: "https://paypal.example/approve" })) }));
 
 describe("tenant billing initiation", () => {
-  beforeEach(() => { vi.clearAllMocks(); requirePermission.mockResolvedValue({ id: "admin" }); requireCurrentChurch.mockResolvedValue({ church: { id: "church-1" } }); });
+  beforeEach(() => { vi.clearAllMocks(); requirePermission.mockResolvedValue({ id: "admin" }); requireCurrentChurch.mockResolvedValue({ user: { id: "admin" }, church: { id: "church-1" } }); });
   it("serializes plan prices and exposes provider configuration without secrets", async () => {
     db.subscriptionPlan.findMany.mockResolvedValue([{ id: "plan-1", name: "Standard", slug: "standard", description: null, monthlyPrice: { toString: () => "10.00" }, annualPrice: { toString: () => "100.00" }, currency: "USD", stripeEnabled: true, paypalEnabled: true }]);
     const { listAvailableBillingPlans } = await import("@/lib/billing");
     const plans = await listAvailableBillingPlans();
-    expect(requirePermission).toHaveBeenCalledWith("ACCESS_ADMIN", { allowUnsubscribed: true });
+    expect(requireCurrentChurch).toHaveBeenCalledWith({ allowUnsubscribed: true });
     expect(plans[0]).toMatchObject({ monthlyPrice: "10.00", providers: { STRIPE: false, PAYPAL: false } });
     expect(JSON.stringify(plans)).not.toContain("SECRET");
   });
@@ -29,7 +29,7 @@ describe("tenant billing initiation", () => {
     db.subscription.create.mockResolvedValue({ id: "sub-2", status: "INCOMPLETE", provider: "STRIPE", interval: "MONTHLY" });
     const { initiateBillingSubscription } = await import("@/lib/billing");
     await expect(initiateBillingSubscription({ planId: "plan-1", provider: "STRIPE", interval: "MONTHLY" })).resolves.toMatchObject({ id: "sub-2", reused: false, checkoutUrl: "https://checkout.example/cs_1", paymentStatus: "PENDING_PROVIDER_CONFIRMATION" });
-    expect(requirePermission).toHaveBeenCalledWith("ACCESS_ADMIN", { allowUnsubscribed: true });
+    expect(requireCurrentChurch).toHaveBeenCalledWith({ allowUnsubscribed: true });
     expect(db.subscription.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "sub-1" }, data: expect.objectContaining({ status: "CANCELED" }) }));
     expect(db.subscription.create).toHaveBeenCalled();
     delete process.env.STRIPE_SECRET_KEY;

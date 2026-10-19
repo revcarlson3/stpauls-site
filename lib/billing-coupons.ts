@@ -1,9 +1,7 @@
 import { db } from "@/lib/db";
-import { requirePermission } from "@/lib/auth";
 import { requireCurrentChurch } from "@/lib/tenant";
 
 export async function validateTenantCoupon(input: { code: unknown; planId: unknown; interval: unknown }) {
-  await requirePermission("ACCESS_ADMIN", { allowUnsubscribed: true });
   const { church } = await requireCurrentChurch({ allowUnsubscribed: true });
   const code = typeof input.code === "string" ? input.code.trim().toUpperCase() : "";
   if (!code) throw new Error("Enter a coupon code.");
