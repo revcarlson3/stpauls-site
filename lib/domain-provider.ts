@@ -16,6 +16,15 @@ function hash(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+export function buildDomainVerificationRecord(hostname: string, token: string | null) {
+  if (!token) return null;
+  return {
+    type: "TXT" as const,
+    name: `_mychurch-verification.${hostname}`,
+    value: token
+  };
+}
+
 function response(request: { id: string; hostname: string; operation: string; status: string; externalId: string | null; externalStatus: string | null }) {
   return { id: request.id, hostname: request.hostname, operation: request.operation, status: request.status, externalId: request.externalId, externalStatus: request.externalStatus };
 }
@@ -44,10 +53,10 @@ export async function createTenantDomain(input: { hostname: string; kind: "PLATF
       tlsStatus: "PENDING",
       dnsGuidance: input.kind === "CUSTOM_DOMAIN" ? "Add the verification DNS record, then retry verification. 1Panel attachment and SSL remain separate pending steps." : "Platform hostname is reserved locally. 1Panel attachment and DNS/SSL provisioning remain pending."
     },
-    select: { id: true, hostname: true, kind: true, status: true, tlsStatus: true, dnsGuidance: true }
+    select: { id: true, hostname: true, kind: true, status: true, tlsStatus: true, dnsGuidance: true, verificationToken: true }
   });
   await logAudit({ activityType: "domain-acquisition-requested", summary: `Added ${input.kind === "CUSTOM_DOMAIN" ? "external" : "platform"} domain ${hostname}.`, actorId: actor.id, details: JSON.stringify({ domainId: domain.id, kind: input.kind, provisioning: "PENDING_1PANEL_ATTACHMENT" }) });
-  return domain;
+  return { ...domain, verificationRecord: buildDomainVerificationRecord(domain.hostname, domain.verificationToken) };
 }
 
 export async function listTenantDomains() {
@@ -59,9 +68,9 @@ export async function listTenantDomains() {
     select: {
       id: true, hostname: true, kind: true, status: true, isPrimary: true,
       verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true,
-      lastError: true, dnsGuidance: true
+      lastError: true, dnsGuidance: true, verificationToken: true
     }
-  });
+  }).then((domains) => domains.map((domain) => ({ ...domain, verificationRecord: buildDomainVerificationRecord(domain.hostname, domain.verificationToken) })));
 }
 
 export async function requestDomainAcquisition(input: { hostname: string; operation: "REGISTRATION" | "TRANSFER"; idempotencyKey: string }) {
