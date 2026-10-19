@@ -34,6 +34,17 @@ function responseData(body: unknown): unknown {
   return body;
 }
 
+function responseMessage(body: unknown) {
+  if (!body || typeof body !== "object") return "";
+  const record = body as Record<string, unknown>;
+  for (const key of ["message", "msg", "error", "detail"]) {
+    if (typeof record[key] === "string" && record[key].trim()) return record[key].trim();
+  }
+  const data = record.data;
+  if (data && typeof data === "object") return responseMessage(data);
+  return "";
+}
+
 function numericId(body: unknown) {
   const data = responseData(body);
   if (!data || typeof data !== "object") return null;
@@ -47,6 +58,7 @@ async function panelRequest<T>(config: NonNullable<Awaited<ReturnType<typeof con
     ? [legacyToken(config.apiKey, timestamp)]
     : [token(config.apiKey, timestamp), legacyToken(config.apiKey, timestamp)];
   let lastResponse: Response | null = null;
+  let lastBody: unknown = null;
   for (const signature of signatures) {
     const response = await fetch(`${config.baseUrl}${apiPath(config.version, path)}`, {
       method: "POST",
@@ -62,9 +74,11 @@ async function panelRequest<T>(config: NonNullable<Awaited<ReturnType<typeof con
     const text = await response.text();
     let parsed: unknown = null;
     try { parsed = text ? JSON.parse(text) : null; } catch { parsed = null; }
+    lastBody = parsed;
     if (response.ok) return parsed as T;
   }
-  throw new Error(`1Panel request failed (${lastResponse?.status ?? "no response"}).`);
+  const detail = responseMessage(lastBody);
+  throw new Error(`1Panel request failed (${lastResponse?.status ?? "no response"})${detail ? `: ${detail}` : "."}`);
 }
 
 async function panelGet<T>(config: NonNullable<Awaited<ReturnType<typeof configuration>>>, path: string) {
@@ -73,6 +87,7 @@ async function panelGet<T>(config: NonNullable<Awaited<ReturnType<typeof configu
     ? [legacyToken(config.apiKey, timestamp)]
     : [token(config.apiKey, timestamp), legacyToken(config.apiKey, timestamp)];
   let lastResponse: Response | null = null;
+  let lastBody: unknown = null;
   for (const signature of signatures) {
     const response = await fetch(`${config.baseUrl}${apiPath(config.version, path)}`, {
       method: "GET",
@@ -82,9 +97,11 @@ async function panelGet<T>(config: NonNullable<Awaited<ReturnType<typeof configu
     const text = await response.text();
     let parsed: unknown = null;
     try { parsed = text ? JSON.parse(text) : null; } catch { parsed = null; }
+    lastBody = parsed;
     if (response.ok) return parsed as T;
   }
-  throw new Error(`1Panel request failed (${lastResponse?.status ?? "no response"}).`);
+  const detail = responseMessage(lastBody);
+  throw new Error(`1Panel request failed (${lastResponse?.status ?? "no response"})${detail ? `: ${detail}` : "."}`);
 }
 
 function certificateStatus(body: unknown) {
