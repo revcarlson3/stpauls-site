@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import crypto from "node:crypto";
 
 const db = vi.hoisted(() => ({
-  onePanelConfiguration: { findUnique: vi.fn() }
+  onePanelConfiguration: { findUnique: vi.fn(), upsert: vi.fn() }
 }));
 const requireGlobalAdmin = vi.hoisted(() => vi.fn(async () => undefined));
 
@@ -56,5 +56,43 @@ describe("1Panel API compatibility", () => {
     expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v2/toolbox/device/base");
     expect(firstHeaders["1Panel-Token"]).toBe(crypto.createHmac("sha256", "api-key").update(`1panel:${firstHeaders["1Panel-Timestamp"]}`).digest("hex"));
     expect(secondHeaders["1Panel-Token"]).toBe(crypto.createHash("md5").update(`1panelapi-key${secondHeaders["1Panel-Timestamp"]}`).digest("hex"));
+  });
+
+  it("requests a Let’s Encrypt certificate and attaches it to the configured website", async () => {
+    db.onePanelConfiguration.findUnique.mockResolvedValue({
+      baseUrl: "https://panel.example.test",
+      apiKeyEncrypted: "encrypted",
+      version: "2.0.0",
+      websiteId: 7,
+      acmeAccountId: 11,
+      wildcardSslId: 13,
+      platformSuffix: "mychurch.one"
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response('{"data":{"id":42}}'))
+      .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
+      .mockResolvedValueOnce(response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { provisionCustomDomainTls } = await import("@/lib/onepanel");
+    await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 7 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://panel.example.test/api/v2/websites/ssl");
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({
+      primaryDomain: "www.example.org",
+      provider: "http",
+      acmeAccountId: 11,
+      autoRenew: true,
+      skipDNS: true
+    });
+    expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v2/websites/ssl/42");
+    expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("GET");
+    expect(JSON.parse((fetchMock.mock.calls[2][1] as RequestInit).body as string)).toMatchObject({
+      ids: [7],
+      websiteSSLId: 42,
+      type: "existed",
+      httpConfig: "HTTPToHTTPS"
+    });
   });
 });

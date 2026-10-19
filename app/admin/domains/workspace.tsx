@@ -60,7 +60,20 @@ export function DomainsWorkspace() {
       setError(value.error ?? "Unable to verify domain.");
       return;
     }
-    setMessage("DNS verification completed. Hosting attachment and SSL remain pending.");
+    setMessage("DNS verification completed. Let’s Encrypt SSL provisioning was started.");
+    await load();
+  }
+
+  async function retryTls(id: string) {
+    setError("");
+    setMessage("");
+    const response = await fetch(`/api/domains/${id}/tls`, { method: "POST" });
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(value.error ?? "Unable to provision SSL.");
+      return;
+    }
+    setMessage("SSL provisioning completed.");
     await load();
   }
 
@@ -75,6 +88,6 @@ export function DomainsWorkspace() {
       <input aria-label="Domain hostname" value={hostname} onChange={(event) => setHostname(event.target.value)} placeholder="www.example.org" className="focus-ring min-w-[240px] flex-1 rounded-lg border border-ink/15 px-3 py-2" />
       <Button type="button" onClick={() => void addDomain()}>Add domain</Button>
     </div></Card>
-    <section className="mt-8 grid gap-4">{domains.map((domain) => <Card key={domain.id} className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-serif text-2xl">{domain.hostname}</h2><p className="mt-1 text-sm text-ink/60">{domain.kind === "CUSTOM_DOMAIN" ? "External domain" : "Platform subdomain"} · {domain.status}</p>{domain.dnsGuidance && <p className="mt-2 text-xs text-ink/60">{domain.dnsGuidance}</p>}{domain.verificationRecord && <div className="mt-4 rounded-lg border border-ink/10 bg-mist/40 p-3 text-xs"><p className="font-semibold text-ink">DNS verification record</p><dl className="mt-2 grid gap-1 text-ink/70"><div><dt className="inline font-semibold">Type: </dt><dd className="inline">{domain.verificationRecord.type}</dd></div><div><dt className="inline font-semibold">Name/host: </dt><dd className="break-all font-mono">{domain.verificationRecord.name}</dd></div><div><dt className="inline font-semibold">Value: </dt><dd className="break-all font-mono">{domain.verificationRecord.value}</dd></div></dl><p className="mt-2 text-ink/55">Add this TXT record at your DNS provider, wait for it to propagate, then retry verification.</p><Button type="button" onClick={() => void verifyDomain(domain.id)} className="mt-3">Verify DNS record</Button></div>}</div><span className="rounded-full bg-mist px-3 py-1 text-xs font-semibold">{domain.tlsStatus ?? "TLS pending"}</span></div></Card>)}{domains.length === 0 && <Card className="p-6 text-sm text-ink/60">No domains configured for this site.</Card>}</section>
+    <section className="mt-8 grid gap-4">{domains.map((domain) => <Card key={domain.id} className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-serif text-2xl">{domain.hostname}</h2><p className="mt-1 text-sm text-ink/60">{domain.kind === "CUSTOM_DOMAIN" ? "External domain" : "Platform subdomain"} · {domain.status}</p>{domain.dnsGuidance && <p className="mt-2 text-xs text-ink/60">{domain.dnsGuidance}</p>}{domain.verificationRecord && <div className="mt-4 rounded-lg border border-ink/10 bg-mist/40 p-3 text-xs"><p className="font-semibold text-ink">DNS verification record</p><dl className="mt-2 grid gap-1 text-ink/70"><div><dt className="inline font-semibold">Type: </dt><dd className="inline">{domain.verificationRecord.type}</dd></div><div><dt className="inline font-semibold">Name/host: </dt><dd className="break-all font-mono">{domain.verificationRecord.name}</dd></div><div><dt className="inline font-semibold">Value: </dt><dd className="break-all font-mono">{domain.verificationRecord.value}</dd></div></dl><p className="mt-2 text-ink/55">Add this TXT record at your DNS provider, wait for it to propagate, then retry verification.</p><Button type="button" onClick={() => void verifyDomain(domain.id)} className="mt-3">Verify DNS record</Button></div>}{domain.tlsStatus === "FAILED" && <Button type="button" onClick={() => void retryTls(domain.id)} className="mt-3">Retry SSL provisioning</Button>}</div><span className="rounded-full bg-mist px-3 py-1 text-xs font-semibold">{domain.tlsStatus ?? "TLS pending"}</span></div></Card>)}{domains.length === 0 && <Card className="p-6 text-sm text-ink/60">No domains configured for this site.</Card>}</section>
   </Container></main>;
 }

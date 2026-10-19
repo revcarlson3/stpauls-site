@@ -6,6 +6,7 @@ import { requireGlobalAdmin } from "@/lib/global-admin";
 import { requirePermission } from "@/lib/auth";
 import { checkNamecheapDomainAvailability, createNamecheapRegistration, createNamecheapTransfer, getNamecheapTransferStatus } from "@/lib/namecheap";
 import { normalizeHostname } from "@/lib/global-admin-domains";
+import { onePanelPlatformTlsStatus, provisionCustomDomainTls } from "@/lib/onepanel";
 
 const REQUEST_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -55,8 +56,8 @@ export async function createTenantDomain(input: { hostname: string; kind: "PLATF
       kind: input.kind,
       status: "VERIFYING",
       verificationToken: input.kind === "CUSTOM_DOMAIN" ? crypto.randomBytes(24).toString("hex") : null,
-      tlsStatus: "PENDING",
-      dnsGuidance: input.kind === "CUSTOM_DOMAIN" ? "Add the verification DNS record, then retry verification. 1Panel attachment and SSL remain separate pending steps." : "Platform hostname is reserved locally. 1Panel attachment and DNS/SSL provisioning remain pending."
+      tlsStatus: input.kind === "CUSTOM_DOMAIN" ? "PENDING" : await onePanelPlatformTlsStatus(),
+      dnsGuidance: input.kind === "CUSTOM_DOMAIN" ? "Add the verification DNS record, then retry verification. SSL will be requested automatically after DNS verification." : "Platform hostname uses the mychurch.one wildcard certificate when configured."
     },
     select: { id: true, hostname: true, kind: true, status: true, tlsStatus: true, dnsGuidance: true, verificationToken: true }
   });
@@ -98,14 +99,63 @@ export async function verifyTenantDomain(domainId: string) {
     if (code === "ENOTFOUND" || code === "ENODATA" || code === "EAI_AGAIN") throw new Error("The DNS verification record was not found yet. Add the TXT record and wait for DNS propagation.");
     throw new Error("DNS verification could not be checked right now.");
   }
+
   if (!dnsTxtRecordMatches(records, domain.verificationToken)) throw new Error("The DNS TXT record does not match the verification value shown above.");
   const updated = await db.siteDomain.update({
     where: { id: domain.id },
-    data: { status: "ACTIVE", verifiedAt: new Date(), lastCheckedAt: new Date(), lastError: null, verificationToken: null, dnsGuidance: "DNS verification completed. 1Panel attachment and SSL remain separate pending steps." },
+    data: { status: "ACTIVE", verifiedAt: new Date(), lastCheckedAt: new Date(), lastError: null, verificationToken: null, tlsStatus: "PROVISIONING", dnsGuidance: "DNS verification completed. Let’s Encrypt SSL provisioning is in progress." },
     select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true, dnsGuidance: true, verificationToken: true }
   });
   await logAudit({ activityType: "domain-verification-completed", summary: `Verified external domain ${domain.hostname}.`, actorId: actor.id, details: JSON.stringify({ domainId: domain.id, hostname: domain.hostname }) });
-  return { ...updated, verificationRecord: buildDomainVerificationRecord(updated.hostname, updated.verificationToken) };
+  try {
+    const tls = await provisionCustomDomainTls(domain.hostname);
+    const provisioned = await db.siteDomain.update({
+      where: { id: domain.id },
+      data: { tlsStatus: "ACTIVE", tlsCertificateId: tls.certificateId, lastError: null, dnsGuidance: "DNS verification completed and Let’s Encrypt SSL is installed." },
+      select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true, dnsGuidance: true, verificationToken: true }
+    });
+    await logAudit({ activityType: "domain-tls-provisioned", summary: `Installed SSL for external domain ${domain.hostname}.`, actorId: actor.id, details: JSON.stringify({ domainId: domain.id, hostname: domain.hostname, certificateId: tls.certificateId }) });
+    return { ...provisioned, verificationRecord: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "SSL provisioning failed.";
+    const failed = await db.siteDomain.update({
+      where: { id: domain.id },
+      data: { tlsStatus: "FAILED", lastError: message, dnsGuidance: "DNS verification completed, but SSL provisioning needs attention. Retry after correcting the 1Panel configuration or DNS." },
+      select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true, dnsGuidance: true, verificationToken: true }
+    });
+    await logAudit({ activityType: "domain-tls-provisioning-failed", summary: `SSL provisioning failed for external domain ${domain.hostname}.`, actorId: actor.id, details: JSON.stringify({ domainId: domain.id, hostname: domain.hostname, error: message }) });
+    return { ...failed, verificationRecord: null };
+  }
+}
+
+export async function retryTenantDomainTls(domainId: string) {
+  const actor = await requirePermission("MANAGE_SETTINGS");
+  if (!actor.churchId) throw new Error("A tenant site is required.");
+  const domain = await db.siteDomain.findFirst({
+    where: { id: domainId, churchId: actor.churchId, kind: "CUSTOM_DOMAIN", status: "ACTIVE" },
+    select: { id: true, hostname: true }
+  });
+  if (!domain) throw new Error("The verified custom domain was not found for this site.");
+  await db.siteDomain.update({ where: { id: domain.id }, data: { tlsStatus: "PROVISIONING", lastError: null, dnsGuidance: "SSL provisioning is in progress." } });
+  try {
+    const tls = await provisionCustomDomainTls(domain.hostname);
+    const updated = await db.siteDomain.update({
+      where: { id: domain.id },
+      data: { tlsStatus: "ACTIVE", tlsCertificateId: tls.certificateId, lastError: null, dnsGuidance: "DNS verification completed and Let’s Encrypt SSL is installed." },
+      select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true, dnsGuidance: true, verificationToken: true }
+    });
+    await logAudit({ activityType: "domain-tls-provisioned", summary: `Installed SSL for external domain ${domain.hostname}.`, actorId: actor.id, details: JSON.stringify({ domainId: domain.id, hostname: domain.hostname, certificateId: tls.certificateId, retry: true }) });
+    return { ...updated, verificationRecord: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "SSL provisioning failed.";
+    const updated = await db.siteDomain.update({
+      where: { id: domain.id },
+      data: { tlsStatus: "FAILED", lastError: message, dnsGuidance: "SSL provisioning failed. Correct the 1Panel configuration or DNS, then retry." },
+      select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true, dnsGuidance: true, verificationToken: true }
+    });
+    await logAudit({ activityType: "domain-tls-provisioning-failed", summary: `SSL provisioning failed for external domain ${domain.hostname}.`, actorId: actor.id, details: JSON.stringify({ domainId: domain.id, hostname: domain.hostname, error: message, retry: true }) });
+    return { ...updated, verificationRecord: null };
+  }
 }
 
 export async function requestDomainAcquisition(input: { hostname: string; operation: "REGISTRATION" | "TRANSFER"; idempotencyKey: string }) {
