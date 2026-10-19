@@ -1108,6 +1108,12 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   const { setNodeRef: setRootDropRef } = useDroppable({ id: "drop:root", data: { kind: "root" } });
 
   useEffect(() => {
+    if (message !== "Saved successfully." && message !== "Page created successfully.") return;
+    const timer = window.setTimeout(() => setMessage(""), 4000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
+  useEffect(() => {
     void Promise.all([fetch("/api/menus"), fetch("/api/menu-locations"), fetch("/api/widgets"), fetch("/api/forms")]).then(async ([menusResponse, locationsResponse, widgetsResponse, formsResponse]) => {
       if (!menusResponse.ok || !locationsResponse.ok || !widgetsResponse.ok || !formsResponse.ok) throw new Error("Unable to load editor options.");
       setMenus((await menusResponse.json() as MenuOption[]).map(({ id, name }) => ({ id, name })));
