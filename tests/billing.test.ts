@@ -20,14 +20,16 @@ describe("tenant billing initiation", () => {
     expect(plans[0]).toMatchObject({ monthlyPrice: "10.00", providers: { STRIPE: false, PAYPAL: false } });
     expect(JSON.stringify(plans)).not.toContain("SECRET");
   });
-  it("reuses an incomplete initiation idempotently", async () => {
+  it("restarts an incomplete initiation so checkout can be completed", async () => {
     process.env.STRIPE_SECRET_KEY = "test";
-    db.subscriptionPlan.findFirst.mockResolvedValue({ id: "plan-1", name: "Standard", stripeEnabled: true, paypalEnabled: true });
+    db.subscriptionPlan.findFirst.mockResolvedValue({ id: "plan-1", slug: "standard", name: "Standard", currency: "USD", price: { toString: () => "10.00" }, interval: "MONTHLY", stripeEnabled: true, paypalEnabled: true });
     db.subscription.findFirst.mockResolvedValue({ id: "sub-1", status: "INCOMPLETE", provider: "STRIPE", interval: "MONTHLY" });
+    db.subscription.create.mockResolvedValue({ id: "sub-2", status: "INCOMPLETE", provider: "STRIPE", interval: "MONTHLY" });
     const { initiateBillingSubscription } = await import("@/lib/billing");
-    await expect(initiateBillingSubscription({ planId: "plan-1", provider: "STRIPE", interval: "MONTHLY" })).resolves.toMatchObject({ id: "sub-1", reused: true, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" });
+    await expect(initiateBillingSubscription({ planId: "plan-1", provider: "STRIPE", interval: "MONTHLY" })).resolves.toMatchObject({ id: "sub-2", reused: false, checkoutUrl: "https://checkout.example/cs_1", paymentStatus: "PENDING_PROVIDER_CONFIRMATION" });
     expect(requirePermission).toHaveBeenCalledWith("ACCESS_ADMIN", { allowUnsubscribed: true });
-    expect(db.subscription.create).not.toHaveBeenCalled();
+    expect(db.subscription.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "sub-1" }, data: expect.objectContaining({ status: "CANCELED" }) }));
+    expect(db.subscription.create).toHaveBeenCalled();
     delete process.env.STRIPE_SECRET_KEY;
   });
 

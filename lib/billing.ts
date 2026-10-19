@@ -36,8 +36,6 @@ export async function initiateBillingSubscription(input: { planId: unknown; prov
     checkoutPrice = coupon.total;
   }
   const existing = await db.subscription.findFirst({ where: { churchId: church.id, planId: plan.id, interval, status: SubscriptionStatus.INCOMPLETE }, orderBy: { updatedAt: "desc" }, select: { id: true, status: true, provider: true, interval: true, externalSubscriptionId: true } });
-  if (existing?.provider === provider) return { ...existing, reused: true, paymentStatus: "PENDING_PROVIDER_CONFIRMATION" };
-  if (existing?.externalSubscriptionId) throw new Error("Another provider checkout is already pending for this plan.");
   if (existing) await db.subscription.update({ where: { id: existing.id }, data: { status: SubscriptionStatus.CANCELED, canceledAt: new Date() } });
   const subscription = await db.subscription.create({ data: { churchId: church.id, planId: plan.id, provider, interval, status: SubscriptionStatus.INCOMPLETE }, select: { id: true, status: true, provider: true, interval: true } });
   const checkout = provider === "STRIPE"
