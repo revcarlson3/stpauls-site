@@ -76,6 +76,10 @@ export async function applyVerifiedStripeEvent(event: { type: string; data?: { o
   if (!localId || !externalId) return false;
   const status = event.type.includes("completed") || event.type.includes("active") ? "ACTIVE" : event.type.includes("deleted") || event.type.includes("canceled") ? "CANCELED" : "PAST_DUE";
   await db.subscription.update({ where: { id: localId }, data: { externalSubscriptionId: externalId, status } });
+  if (status === "ACTIVE") {
+    const subscription = await db.subscription.findUnique({ where: { id: localId }, select: { churchId: true } });
+    if (subscription) await db.church.update({ where: { id: subscription.churchId }, data: { lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE", status: "ACTIVE" } });
+  }
   return true;
 }
 

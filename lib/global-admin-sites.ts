@@ -4,6 +4,10 @@ import { lifecycleActions } from "@/lib/global-admin";
 
 export async function listGlobalSites(input: { search?: string; lifecycle?: string; onboarding?: string; page?: number; pageSize?: number }) {
   await requireGlobalAdmin();
+  await db.church.updateMany({
+    where: { lifecycleStatus: "CANCELED", subscriptions: { some: { status: "ACTIVE" } } },
+    data: { lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE", status: "ACTIVE" }
+  });
   const pageSize = Math.min(50, Math.max(1, input.pageSize ?? 25));
   const page = Math.max(1, input.page ?? 1);
   const search = input.search?.trim();

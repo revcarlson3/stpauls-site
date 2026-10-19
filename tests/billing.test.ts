@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ subscriptionPlan: { findMany: vi.fn(), findFirst: vi.fn() }, subscription: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() }, promotionRedemption: { create: vi.fn() }, promotion: { update: vi.fn() } }));
+const db = vi.hoisted(() => ({ subscriptionPlan: { findMany: vi.fn(), findFirst: vi.fn() }, subscription: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() }, promotionRedemption: { create: vi.fn() }, promotion: { update: vi.fn() }, church: { update: vi.fn() } }));
 const requirePermission = vi.hoisted(() => vi.fn());
 const requireCurrentChurch = vi.hoisted(() => vi.fn());
 const logAudit = vi.hoisted(() => vi.fn());

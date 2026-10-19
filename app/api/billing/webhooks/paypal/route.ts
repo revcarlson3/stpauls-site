@@ -49,15 +49,20 @@ export async function POST(request: Request) {
   const localId = event.resource?.custom_id;
   const externalId = event.resource?.id;
   if (localId && externalId) {
+    const status = event.event_type?.includes("ACTIVATED") || event.event_type?.includes("PAYMENT.SALE.COMPLETED")
+      ? "ACTIVE"
+      : event.event_type?.includes("CANCEL") ? "CANCELED" : "PAST_DUE";
     await db.subscription.update({
       where: { id: localId },
       data: {
         externalSubscriptionId: externalId,
-        status: event.event_type?.includes("ACTIVATED") || event.event_type?.includes("PAYMENT.SALE.COMPLETED")
-          ? "ACTIVE"
-          : event.event_type?.includes("CANCEL") ? "CANCELED" : "PAST_DUE"
+        status
       }
     });
+    if (status === "ACTIVE") {
+      const subscription = await db.subscription.findUnique({ where: { id: localId }, select: { churchId: true } });
+      if (subscription) await db.church.update({ where: { id: subscription.churchId }, data: { lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE", status: "ACTIVE" } });
+    }
   }
   return NextResponse.json({ received: true });
 }

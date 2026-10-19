@@ -65,6 +65,7 @@ export async function initiateBillingSubscription(input: { planId: unknown; prov
   if (existing) await db.subscription.update({ where: { id: existing.id }, data: { status: SubscriptionStatus.CANCELED, canceledAt: new Date() } });
   if (coupon && Number(coupon.total) === 0) {
     const subscription = await db.subscription.create({ data: { churchId: church.id, planId: plan.id, provider, interval, status: SubscriptionStatus.ACTIVE }, select: { id: true, status: true, provider: true, interval: true } });
+    await db.church.update({ where: { id: church.id }, data: { lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE", status: "ACTIVE" } });
     await db.promotionRedemption.create({ data: { promotionId: coupon.couponId, churchId: church.id, subscriptionId: subscription.id } });
     await db.promotion.update({ where: { id: coupon.couponId }, data: { redemptionCount: { increment: 1 } } });
     await logAudit({ activityType: "billing-subscription-initiation-requested", summary: `Activated a ${provider} subscription for ${plan.name} using a 100% coupon.`, actorId: actor.id, details: JSON.stringify({ boundary: "tenant-billing", churchId: church.id, targetType: "subscription", targetId: subscription.id, metadata: { provider, interval, paymentStatus: "NO_PAYMENT_REQUIRED", couponId: coupon.couponId } }) });
