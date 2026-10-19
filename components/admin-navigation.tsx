@@ -63,8 +63,7 @@ export function AdminNavigation({ permissions, publicWebsiteModuleEnabled, subsc
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/domains">Domains</Link>
         </div>
       </details>}
-      <p className="mt-4 border-t border-ink/10 px-4 pt-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Modules</p>
-      {subscriptionActive && <ModuleNavigation onNavigate={onNavigate} />}
+      {subscriptionActive && <><p className="mt-4 border-t border-ink/10 px-4 pt-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Modules</p><ModuleNavigation onNavigate={onNavigate} /></>}
       <AdminLogout onLogout={onNavigate} />
     </nav>
   );
