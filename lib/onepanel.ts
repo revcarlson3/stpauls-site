@@ -109,6 +109,10 @@ function certificateStatus(body: unknown) {
   return data && typeof data === "object" && "status" in data ? String((data as { status: unknown }).status) : "";
 }
 
+function certificateMessage(body: unknown) {
+  return responseMessage(body);
+}
+
 export type DomainTlsProvisioningResult = {
   certificateId: number;
   websiteId: number;
@@ -131,9 +135,13 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
   const certificateId = numericId(created);
   if (!certificateId) throw new Error("1Panel did not return a certificate ID.");
   for (let attempt = 0; attempt < 60; attempt += 1) {
-    const status = certificateStatus(await panelGet(config, `/websites/ssl/${certificateId}`));
+    const certificate = await panelGet(config, `/websites/ssl/${certificateId}`);
+    const status = certificateStatus(certificate);
     if (status === "ready") break;
-    if (status === "error" || status === "applyError") throw new Error("1Panel Let’s Encrypt certificate issuance failed.");
+    if (status === "error" || status === "applyError") {
+      const detail = certificateMessage(certificate);
+      throw new Error(`1Panel Let’s Encrypt certificate issuance failed${detail ? `: ${detail}` : "."}`);
+    }
     await new Promise((resolve) => setTimeout(resolve, 1000));
     if (attempt === 59) throw new Error("1Panel Let’s Encrypt certificate issuance timed out.");
   }
