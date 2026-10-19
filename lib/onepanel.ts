@@ -141,6 +141,16 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
   const config = await configuration();
   if (!config) throw new Error("Configure 1Panel before provisioning SSL.");
   if (!config.websiteId || !config.acmeAccountId) throw new Error("Configure the 1Panel website ID and Let’s Encrypt account ID before provisioning SSL.");
+  try {
+    await panelRequest(config, "/websites/domains", {
+      websiteId: Number(config.websiteId),
+      domain: hostname,
+      port: 80
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!/already exists|already added|duplicate/i.test(message)) throw error;
+  }
   const created = await panelRequest<unknown>(config, "/websites/ssl", {
     primaryDomain: hostname,
     otherDomains: "",

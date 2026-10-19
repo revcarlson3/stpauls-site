@@ -69,6 +69,7 @@ describe("1Panel API compatibility", () => {
       platformSuffix: "mychurch.one"
     });
     const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response("{}"))
       .mockResolvedValueOnce(response('{"data":{"id":42}}'))
       .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
       .mockResolvedValueOnce(response("{}"));
@@ -77,18 +78,24 @@ describe("1Panel API compatibility", () => {
     const { provisionCustomDomainTls } = await import("@/lib/onepanel");
     await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 7 });
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls[0][0]).toBe("https://panel.example.test/api/v2/websites/ssl");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://panel.example.test/api/v2/websites/domains");
     expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({
+      websiteId: 7,
+      domain: "www.example.org",
+      port: 80
+    });
+    expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v2/websites/ssl");
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toMatchObject({
       primaryDomain: "www.example.org",
       provider: "http",
       acmeAccountId: 11,
       autoRenew: true,
       skipDNS: true
     });
-    expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v2/websites/ssl/42");
-    expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("GET");
-    expect(JSON.parse((fetchMock.mock.calls[2][1] as RequestInit).body as string)).toMatchObject({
+    expect(fetchMock.mock.calls[2][0]).toBe("https://panel.example.test/api/v2/websites/ssl/42");
+    expect((fetchMock.mock.calls[2][1] as RequestInit).method).toBe("GET");
+    expect(JSON.parse((fetchMock.mock.calls[3][1] as RequestInit).body as string)).toMatchObject({
       ids: [7],
       websiteSSLId: 42,
       type: "existed",
@@ -107,6 +114,7 @@ describe("1Panel API compatibility", () => {
       platformSuffix: "mychurch.one"
     });
     const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response("{}"))
       .mockResolvedValueOnce(response('{"data":{"sslId":"42"}}'))
       .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
       .mockResolvedValueOnce(response("{}"));
