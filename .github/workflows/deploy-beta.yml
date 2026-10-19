@@ -31,12 +31,14 @@ jobs:
           DEPLOY_USER: ${{ secrets.BETA_DEPLOY_USER }}
           DEPLOY_KEY: ${{ secrets.BETA_DEPLOY_KEY }}
           KNOWN_HOSTS: ${{ secrets.BETA_DEPLOY_KNOWN_HOSTS }}
+          BILLING_CONFIG_MASTER_KEY: ${{ secrets.BILLING_CONFIG_MASTER_KEY }}
         run: |
           set -euo pipefail
           [[ -n "$DEPLOY_HOST" ]] || { echo "BETA_DEPLOY_HOST is not configured in the beta environment."; exit 1; }
           [[ -n "$DEPLOY_USER" ]] || { echo "BETA_DEPLOY_USER is not configured in the beta environment."; exit 1; }
           [[ -n "$DEPLOY_KEY" ]] || { echo "BETA_DEPLOY_KEY is not configured in the beta environment."; exit 1; }
           [[ -n "$KNOWN_HOSTS" ]] || { echo "BETA_DEPLOY_KNOWN_HOSTS is not configured in the beta environment."; exit 1; }
+          [[ "$BILLING_CONFIG_MASTER_KEY" =~ ^[0-9a-fA-F]{64}$ ]] || { echo "BILLING_CONFIG_MASTER_KEY must be configured as a 64-character hex key in the beta environment."; exit 1; }
 
       - name: Configure SSH
         shell: bash
@@ -76,7 +78,8 @@ jobs:
           DEPLOY_USER: ${{ secrets.BETA_DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.BETA_DEPLOY_PORT || 22 }}
           DEPLOY_PATH: ${{ secrets.BETA_DEPLOY_PATH || '/var/www/mychurch' }}
+          BILLING_CONFIG_MASTER_KEY: ${{ secrets.BILLING_CONFIG_MASTER_KEY }}
         run: |
           set -euo pipefail
           ssh -p "$DEPLOY_PORT" -i "$HOME/.ssh/beta_deploy_key" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && npm ci && npm run deployment:check && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260919140000_scope_security_groups_to_churches/migration.sql && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260920090000_membership_family_roles/migration.sql && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260920170000_announcement_audiences_and_surfaces/migration.sql && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260920183000_restore_administrator_support_permission/migration.sql && npm run db:push && npm run db:generate && npm run build && sudo -n systemctl restart stpauls-site"
+            "cd '$DEPLOY_PATH' && if [ -f .env ]; then grep -v '^BILLING_CONFIG_MASTER_KEY=' .env > .env.billing.tmp; else : > .env.billing.tmp; fi && printf '%s\n' 'BILLING_CONFIG_MASTER_KEY=$BILLING_CONFIG_MASTER_KEY' >> .env.billing.tmp && mv .env.billing.tmp .env && npm ci && npm run deployment:check && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260919140000_scope_security_groups_to_churches/migration.sql && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260920090000_membership_family_roles/migration.sql && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260920170000_announcement_audiences_and_surfaces/migration.sql && npx prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260920183000_restore_administrator_support_permission/migration.sql && npm run db:push && npm run db:generate && npm run build && sudo -n systemctl restart stpauls-site"
