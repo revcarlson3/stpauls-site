@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ subscriptionPlan: { findMany: vi.fn(), findFirst: vi.fn() }, subscription: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() } }));
+const db = vi.hoisted(() => ({ subscriptionPlan: { findMany: vi.fn(), findFirst: vi.fn() }, subscription: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() }, promotionRedemption: { create: vi.fn() }, promotion: { update: vi.fn() } }));
 const requirePermission = vi.hoisted(() => vi.fn());
 const requireCurrentChurch = vi.hoisted(() => vi.fn());
 const logAudit = vi.hoisted(() => vi.fn());
+const validateTenantCoupon = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/db", () => ({ db }));
 vi.mock("@/lib/auth", () => ({ requirePermission }));
 vi.mock("@/lib/tenant", () => ({ requireCurrentChurch }));
 vi.mock("@/lib/audit", () => ({ logAudit }));
+vi.mock("@/lib/billing-coupons", () => ({ validateTenantCoupon }));
 vi.mock("@/lib/billing-providers", () => ({ createStripeCheckout: vi.fn(async () => ({ externalId: "cs_1", checkoutUrl: "https://checkout.example/cs_1" })), createPayPalSubscription: vi.fn(async () => ({ externalId: "sub_1", checkoutUrl: "https://paypal.example/approve" })) }));
 
 describe("tenant billing initiation", () => {
@@ -42,5 +44,22 @@ describe("tenant billing initiation", () => {
     await expect(initiateBillingSubscription({ planId: "plan-1", provider: "STRIPE", interval: "MONTHLY" })).resolves.toMatchObject({ checkoutUrl: "https://checkout.example/cs_1", paymentStatus: "PENDING_PROVIDER_CONFIRMATION" });
     expect(db.subscription.update).toHaveBeenCalledWith(expect.objectContaining({ data: { externalSubscriptionId: "cs_1" } }));
     delete process.env.STRIPE_SECRET_KEY;
+  });
+
+  it("activates a 100% coupon without contacting a payment provider", async () => {
+    process.env.PAYPAL_CLIENT_ID = "client";
+    process.env.PAYPAL_CLIENT_SECRET = "secret";
+    db.subscriptionPlan.findFirst.mockResolvedValue({ id: "plan-1", slug: "standard", name: "Standard", currency: "USD", price: { toString: () => "10.00" }, interval: "MONTHLY", stripeEnabled: true, paypalEnabled: true });
+    db.subscription.findFirst.mockResolvedValue(null);
+    db.subscription.create.mockResolvedValue({ id: "sub-free", status: "ACTIVE", provider: "PAYPAL", interval: "MONTHLY" });
+    const { initiateBillingSubscription } = await import("@/lib/billing");
+    const { createPayPalSubscription } = await import("@/lib/billing-providers");
+    validateTenantCoupon.mockResolvedValue({ couponId: "promo-full", code: "FULL", discountType: "PERCENTAGE", subtotal: "10.00", discount: "10.00", total: "0.00", currency: "USD" });
+    await expect(initiateBillingSubscription({ planId: "plan-1", provider: "PAYPAL", interval: "MONTHLY", couponCode: "FULL" })).resolves.toMatchObject({ status: "ACTIVE", paymentStatus: "NO_PAYMENT_REQUIRED", couponApplied: true });
+    expect(createPayPalSubscription).not.toHaveBeenCalled();
+    expect(db.promotionRedemption.create).toHaveBeenCalledWith({ data: { promotionId: "promo-full", churchId: "church-1", subscriptionId: "sub-free" } });
+    expect(db.promotion.update).toHaveBeenCalledWith({ where: { id: "promo-full" }, data: { redemptionCount: { increment: 1 } } });
+    delete process.env.PAYPAL_CLIENT_ID;
+    delete process.env.PAYPAL_CLIENT_SECRET;
   });
 });
