@@ -421,6 +421,28 @@ function updateAtPath(blocks: Block[], path: number[], update: (block: Block) =>
   });
 }
 
+function hasMeaningfulContent(value: string | undefined) {
+  if (!value) return false;
+  const text = value.replace(/<[^>]*>/g, "").replace(/&nbsp;/gi, " ").trim();
+  return Boolean(text) && !/^new .+ element$/i.test(text);
+}
+
+function blockHasContent(block: Block) {
+  if (block.children?.length) return true;
+  if (block.type === "headline") return hasMeaningfulContent(block.title);
+  if (block.type === "body" || block.type === "blockquote") return hasMeaningfulContent(block.content);
+  if (block.type === "list") return hasMeaningfulContent(block.listItems);
+  if (block.type === "image") return Boolean(block.imageUrl);
+  if (block.type === "youtube") return Boolean(block.youtubeUrl);
+  if (block.type === "map") return Boolean(block.mapAddress);
+  if (block.type === "carousel") return hasMeaningfulContent(block.content);
+  if (block.type === "form") return Boolean(block.formId);
+  if (block.type === "widget") return Boolean(block.widgetId);
+  if (block.type === "hero") return Boolean(block.mediaUrl) || hasMeaningfulContent(block.content);
+  if (block.type === "buttons" || block.type === "table" || block.type === "calendar" || block.type === "cta") return hasMeaningfulContent(block.content) || hasMeaningfulContent(block.title);
+  return hasMeaningfulContent(block.content) || hasMeaningfulContent(block.title);
+}
+
 function removeAtPath(blocks: Block[], path: number[]): Block[] {
   if (path.length === 1) return blocks.filter((_, index) => index !== path[0]);
   return blocks.map((block, index) => index === path[0] ? { ...block, children: removeAtPath(block.children ?? [], path.slice(1)) } : block);
@@ -1021,6 +1043,7 @@ function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, dragg
   const mapStyle: CSSProperties = { ...imageStyle, width: block.widthValue ? imageStyle.width : "100%", minHeight: block.heightValue ? undefined : "20rem" };
   const mapSource = mapEmbedUrl(block.mapProvider, block.mapAddress);
   const selected = selectedPath?.join(".") === path.join(".");
+  const hasContent = blockHasContent(block);
   const gridColumns = Math.max(1, Math.min(12, Math.round(block.columns ?? 2)));
   const childLayoutStyle: CSSProperties | undefined = block.type === "grid"
     ? { display: "grid", gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`, alignContent: block.verticalAlign === "center" ? "center" : block.verticalAlign === "bottom" ? "end" : "start", backgroundColor: "transparent", minHeight: "14rem", height: "100%" }
@@ -1052,7 +1075,7 @@ function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, dragg
         </div>}
       </div>
     </div>
-    <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink/10 pt-3 text-xs text-ink/50"><span>{blockDefinitions[block.type].description}</span>{parentType && <span className="rounded-full bg-mist px-2 py-1 font-semibold text-ink/55">Inside {blockDefinitions[parentType].label}</span>}</div>
+    {!hasContent && <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink/10 pt-3 text-xs text-ink/50"><span>{blockDefinitions[block.type].description}</span>{parentType && <span className="rounded-full bg-mist px-2 py-1 font-semibold text-ink/55">Inside {blockDefinitions[parentType].label}</span>}</div>}
   </article>;
 }
 
