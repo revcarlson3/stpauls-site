@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     canAccessAdmin: user.canAccessAdmin,
     sessionVersion
   });
-  const bridgeUrl = new URL("/_auth/bridge", `${target.protocol}//${domain.hostname}`);
+  const bridgeUrl = new URL("/auth/bridge", `${target.protocol}//${domain.hostname}`);
   bridgeUrl.searchParams.set("token", bridgeToken);
   return NextResponse.redirect(bridgeUrl);
 }
