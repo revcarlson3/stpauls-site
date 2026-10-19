@@ -98,7 +98,7 @@ export async function performProviderBillingAction(provider: string, externalId:
     if (!response.ok || typeof value.id !== "string") throw new Error("Stripe subscription update failed.");
     return { status: value.status === "active" ? "ACTIVE" : value.status === "canceled" ? "CANCELED" : "PAST_DUE", cancelAtPeriodEnd: Boolean(value.cancel_at_period_end) };
   }
-  if (provider === "PAYPAL" && action === "REFRESH") {
+  if (provider === "PAYPAL" && (action === "REFRESH" || action === "CANCEL_AT_PERIOD_END")) {
     const clientId = await getConfiguredSecret("PAYPAL", "clientId", "PAYPAL_CLIENT_ID"); const clientSecret = await getConfiguredSecret("PAYPAL", "clientSecret", "PAYPAL_CLIENT_SECRET"); if (!clientId || !clientSecret) throw new Error("PayPal credentials are not configured.");
     const auth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
     const base = await getConfiguredApiBase();
