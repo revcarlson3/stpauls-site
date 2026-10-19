@@ -23,6 +23,9 @@ function sslFailureMessage(lastError: string | null) {
   if (detail.includes("permission") || detail.includes("unauthorized") || detail.includes("forbidden") || detail.includes("(401)") || detail.includes("(403)")) {
     return "1Panel rejected the SSL request. Check that the saved API key can manage Websites and SSL certificates, then retry.";
   }
+  if (detail.includes("bridge access") || detail.includes("secure entrance")) {
+    return "1Panel is blocking API access through its secure entrance. Use the API-accessible panel URL from `1pctl user-info`, then retry.";
+  }
   if (detail.includes("certificate issuance") || detail.includes("let’s encrypt") || detail.includes("acme")) {
     return "Let’s Encrypt could not issue the certificate. Confirm this domain reaches the VPS on HTTP/port 80, then retry.";
   }

@@ -217,6 +217,9 @@ export async function testOnePanelConnection() {
     if (/enabled secure login access/i.test(body)) {
       throw new Error("1Panel secure entrance is still enabled. Run `1pctl reset entrance` on the 1Panel server, or configure the integration with the secure entrance URL shown by `1pctl user-info`.");
     }
+    if (/bridge access is required/i.test(body)) {
+      throw new Error("1Panel requires bridge access for this URL. Use the exact API-accessible panel URL shown by `1pctl user-info`, or disable/reset the secure entrance before testing the connection.");
+    }
   }
   throw new Error("1Panel did not return an API JSON response. Verify that the configured URL exposes the panel API (including /api/v2), the API interface is enabled, and the caller IP is in the API allowlist.");
 }
