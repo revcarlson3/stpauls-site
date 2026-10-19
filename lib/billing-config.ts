@@ -30,8 +30,16 @@ export async function getBillingProviderConfig(provider: BillingProvider, enviro
   return model?.findUnique({ where: { provider_environment: { provider, environment } } }) ?? null;
 }
 
-export async function getConfiguredSecret(provider: BillingProvider, field: "secretKey" | "webhookSecret" | "clientId" | "clientSecret" | "webhookId", fallbackName: string) {
-  const config = await getBillingProviderConfig(provider);
+export async function getPreferredBillingEnvironment(provider: BillingProvider): Promise<BillingEnvironment> {
+  const [live, test] = await Promise.all([getBillingProviderConfig(provider, "LIVE"), getBillingProviderConfig(provider, "TEST")]);
+  const liveConfigured = provider === "STRIPE"
+    ? Boolean(live?.stripeSecretKeyEncrypted)
+    : Boolean(live?.paypalClientIdEncrypted && live.paypalClientSecretEncrypted);
+  return liveConfigured || !test ? "LIVE" : "TEST";
+}
+
+export async function getConfiguredSecret(provider: BillingProvider, field: "secretKey" | "webhookSecret" | "clientId" | "clientSecret" | "webhookId", fallbackName: string, environment?: BillingEnvironment) {
+  const config = await getBillingProviderConfig(provider, environment ?? await getPreferredBillingEnvironment(provider));
   const encrypted = provider === "STRIPE"
     ? field === "secretKey" ? config?.stripeSecretKeyEncrypted : config?.stripeWebhookSecretEncrypted
     : field === "clientId" ? config?.paypalClientIdEncrypted : field === "clientSecret" ? config?.paypalClientSecretEncrypted : config?.paypalWebhookIdEncrypted;
@@ -39,13 +47,14 @@ export async function getConfiguredSecret(provider: BillingProvider, field: "sec
 }
 
 export async function getConfiguredApiBase() {
-  const config = await getBillingProviderConfig("PAYPAL");
+  const config = await getBillingProviderConfig("PAYPAL", await getPreferredBillingEnvironment("PAYPAL"));
   return config?.paypalApiBaseUrl || process.env.PAYPAL_API_BASE_URL || "https://api-m.sandbox.paypal.com";
 }
 
 export async function providerConfiguredWithStored(provider: BillingProvider) {
-  if (provider === "STRIPE") return Boolean(await getConfiguredSecret("STRIPE", "secretKey", "STRIPE_SECRET_KEY"));
-  return Boolean(await getConfiguredSecret("PAYPAL", "clientId", "PAYPAL_CLIENT_ID") && await getConfiguredSecret("PAYPAL", "clientSecret", "PAYPAL_CLIENT_SECRET"));
+  const environment = await getPreferredBillingEnvironment(provider);
+  if (provider === "STRIPE") return Boolean(await getConfiguredSecret("STRIPE", "secretKey", "STRIPE_SECRET_KEY", environment));
+  return Boolean(await getConfiguredSecret("PAYPAL", "clientId", "PAYPAL_CLIENT_ID", environment) && await getConfiguredSecret("PAYPAL", "clientSecret", "PAYPAL_CLIENT_SECRET", environment));
 }
 
 export async function billingConfigStatus() {

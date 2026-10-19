@@ -76,13 +76,13 @@ function response(request: { id: string; hostname: string; operation: string; st
 
 export async function searchDomainAvailability(domains: string[]) {
   const results = await checkNamecheapDomainAvailability(domains);
-  const actor = await requirePermission("MANAGE_SETTINGS");
+  const actor = await requirePermission("MANAGE_SETTINGS", { allowUnsubscribed: true });
   await logAudit({ activityType: "domain-availability-searched", summary: "Searched domain availability.", actorId: actor.id, details: JSON.stringify({ count: results.length }) });
   return results;
 }
 
 export async function createTenantDomain(input: { hostname: string; kind: "PLATFORM_SUBDOMAIN" | "CUSTOM_DOMAIN" }) {
-  const actor = await requirePermission("MANAGE_SETTINGS");
+  const actor = await requirePermission("MANAGE_SETTINGS", { allowUnsubscribed: true });
   if (!actor.churchId) throw new Error("A tenant site is required.");
   const hostname = normalizeHostname(input.hostname);
   if (!hostname) throw new Error("Provide a valid domain.");
@@ -105,7 +105,7 @@ export async function createTenantDomain(input: { hostname: string; kind: "PLATF
 }
 
 export async function listTenantDomains() {
-  const actor = await requirePermission("MANAGE_SETTINGS");
+  const actor = await requirePermission("MANAGE_SETTINGS", { allowUnsubscribed: true });
   if (!actor.churchId) throw new Error("A tenant site is required.");
   return db.siteDomain.findMany({
     where: tenantDomainWhere(actor.churchId),
@@ -119,7 +119,7 @@ export async function listTenantDomains() {
 }
 
 export async function verifyTenantDomain(domainId: string) {
-  const actor = await requirePermission("MANAGE_SETTINGS");
+  const actor = await requirePermission("MANAGE_SETTINGS", { allowUnsubscribed: true });
   if (!actor.churchId) throw new Error("A tenant site is required.");
   const domain = await db.siteDomain.findFirst({
     where: { id: domainId, ...tenantDomainWhere(actor.churchId) },
@@ -166,7 +166,7 @@ export async function verifyTenantDomain(domainId: string) {
 }
 
 export async function retryTenantDomainTls(domainId: string) {
-  const actor = await requirePermission("MANAGE_SETTINGS");
+  const actor = await requirePermission("MANAGE_SETTINGS", { allowUnsubscribed: true });
   if (!actor.churchId) throw new Error("A tenant site is required.");
   const domain = await db.siteDomain.findFirst({
     where: { id: domainId, churchId: actor.churchId, kind: "CUSTOM_DOMAIN", status: "ACTIVE" },
@@ -196,7 +196,7 @@ export async function retryTenantDomainTls(domainId: string) {
 }
 
 export async function requestDomainAcquisition(input: { hostname: string; operation: "REGISTRATION" | "TRANSFER"; idempotencyKey: string }) {
-  const actor = await requirePermission("MANAGE_SETTINGS");
+  const actor = await requirePermission("MANAGE_SETTINGS", { allowUnsubscribed: true });
   if (!actor.churchId) throw new Error("A tenant site is required.");
   const hostname = input.hostname.trim().toLowerCase().replace(/\.+$/, "");
   if (!/^(?!-)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(hostname)) throw new Error("Provide a valid domain.");

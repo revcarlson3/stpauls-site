@@ -7,12 +7,14 @@ export function AdminDrawer() {
   const [open, setOpen] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [publicWebsiteModuleEnabled, setPublicWebsiteModuleEnabled] = useState(false);
+  const [subscriptionActive, setSubscriptionActive] = useState(false);
   const [launcherPosition, setLauncherPosition] = useState({ x: 0, y: 80 });
   const launcherRef = useRef<HTMLButtonElement>(null);
   const dragRef = useRef({ active: false, moved: false, startX: 0, startY: 0, originX: 0, originY: 0 });
   useEffect(() => {
     void fetch("/api/account").then((response) => response.ok ? response.json() : null).then((value) => {
       setPermissions(Array.isArray(value?.permissions) ? value.permissions : []);
+      setSubscriptionActive(value?.subscriptionActive === true);
     }).catch(() => undefined);
     void fetch("/api/modules").then((response) => response.ok ? response.json() : null).then((value) => {
       setPublicWebsiteModuleEnabled(Array.isArray(value?.modules) && value.modules.some((module: { slug?: string }) => module.slug === "public-site"));
@@ -117,7 +119,7 @@ export function AdminDrawer() {
           </div>
           <button type="button" aria-label="Close admin menu" className="focus-ring rounded-full px-2 py-1 text-xl text-ink/60 hover:text-coral" onClick={() => setOpen(false)}>×</button>
         </div>
-        <AdminNavigation permissions={permissions} publicWebsiteModuleEnabled={publicWebsiteModuleEnabled} onNavigate={() => setOpen(false)} className="mt-8 grid gap-2" />
+        <AdminNavigation permissions={permissions} publicWebsiteModuleEnabled={publicWebsiteModuleEnabled} subscriptionActive={subscriptionActive} onNavigate={() => setOpen(false)} className="mt-8 grid gap-2" />
         <p className="absolute bottom-6 left-6 right-6 border-t border-ink/10 pt-4 text-xs leading-5 text-ink/50">This menu is visible only to authenticated users. Access is still enforced by the server.</p>
       </aside>
     </>

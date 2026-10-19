@@ -16,6 +16,15 @@ describe("billing configuration and coupons", () => {
     expect(await billingConfigStatus()).toEqual([expect.objectContaining({ configured: true, webhookConfigured: false })]);
     expect(JSON.stringify(await billingConfigStatus())).not.toContain("super-secret");
   });
+  it("uses live provider credentials for tenant billing when live is configured", async () => {
+    const { encryptBillingSecret, providerConfiguredWithStored, getPreferredBillingEnvironment } = await import("@/lib/billing-config");
+    const liveSecret = encryptBillingSecret("live-secret");
+    db.billingProviderConfiguration.findUnique.mockImplementation(({ where }: { where: { provider_environment: { environment: string } } }) => where.provider_environment.environment === "LIVE"
+      ? { stripeSecretKeyEncrypted: liveSecret, stripeWebhookSecretEncrypted: null, paypalClientIdEncrypted: null, paypalClientSecretEncrypted: null, paypalWebhookIdEncrypted: null, paypalApiBaseUrl: null }
+      : null);
+    expect(await getPreferredBillingEnvironment("STRIPE")).toBe("LIVE");
+    expect(await providerConfiguredWithStored("STRIPE")).toBe(true);
+  });
   it("rejects invalid or mutually exclusive coupon discounts and dates", async () => {
     const { validateCouponInput } = await import("@/lib/global-admin-coupons");
     const { couponDiscountLabel } = await import("@/lib/coupon-ui");

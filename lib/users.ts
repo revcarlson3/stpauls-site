@@ -114,7 +114,7 @@ export async function deleteUser(id: string) {
 
 export async function getOwnAccount() {
   const actor = await requireOwnAccount();
-  const [account, publicDomain] = await Promise.all([
+  const [account, publicDomain, subscription] = await Promise.all([
     db.user.findUnique({ where: { id: actor.id }, select: { id: true, email: true, name: true, emailVerifiedAt: true, isPlatformAdmin: true } }),
     actor.churchId
       ? db.siteDomain.findFirst({
@@ -123,11 +123,16 @@ export async function getOwnAccount() {
           select: { hostname: true }
         })
       : Promise.resolve(null)
+    ,
+    actor.churchId
+      ? db.subscription.findFirst({ where: { churchId: actor.churchId, status: "ACTIVE" }, select: { id: true } })
+      : Promise.resolve(null)
   ]);
   return account ? {
     ...account,
     publicSiteUrl: buildPublicSiteUrl(publicDomain?.hostname ?? null),
     canAccessAdmin: actor.canAccessAdmin,
+    subscriptionActive: Boolean(subscription),
     isAdministrator: actor.role === "admin",
     permissions: actor.permissions
   } : account;

@@ -57,8 +57,14 @@ export function getCurrentUser() {
   });
 }
 
-export async function requirePermission(permission: Permission): Promise<User> {
+export async function requirePermission(permission: Permission, options: { allowUnsubscribed?: boolean } = {}): Promise<User> {
   const user = await requireAuthenticatedUser();
+  const subscriptionActive = user.churchId
+    ? Boolean(await db.subscription.findFirst({ where: { churchId: user.churchId, status: "ACTIVE" }, select: { id: true } }))
+    : false;
+  if (!subscriptionActive && !options.allowUnsubscribed && !user.isPlatformAdmin && permission !== "CREATE_SUPPORT_TICKETS") {
+    throw new Error("An active subscription is required to access this administrative feature.");
+  }
   const group = user.effectiveGroupId ? await db.securityGroup.findFirst({
     where: { id: user.effectiveGroupId, ...(user.churchId ? { churchId: user.churchId } : {}) },
     select: { permissions: { where: { permission }, select: { permission: true } } }

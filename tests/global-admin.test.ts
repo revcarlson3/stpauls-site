@@ -45,6 +45,8 @@ describe("global administrator bridge authorization", () => {
       expect(nextLifecycleState({ lifecycleStatus: "PROVISIONING", onboardingStatus: "SITE_SETUP" }, "activate")?.lifecycleStatus).toBe("ACTIVE");
       expect(nextLifecycleState({ lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE" }, "suspend")?.lifecycleStatus).toBe("SUSPENDED");
       expect(nextLifecycleState({ lifecycleStatus: "SUSPENDED", onboardingStatus: "COMPLETE" }, "disable")?.lifecycleStatus).toBe("DISABLED");
+      expect(nextLifecycleState({ lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE" }, "cancel")?.lifecycleStatus).toBe("CANCELED");
+      expect(nextLifecycleState({ lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE" }, "delete")?.lifecycleStatus).toBe("CANCELED");
       expect(nextLifecycleState({ lifecycleStatus: "DISABLED", onboardingStatus: "COMPLETE" }, "suspend")).toBeNull();
       expect(nextLifecycleState({ lifecycleStatus: "ACTIVE", onboardingStatus: "COMPLETE" }, "activate")).toBeNull();
   });

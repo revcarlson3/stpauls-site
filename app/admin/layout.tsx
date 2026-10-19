@@ -20,6 +20,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
   const [isAdministrator, setIsAdministrator] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [subscriptionActive, setSubscriptionActive] = useState(false);
   const [viewAsGroups, setViewAsGroups] = useState<{ id: string; name: string; canAccessAdmin: boolean }[]>([]);
   const [viewAsGroupId, setViewAsGroupId] = useState("");
   const [membershipMenuOpen, setMembershipMenuOpen] = useState(false);
@@ -66,6 +67,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
       setIsAdministrator(value.isAdministrator === true);
       setPermissions(value.permissions ?? []);
       setIsPlatformAdmin(value.isPlatformAdmin === true);
+      setSubscriptionActive(value.subscriptionActive === true);
       setPublicSiteUrl(typeof value.publicSiteUrl === "string" ? value.publicSiteUrl : null);
     }).catch(() => undefined);
     void fetch("/api/modules").then(async (response) => {
@@ -135,9 +137,9 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
       <div className={`flex w-full flex-col lg:flex-row ${isEditor ? "min-h-0 flex-1" : ""}`}>
         {!canAccessAdmin ? <div className="min-h-[calc(100vh-5rem)] flex-1">{pathname.startsWith("/admin") ? <Container className="py-16"><h1 className="font-serif text-3xl">Administration access required</h1><p className="mt-3 text-sm text-ink/60">This account can manage its Account page, but does not have access to Site Administration.</p></Container> : children}</div> : <>
         <aside className={`max-h-[2000px] overflow-hidden border-b border-ink/10 bg-white transition-[max-height,max-width,opacity,transform,width] duration-300 ease-out lg:max-w-72 lg:shrink-0 lg:border-b-0 lg:border-r ${isEditor ? "lg:min-h-0 lg:overflow-y-auto" : "lg:min-h-[calc(100vh-5rem)]"} ${isEditor && !editorChromeVisible ? "pointer-events-none max-h-0 -translate-x-2 opacity-0 lg:w-0 lg:max-w-0" : "translate-x-0 opacity-100 lg:w-72"}`}>
-          <AdminNavigation permissions={permissions} publicWebsiteModuleEnabled={publicWebsiteModuleEnabled} />
+          <AdminNavigation permissions={permissions} publicWebsiteModuleEnabled={publicWebsiteModuleEnabled} subscriptionActive={subscriptionActive} />
         </aside>
-        <div className={`min-h-0 min-w-0 flex-1 ${isEditor ? "overflow-hidden" : ""} ${isEditor && !editorChromeVisible ? "admin-editor-shell-expanded" : ""}`}>{children}</div>
+        <div className={`min-h-0 min-w-0 flex-1 ${isEditor ? "overflow-hidden" : ""} ${isEditor && !editorChromeVisible ? "admin-editor-shell-expanded" : ""}`}>{!subscriptionActive && !pathname.startsWith("/admin/billing") && !pathname.startsWith("/admin/domains") ? <Container className="py-16"><h1 className="font-serif text-3xl">Subscription required</h1><p className="mt-3 max-w-xl text-sm text-ink/60">Billing and Domains remain available while you set up a subscription. Other site administration features become available after the subscription is active.</p><Link className="focus-ring mt-5 inline-block rounded-lg bg-coral px-4 py-2 text-sm font-semibold text-white" href="/admin/billing">Set up subscription</Link></Container> : children}</div>
         </>}
       </div>
     </div>

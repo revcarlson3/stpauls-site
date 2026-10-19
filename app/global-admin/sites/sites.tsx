@@ -5,7 +5,7 @@ import { GlobalAdminBackLink } from "@/app/global-admin/back-link";
 type Site = { id: string; name: string; slug: string; status: string; lifecycleStatus: string; onboardingStatus: string; onboardingStep: string | null; createdAt: string };
 type Data = { sites: Site[]; page: number; total: number; totalPages: number };
 type Result = { committed: boolean; blocked: Array<{ id: string; name: string; error: string }>; results: Array<{ id: string; name: string; success: boolean; lifecycleStatus?: string; error?: string }> };
-const actions = ["enable", "activate", "suspend", "disable"] as const;
+const actions = ["enable", "activate", "suspend", "disable", "cancel", "delete"] as const;
 export default function Sites() {
   const [data, setData] = useState<Data | null>(null); const [search, setSearch] = useState(""); const [lifecycle, setLifecycle] = useState(""); const [onboarding, setOnboarding] = useState(""); const [selected, setSelected] = useState<string[]>([]); const [action, setAction] = useState<typeof actions[number]>("activate"); const [preview, setPreview] = useState<Result | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [message, setMessage] = useState("");
   const load = () => { const params = new URLSearchParams({ ...(search ? { search } : {}), ...(lifecycle ? { lifecycle } : {}), ...(onboarding ? { onboarding } : {}) }); void fetch(`/api/global-admin/sites?${params}`, { cache: "no-store" }).then(async (response) => { const value = await response.json(); if (!response.ok) throw new Error(value.error); setData(value); setSelected([]); }).catch((reason) => setError(reason instanceof Error ? reason.message : "Unable to load site inventory.")); };

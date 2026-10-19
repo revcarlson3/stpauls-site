@@ -10,7 +10,7 @@ export const GLOBAL_ADMIN_BOUNDARY = "global-admin" as const;
 export const SELECTED_CHURCH_COOKIE = "global-admin-church";
 export const GLOBAL_ADMIN_REAUTH_COOKIE = "global-admin-reauth";
 const REAUTH_WINDOW_SECONDS = 15 * 60;
-export const lifecycleActions = ["enable", "activate", "suspend", "disable"] as const;
+export const lifecycleActions = ["enable", "activate", "suspend", "disable", "cancel", "delete"] as const;
 export type LifecycleAction = (typeof lifecycleActions)[number];
 export type LifecycleState = { lifecycleStatus: TenantLifecycleStatus; onboardingStatus: OnboardingStatus };
 
@@ -41,13 +41,17 @@ export function nextLifecycleState(state: LifecycleState, action: LifecycleActio
     enable: ["PROVISIONING"],
     activate: ["ACTIVE"],
     suspend: ["SUSPENDED"],
-    disable: ["DISABLED"]
+    disable: ["DISABLED"],
+    cancel: ["CANCELED"],
+    delete: ["CANCELED"]
   };
   const allowed: Record<LifecycleAction, TenantLifecycleStatus[]> = {
     enable: ["DISABLED"],
     activate: ["PROVISIONING", "SUSPENDED"],
     suspend: ["ACTIVE"],
-    disable: ["ACTIVE", "SUSPENDED"]
+    disable: ["ACTIVE", "SUSPENDED"],
+    cancel: ["PROVISIONING", "ACTIVE", "SUSPENDED", "DISABLED"],
+    delete: ["PROVISIONING", "ACTIVE", "SUSPENDED", "DISABLED"]
   };
   if (!allowed[action].includes(state.lifecycleStatus)) return null;
   const lifecycleStatus = nextStatus[action][0];
@@ -92,7 +96,7 @@ export async function transitionSelectedChurchLifecycle(action: LifecycleAction)
   const updated = await db.$transaction(async (transaction) => {
     const result = await transaction.church.update({
       where: { id: church.id },
-      data: { lifecycleStatus: to.lifecycleStatus, onboardingStatus: to.onboardingStatus, status: to.lifecycleStatus === "SUSPENDED" ? "SUSPENDED" : "ACTIVE" },
+      data: { lifecycleStatus: to.lifecycleStatus, onboardingStatus: to.onboardingStatus, status: ["SUSPENDED", "CANCELED", "DISABLED"].includes(to.lifecycleStatus) ? "SUSPENDED" : "ACTIVE" },
       select: { id: true, name: true, lifecycleStatus: true, onboardingStatus: true }
     });
     await transaction.auditLog.create({
