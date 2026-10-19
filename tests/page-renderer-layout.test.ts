@@ -8,6 +8,7 @@ describe("public page headline layout", () => {
   it("does not add page-shell padding between the header and first page block", () => {
     const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8");
     expect(css.replace(/\r\n/g, "\n")).toContain(".site-public-content.site-section {\n  padding-block: 0;\n}");
+    expect(css.replace(/\r\n/g, "\n")).toContain(".site-block-stack {\n  gap: 0;\n}");
   });
 
   it("preserves headline typography and placement inside a full-height container", async () => {

@@ -622,7 +622,7 @@ body[data-theme-radius="soft"] {
 }
 
 .site-block-stack {
-  gap: var(--site-block-gap);
+  gap: 0;
 }
 
 .site-section {
