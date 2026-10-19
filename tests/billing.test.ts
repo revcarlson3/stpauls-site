@@ -37,7 +37,7 @@ describe("tenant billing initiation", () => {
 
   it("creates a provider checkout boundary without marking payment successful", async () => {
     process.env.STRIPE_SECRET_KEY = "test";
-    db.subscriptionPlan.findFirst.mockResolvedValue({ id: "plan-1", slug: "standard", name: "Standard", stripeEnabled: true, paypalEnabled: true });
+    db.subscriptionPlan.findFirst.mockResolvedValue({ id: "plan-1", slug: "standard", name: "Standard", currency: "USD", price: { toString: () => "10.00" }, interval: "MONTHLY", stripeEnabled: true, paypalEnabled: true });
     db.subscription.findFirst.mockResolvedValue(null);
     db.subscription.create.mockResolvedValue({ id: "sub-2", status: "INCOMPLETE", provider: "STRIPE", interval: "MONTHLY" });
     const { initiateBillingSubscription } = await import("@/lib/billing");
@@ -61,5 +61,11 @@ describe("tenant billing initiation", () => {
     expect(db.promotion.update).toHaveBeenCalledWith({ where: { id: "promo-full" }, data: { redemptionCount: { increment: 1 } } });
     delete process.env.PAYPAL_CLIENT_ID;
     delete process.env.PAYPAL_CLIENT_SECRET;
+  });
+
+  it("includes the paid custom-domain add-on in the checkout quote", async () => {
+    db.subscriptionPlan.findFirst.mockResolvedValue({ id: "plan-1", name: "Standard", currency: "USD", price: { toString: () => "20.00" }, interval: "QUARTERLY", monthlyPrice: { toString: () => "20.00" }, annualPrice: { toString: () => "80.00" }, entitlements: [{ mode: "PAID_ADD_ON", addOnMonthly: { toString: () => "3.00" }, addOnAnnual: { toString: () => "3.00" } }] });
+    const { getBillingQuote } = await import("@/lib/billing");
+    await expect(getBillingQuote({ planId: "plan-1", provider: "STRIPE", interval: "QUARTERLY", customDomain: true })).resolves.toMatchObject({ planPrice: 20, addOnPrice: 3, addOnSelected: true, subtotal: "23.00", total: "23.00" });
   });
 });

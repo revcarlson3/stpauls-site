@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { requireCurrentChurch } from "@/lib/tenant";
 
-export async function validateTenantCoupon(input: { code: unknown; planId: unknown; interval: unknown }) {
+export async function validateTenantCoupon(input: { code: unknown; planId: unknown; interval: unknown; additionalPrice?: unknown }) {
   const { church } = await requireCurrentChurch({ allowUnsubscribed: true });
   const code = typeof input.code === "string" ? input.code.trim().toUpperCase() : "";
   if (!code) throw new Error("Enter a coupon code.");
@@ -18,7 +18,8 @@ export async function validateTenantCoupon(input: { code: unknown; planId: unkno
   if (coupon.maxRedemptions !== null && coupon.redemptionCount >= coupon.maxRedemptions) throw new Error("This coupon has reached its usage limit.");
   if (coupon.maxPerAccount !== null && coupon.redemptions.length >= coupon.maxPerAccount) throw new Error("This coupon has already reached its limit for this account.");
   if (coupon.currency !== plan.currency) throw new Error("This coupon is not valid for the selected plan currency.");
-  const subtotal = Number((plan.price ?? (interval === "MONTHLY" ? plan.monthlyPrice : plan.annualPrice)).toString());
+  const additionalPrice = typeof input.additionalPrice === "number" && Number.isFinite(input.additionalPrice) && input.additionalPrice >= 0 ? input.additionalPrice : 0;
+  const subtotal = Number((plan.price ?? (interval === "MONTHLY" ? plan.monthlyPrice : plan.annualPrice)).toString()) + additionalPrice;
   const discount = coupon.discountType === "PERCENTAGE" ? subtotal * ((coupon.percentageOff ?? 0) / 100) : Number((coupon.amountOff ?? 0).toString());
   const total = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
   return { couponId: coupon.id, code: coupon.code, discountType: coupon.discountType, subtotal: subtotal.toFixed(2), discount: Math.min(subtotal, discount).toFixed(2), total: total.toFixed(2), currency: plan.currency };
