@@ -56,7 +56,8 @@ export function AdminNavigation({ permissions, publicWebsiteModuleEnabled, subsc
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/report-automations">Report Automations</Link>
         </div>
       </details>}
-      {(!subscriptionActive || can("MANAGE_SETTINGS")) && <details open={pathname.startsWith("/admin/billing") || pathname.startsWith("/admin/domains")} className="group">
+      {!subscriptionActive && <Link onClick={onNavigate} className="focus-ring flex items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist" href="/admin/billing"><AdminNavIcon name="settings" />Billing</Link>}
+      {subscriptionActive && can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/billing") || pathname.startsWith("/admin/domains")} className="group">
         <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="settings" />Billing and Domains <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
         <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/billing">Billing</Link>
