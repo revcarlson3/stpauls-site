@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { cookies } from "next/headers";
+import crypto from "node:crypto";
 import { authOptions } from "@/lib/auth-options";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
@@ -7,6 +8,7 @@ import type { OnboardingStatus, TenantLifecycleStatus } from "@prisma/client";
 
 export const GLOBAL_ADMIN_BOUNDARY = "global-admin" as const;
 export const SELECTED_CHURCH_COOKIE = "global-admin-church";
+export const GLOBAL_ADMIN_REAUTH_COOKIE = "global-admin-reauth";
 const REAUTH_WINDOW_SECONDS = 15 * 60;
 export const lifecycleActions = ["enable", "activate", "suspend", "disable"] as const;
 export type LifecycleAction = (typeof lifecycleActions)[number];
@@ -14,6 +16,20 @@ export type LifecycleState = { lifecycleStatus: TenantLifecycleStatus; onboardin
 
 export function hasRecentReauthentication(reauthenticatedAt: number | undefined, now = Math.floor(Date.now() / 1000)) {
   return typeof reauthenticatedAt === "number" && reauthenticatedAt >= now - REAUTH_WINDOW_SECONDS;
+}
+
+export function createGlobalAdminReauthToken(userId: string, sessionVersion: number, now = Math.floor(Date.now() / 1000)) {
+  const payload = `${userId}.${sessionVersion}.${now}`;
+  const signature = crypto.createHmac("sha256", process.env.NEXTAUTH_SECRET ?? "development-only-config-key").update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+export function hasValidGlobalAdminReauthToken(token: string | undefined, userId: string, sessionVersion: number, now = Math.floor(Date.now() / 1000)) {
+  if (!token) return false;
+  const [tokenUserId, tokenSessionVersion, tokenTimestamp, signature] = token.split(".");
+  if (tokenUserId !== userId || tokenSessionVersion !== String(sessionVersion) || !/^\d+$/.test(tokenTimestamp ?? "") || now - Number(tokenTimestamp) < 0 || now - Number(tokenTimestamp) > REAUTH_WINDOW_SECONDS || !signature) return false;
+  const expected = createGlobalAdminReauthToken(tokenUserId, sessionVersion, Number(tokenTimestamp)).split(".").at(-1);
+  return Boolean(expected && signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected)));
 }
 
 export function isActiveSelectedChurch(selectedChurchId: string | null, church: { id: string; status: "ACTIVE" | "SUSPENDED" } | null) {
@@ -53,11 +69,12 @@ export function isGlobalAdminSession(session: { user?: { authBoundary?: string; 
 export async function requireGlobalAdmin(options: { selectedChurch?: boolean; sensitive?: boolean } = {}) {
   const session = await getServerSession(authOptions);
   if (!session || !isGlobalAdminSession(session) || !session.user?.id) throw new Error("Unauthorized: bridge access is required.");
-  const user = await db.user.findUnique({ where: { id: session.user.id }, select: { id: true, name: true, email: true, isActive: true, isPlatformAdmin: true } });
+  const user = await db.user.findUnique({ where: { id: session.user.id }, select: { id: true, name: true, email: true, isActive: true, isPlatformAdmin: true, sessionVersion: true } });
   if (!user?.isActive || !user.isPlatformAdmin) throw new Error("Unauthorized: platform administrator access is required.");
   if (options.sensitive) {
     const reauthenticatedAt = session.user.reauthenticatedAt ?? 0;
-    if (!hasRecentReauthentication(reauthenticatedAt)) throw new Error("Reauthentication required.");
+    const reauthCookie = cookies().get(GLOBAL_ADMIN_REAUTH_COOKIE)?.value;
+    if (!hasRecentReauthentication(reauthenticatedAt) && !hasValidGlobalAdminReauthToken(reauthCookie, user.id, user.sessionVersion)) throw new Error("Reauthentication required.");
   }
   const churchId = cookies().get(SELECTED_CHURCH_COOKIE)?.value ?? null;
   const church = churchId ? await db.church.findUnique({ where: { id: churchId }, select: { id: true, name: true, slug: true } }) : null;

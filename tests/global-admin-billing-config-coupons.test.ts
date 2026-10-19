@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const db = vi.hoisted(() => ({ billingProviderConfiguration: { findMany: vi.fn(), findUnique: vi.fn(), upsert: vi.fn() }, promotion: { findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), findUnique: vi.fn() } }));
+const db = vi.hoisted(() => ({ billingProviderConfiguration: { findMany: vi.fn(), findUnique: vi.fn(), upsert: vi.fn(), delete: vi.fn() }, promotion: { findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), findUnique: vi.fn() } }));
 const requireGlobalAdmin = vi.hoisted(() => vi.fn());
 const logAudit = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/db", () => ({ db }));
@@ -37,5 +37,18 @@ describe("billing configuration and coupons", () => {
     await createGlobalCoupon({ code: "WELCOME", discountType: "PERCENTAGE", percentageOff: 10 });
     expect(requireGlobalAdmin).toHaveBeenCalledWith({ sensitive: true });
     expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({ activityType: "billing-coupon-changed" }));
+  });
+  it("deletes a saved provider configuration through the sensitive audited boundary", async () => {
+    db.billingProviderConfiguration.delete.mockResolvedValue({});
+    db.billingProviderConfiguration.findMany.mockResolvedValue([]);
+    const { DELETE } = await import("@/app/api/global-admin/billing/config/route");
+    const response = await DELETE(new Request("http://localhost/api/global-admin/billing/config", {
+      method: "DELETE",
+      body: JSON.stringify({ provider: "STRIPE", environment: "TEST" }),
+      headers: { "Content-Type": "application/json" },
+    }));
+    expect(response.status).toBe(200);
+    expect(db.billingProviderConfiguration.delete).toHaveBeenCalledWith({ where: { provider_environment: { provider: "STRIPE", environment: "TEST" } } });
+    expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({ activityType: "billing-provider-configuration-deleted" }));
   });
 });

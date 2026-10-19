@@ -30,3 +30,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update provider configuration." }, { status: 400 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const context = await requireGlobalAdmin({ sensitive: true });
+    const input = await request.json();
+    if ((input.provider !== "STRIPE" && input.provider !== "PAYPAL") || (input.environment !== "TEST" && input.environment !== "LIVE")) {
+      return NextResponse.json({ error: "Invalid billing configuration." }, { status: 400 });
+    }
+    const provider = input.provider as "STRIPE" | "PAYPAL";
+    const environment = input.environment as "TEST" | "LIVE";
+    await db.billingProviderConfiguration.delete({ where: { provider_environment: { provider, environment } } });
+    await logAudit({
+      activityType: "billing-provider-configuration-deleted",
+      summary: `Deleted ${provider} billing provider configuration (${environment}).`,
+      actorId: context.user.id,
+      details: buildGlobalAuditDetails({
+        churchId: "platform",
+        targetType: "billing-provider-configuration",
+        targetId: `${provider}:${environment}`,
+        metadata: { provider, environment },
+      }),
+    });
+    return NextResponse.json({ configurations: await billingConfigStatus() });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Reauthentication required.") return NextResponse.json({ error: error.message }, { status: 428 });
+    if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Bridge access is required." }, { status: 403 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to delete provider configuration." }, { status: 400 });
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGlobalAuditDetails, hasRecentReauthentication, isActiveSelectedChurch, isGlobalAdminSession, lifecycleAuditMetadata, nextLifecycleState } from "@/lib/global-admin";
+import { buildGlobalAuditDetails, createGlobalAdminReauthToken, hasRecentReauthentication, hasValidGlobalAdminReauthToken, isActiveSelectedChurch, isGlobalAdminSession, lifecycleAuditMetadata, nextLifecycleState } from "@/lib/global-admin";
 
 describe("global administrator bridge authorization", () => {
   it("accepts only a completed global-admin session", () => {
@@ -12,6 +12,15 @@ describe("global administrator bridge authorization", () => {
     expect(hasRecentReauthentication(900, 1_000)).toBe(true);
     expect(hasRecentReauthentication(0, 1_000)).toBe(false);
     expect(hasRecentReauthentication(undefined, 1_000)).toBe(false);
+  });
+
+  it("binds billing reauthentication to the user, session version, and short expiry", () => {
+    process.env.NEXTAUTH_SECRET = "test-secret";
+    const token = createGlobalAdminReauthToken("user-1", 4, 1_000);
+    expect(hasValidGlobalAdminReauthToken(token, "user-1", 4, 1_010)).toBe(true);
+    expect(hasValidGlobalAdminReauthToken(token, "user-2", 4, 1_010)).toBe(false);
+    expect(hasValidGlobalAdminReauthToken(token, "user-1", 5, 1_010)).toBe(false);
+    expect(hasValidGlobalAdminReauthToken(token, "user-1", 4, 1_901)).toBe(false);
   });
 
   it("does not accept a missing, suspended, or mismatched site context", () => {
