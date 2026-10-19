@@ -27,6 +27,7 @@ export async function GET() {
         cellphone: true,
         family: {
           select: {
+            id: true,
             lastName: true,
             familyNameOverride: true,
             phone: true,
@@ -44,6 +45,7 @@ export async function GET() {
     return NextResponse.json({
       members: members.map((member) => ({
         id: member.id,
+        familyId: member.family.id,
         firstName: member.firstName,
         lastName: member.lastName ?? member.family.lastName,
         email: member.email ?? member.family.email,
