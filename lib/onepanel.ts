@@ -34,15 +34,23 @@ function responseData(body: unknown): unknown {
   return body;
 }
 
-function responseMessage(body: unknown) {
+function responseMessage(body: unknown): string {
+  if (Array.isArray(body)) {
+    return body.map(responseMessage).find(Boolean) ?? "";
+  }
   if (!body || typeof body !== "object") return "";
   const record = body as Record<string, unknown>;
-  for (const key of ["message", "msg", "error", "detail"]) {
+  for (const key of ["message", "msg", "error", "err", "detail", "remark"]) {
     if (typeof record[key] === "string" && record[key].trim()) return record[key].trim();
   }
   const data = record.data;
   if (data && typeof data === "object") return responseMessage(data);
-  return "";
+  try {
+    const serialized = JSON.stringify(body);
+    return serialized && serialized.length <= 500 ? serialized : "";
+  } catch {
+    return "";
+  }
 }
 
 function numericId(body: unknown) {
