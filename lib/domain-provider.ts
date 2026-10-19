@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { resolveTxt } from "node:dns/promises";
+import { Resolver, resolveTxt } from "node:dns/promises";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { requireGlobalAdmin } from "@/lib/global-admin";
@@ -29,6 +29,26 @@ export function buildDomainVerificationRecord(hostname: string, token: string | 
 
 export function dnsTxtRecordMatches(records: string[][], token: string) {
   return records.some((chunks) => chunks.join("") === token);
+}
+
+async function resolveVerificationTxt(name: string) {
+  const resolvers = [
+    async () => resolveTxt(name),
+    async () => {
+      const resolver = new Resolver();
+      resolver.setServers(["1.1.1.1", "8.8.8.8"]);
+      return resolver.resolveTxt(name);
+    }
+  ];
+  let lastError: unknown;
+  for (const resolve of resolvers) {
+    try {
+      return await resolve();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 function response(request: { id: string; hostname: string; operation: string; status: string; externalId: string | null; externalStatus: string | null }) {
@@ -93,7 +113,7 @@ export async function verifyTenantDomain(domainId: string) {
   if (!record) throw new Error("This domain has no pending DNS verification record.");
   let records: string[][];
   try {
-    records = await resolveTxt(record.name);
+    records = await resolveVerificationTxt(record.name);
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
     if (code === "ENOTFOUND" || code === "ENODATA" || code === "EAI_AGAIN") throw new Error("The DNS verification record was not found yet. Add the TXT record and wait for DNS propagation.");
