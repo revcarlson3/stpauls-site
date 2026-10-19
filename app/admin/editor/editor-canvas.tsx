@@ -1290,6 +1290,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   async function saveDraft() {
     autosaveControllerRef.current?.abort();
     const saveGeneration = ++saveGenerationRef.current;
+    setMessage("");
     if (passwordProtected && passwordChanged && accessPassword.length < 8) {
       setMessage("Page passwords must be at least 8 characters.");
       return;
