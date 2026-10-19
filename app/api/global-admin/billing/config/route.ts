@@ -24,5 +24,9 @@ export async function POST(request: Request) {
     await db.billingProviderConfiguration.upsert({ where: { provider_environment: { provider, environment } }, create: { provider, environment, ...values }, update: values });
     await logAudit({ activityType: "billing-provider-configuration-updated", summary: `Updated ${provider} billing provider configuration (${environment}).`, actorId: context.user.id, details: buildGlobalAuditDetails({ churchId: "platform", targetType: "billing-provider-configuration", targetId: `${provider}:${environment}`, metadata: { provider, environment, secretFieldsUpdated: Object.keys(values).filter((key) => key.endsWith("Encrypted")) } }) });
     return NextResponse.json({ configurations: await billingConfigStatus() });
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update provider configuration." }, { status: 400 }); }
+  } catch (error) {
+    if (error instanceof Error && error.message === "Reauthentication required.") return NextResponse.json({ error: error.message }, { status: 428 });
+    if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Bridge access is required." }, { status: 403 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update provider configuration." }, { status: 400 });
+  }
 }
