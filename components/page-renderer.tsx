@@ -229,7 +229,10 @@ function responsiveStyle(props: Record<string, unknown>): CSSProperties {
   const baseFontSize = cssFontSize(props.fontSize);
   const baseLetterSpacing = cssPixel(props.letterSpacing);
   if (props.hidden === true) style["--desktop-display"] = "none";
-  if (baseFontSize) style["--desktop-font-size"] = baseFontSize;
+  if (baseFontSize) {
+    style["--desktop-font-size"] = baseFontSize;
+    style.fontSize = baseFontSize;
+  }
   if (typeof props.fontWeight === "string" && props.fontWeight) style["--desktop-font-weight"] = props.fontWeight;
   if (typeof props.lineHeight === "string" && props.lineHeight) style["--desktop-line-height"] = props.lineHeight;
   if (baseLetterSpacing) style["--desktop-letter-spacing"] = baseLetterSpacing;

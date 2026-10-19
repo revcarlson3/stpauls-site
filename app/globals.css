@@ -340,7 +340,7 @@ img[class*="w-[calc(100%+2rem)]"] {
 }
 
 .responsive-typography {
-  font-size: var(--desktop-font-size, inherit) !important;
+  font-size: var(--desktop-font-size, inherit);
   color: var(--desktop-font-color, inherit) !important;
   font-weight: var(--desktop-font-weight, inherit) !important;
   line-height: var(--desktop-line-height, inherit) !important;

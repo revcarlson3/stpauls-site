@@ -20,6 +20,8 @@ describe("public page headline layout", () => {
 
     expect(markup).toContain("--desktop-font-size:42px");
     expect(markup).toContain("--desktop-font-size:1.5em");
+    expect(markup).toContain("font-size:42px");
+    expect(markup).toContain("font-size:1.5em");
     expect(markup).toContain("margin-top:-8px");
     expect(markup).toContain("margin-left:40px");
     expect(markup).toContain("text-left");
