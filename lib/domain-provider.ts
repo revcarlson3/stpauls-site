@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { resolveTxt } from "node:dns/promises";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { requireGlobalAdmin } from "@/lib/global-admin";
@@ -25,6 +26,10 @@ export function buildDomainVerificationRecord(hostname: string, token: string | 
   };
 }
 
+export function dnsTxtRecordMatches(records: string[][], token: string) {
+  return records.some((chunks) => chunks.join("") === token);
+}
+
 function response(request: { id: string; hostname: string; operation: string; status: string; externalId: string | null; externalStatus: string | null }) {
   return { id: request.id, hostname: request.hostname, operation: request.operation, status: request.status, externalId: request.externalId, externalStatus: request.externalStatus };
 }
@@ -49,14 +54,14 @@ export async function createTenantDomain(input: { hostname: string; kind: "PLATF
       hostname,
       kind: input.kind,
       status: "VERIFYING",
-      verificationToken: crypto.randomBytes(24).toString("hex"),
+      verificationToken: input.kind === "CUSTOM_DOMAIN" ? crypto.randomBytes(24).toString("hex") : null,
       tlsStatus: "PENDING",
       dnsGuidance: input.kind === "CUSTOM_DOMAIN" ? "Add the verification DNS record, then retry verification. 1Panel attachment and SSL remain separate pending steps." : "Platform hostname is reserved locally. 1Panel attachment and DNS/SSL provisioning remain pending."
     },
     select: { id: true, hostname: true, kind: true, status: true, tlsStatus: true, dnsGuidance: true, verificationToken: true }
   });
   await logAudit({ activityType: "domain-acquisition-requested", summary: `Added ${input.kind === "CUSTOM_DOMAIN" ? "external" : "platform"} domain ${hostname}.`, actorId: actor.id, details: JSON.stringify({ domainId: domain.id, kind: input.kind, provisioning: "PENDING_1PANEL_ATTACHMENT" }) });
-  return { ...domain, verificationRecord: buildDomainVerificationRecord(domain.hostname, domain.verificationToken) };
+  return { ...domain, verificationRecord: domain.kind === "CUSTOM_DOMAIN" ? buildDomainVerificationRecord(domain.hostname, domain.verificationToken) : null };
 }
 
 export async function listTenantDomains() {
@@ -70,7 +75,37 @@ export async function listTenantDomains() {
       verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true,
       lastError: true, dnsGuidance: true, verificationToken: true
     }
-  }).then((domains) => domains.map((domain) => ({ ...domain, verificationRecord: buildDomainVerificationRecord(domain.hostname, domain.verificationToken) })));
+  }).then((domains) => domains.map((domain) => ({ ...domain, verificationRecord: domain.kind === "CUSTOM_DOMAIN" ? buildDomainVerificationRecord(domain.hostname, domain.verificationToken) : null })));
+}
+
+export async function verifyTenantDomain(domainId: string) {
+  const actor = await requirePermission("MANAGE_SETTINGS");
+  if (!actor.churchId) throw new Error("A tenant site is required.");
+  const domain = await db.siteDomain.findFirst({
+    where: { id: domainId, ...tenantDomainWhere(actor.churchId) },
+    select: { id: true, hostname: true, kind: true, status: true, verificationToken: true }
+  });
+  if (!domain) throw new Error("The domain was not found for this site.");
+  if (domain.kind !== "CUSTOM_DOMAIN") throw new Error("Platform subdomains do not require DNS verification.");
+  if (!domain.verificationToken) throw new Error("This domain has no pending DNS verification record.");
+  const record = buildDomainVerificationRecord(domain.hostname, domain.verificationToken);
+  if (!record) throw new Error("This domain has no pending DNS verification record.");
+  let records: string[][];
+  try {
+    records = await resolveTxt(record.name);
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+    if (code === "ENOTFOUND" || code === "ENODATA" || code === "EAI_AGAIN") throw new Error("The DNS verification record was not found yet. Add the TXT record and wait for DNS propagation.");
+    throw new Error("DNS verification could not be checked right now.");
+  }
+  if (!dnsTxtRecordMatches(records, domain.verificationToken)) throw new Error("The DNS TXT record does not match the verification value shown above.");
+  const updated = await db.siteDomain.update({
+    where: { id: domain.id },
+    data: { status: "ACTIVE", verifiedAt: new Date(), lastCheckedAt: new Date(), lastError: null, verificationToken: null, dnsGuidance: "DNS verification completed. 1Panel attachment and SSL remain separate pending steps." },
+    select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true, dnsGuidance: true, verificationToken: true }
+  });
+  await logAudit({ activityType: "domain-verification-completed", summary: `Verified external domain ${domain.hostname}.`, actorId: actor.id, details: JSON.stringify({ domainId: domain.id, hostname: domain.hostname }) });
+  return { ...updated, verificationRecord: buildDomainVerificationRecord(updated.hostname, updated.verificationToken) };
 }
 
 export async function requestDomainAcquisition(input: { hostname: string; operation: "REGISTRATION" | "TRANSFER"; idempotencyKey: string }) {

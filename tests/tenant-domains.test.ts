@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDomainVerificationRecord, tenantDomainWhere } from "@/lib/domain-provider";
+import { buildDomainVerificationRecord, dnsTxtRecordMatches, tenantDomainWhere } from "@/lib/domain-provider";
 
 describe("tenant domain access", () => {
   it("always scopes domain queries to the authenticated church", () => {
@@ -14,5 +14,10 @@ describe("tenant domain access", () => {
       value: "token-123"
     });
     expect(buildDomainVerificationRecord("www.example.org", null)).toBeNull();
+  });
+
+  it("matches TXT records even when DNS splits a value into chunks", () => {
+    expect(dnsTxtRecordMatches([["token-", "123"], ["other"]], "token-123")).toBe(true);
+    expect(dnsTxtRecordMatches([["token-12"]], "token-123")).toBe(false);
   });
 });
