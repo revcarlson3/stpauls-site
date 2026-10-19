@@ -6,10 +6,8 @@ import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Container } from "@/components/ui";
-import { ModuleNavigation } from "@/components/module-navigation";
-import { AdminLogout } from "@/components/admin-logout";
+import { AdminNavigation } from "@/components/admin-navigation";
 import { NotificationBell } from "@/components/notification-bell";
-import { AdminNavIcon } from "@/components/admin-nav-icon";
 import { AnnouncementTicker } from "@/components/announcement-ticker";
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -29,6 +27,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
   const membershipButtonRef = useRef<HTMLButtonElement>(null);
   const isEditor = pathname === "/admin/editor" || pathname.startsWith("/admin/editor/");
   const [editorChromeVisible, setEditorChromeVisible] = useState(true);
+  const publicSiteBridgeUrl = publicSiteUrl ? `/api/auth/public-site-bridge?target=${encodeURIComponent(publicSiteUrl)}` : null;
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     const refreshOnlineGiving = () => {
@@ -108,8 +107,6 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
     }
   }
 
-  const can = (permission: string) => permissions.includes(permission);
-
   if (pathname === "/admin/login") {
     return <div className="min-h-screen bg-sand">{children}</div>;
   }
@@ -130,7 +127,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
             {!isPlatformAdmin && permissions.includes("CREATE_SUPPORT_TICKETS") && <Link className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href="/account/support">Support</Link>}
             <NotificationBell />
             {membershipLinked && <div className="relative"><button ref={membershipButtonRef} type="button" aria-expanded={membershipMenuOpen} aria-controls="admin-member-navigation" className="focus-ring rounded-full border border-coral px-3 py-2 text-sm font-semibold text-coral hover:bg-coral hover:text-white" onClick={() => setMembershipMenuOpen((current) => !current)}>My membership <span aria-hidden="true">{membershipMenuOpen ? "⌃" : "⌄"}</span></button>{membershipMenuOpen && mounted && createPortal(<div id="admin-member-navigation" className="fixed right-6 top-20 z-[100] grid min-w-56 gap-1 rounded-xl border border-ink/10 bg-white p-2 text-ink shadow-lg"><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership">Member center</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/profile">Member profile</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/prayer-requests">Prayer requests</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/scheduling">Scheduling</Link>{onlineGivingEnabled && <Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving">Online giving</Link>}<Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving-history">Giving history and pledges</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/documents">Documents and forms</Link></div>, document.body)}</div>}
-            {publicSiteUrl && <a className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href={publicSiteUrl}>View site</a>}
+            {publicSiteBridgeUrl && <a className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href={publicSiteBridgeUrl} target="_blank" rel="noopener noreferrer">View site</a>}
           </div>
         </Container>
       </header>
@@ -138,54 +135,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
       <div className={`flex w-full flex-col lg:flex-row ${isEditor ? "min-h-0 flex-1" : ""}`}>
         {!canAccessAdmin ? <div className="min-h-[calc(100vh-5rem)] flex-1">{pathname.startsWith("/admin") ? <Container className="py-16"><h1 className="font-serif text-3xl">Administration access required</h1><p className="mt-3 text-sm text-ink/60">This account can manage its Account page, but does not have access to Site Administration.</p></Container> : children}</div> : <>
         <aside className={`max-h-[2000px] overflow-hidden border-b border-ink/10 bg-white transition-[max-height,max-width,opacity,transform,width] duration-300 ease-out lg:max-w-72 lg:shrink-0 lg:border-b-0 lg:border-r ${isEditor ? "lg:min-h-0 lg:overflow-y-auto" : "lg:min-h-[calc(100vh-5rem)]"} ${isEditor && !editorChromeVisible ? "pointer-events-none max-h-0 -translate-x-2 opacity-0 lg:w-0 lg:max-w-0" : "translate-x-0 opacity-100 lg:w-72"}`}>
-          <nav aria-label="Admin navigation" className="grid gap-1 p-4 sm:p-6">
-            <Link className="focus-ring flex items-center gap-3 rounded-lg bg-mist px-4 py-3 font-semibold hover:bg-coral hover:text-white" href="/admin"><AdminNavIcon name="dashboard" />Admin Dashboard</Link>
-            <p className="mt-4 border-t border-ink/10 px-4 pt-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Site administration</p>
-            {publicWebsiteModuleEnabled && can("PUBLISH_PAGES") && <details open={pathname.startsWith("/admin/pages") || pathname.startsWith("/admin/media") || pathname.startsWith("/admin/navigation") || pathname.startsWith("/admin/theme")} className="group">
-              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="pages" />Public Website <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
-              <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
-                {can("EDIT_PAGES") && <><Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/pages">Pages</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/pages/add">Add a Page</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/media">Media Library</Link></>}
-                {can("MANAGE_MENUS") && <><Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/navigation">Navigation / Menus</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/navigation/locations">Locations</Link></>}
-                {can("MANAGE_SETTINGS") && <><Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/theme">Theme</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/theme/header">Header</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/theme/footer">Footer</Link></>}
-                {can("EDIT_PAGES") && <><Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/pages/widgets">Widgets</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/forms">Forms</Link></>}
-              </div>
-            </details>}
-            {can("MANAGE_USERS") && <details open={pathname.startsWith("/admin/security")} className="group">
-              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="security" />Security <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
-              <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/security">Security Groups</Link>
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/security/settings">Settings</Link>
-              </div>
-            </details>}
-            {can("MANAGE_USERS") && <details open={pathname.startsWith("/admin/users")} className="group">
-              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="users" />Users <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
-              <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/users/add">Add User</Link>
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/users">Edit Users</Link>
-              </div>
-            </details>}
-            {can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/site-settings") || pathname.startsWith("/admin/site-identity") || pathname.startsWith("/admin/report-automations") || pathname.startsWith("/admin/billing") || pathname.startsWith("/admin/domains")} className="group">
-              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="settings" />Site Settings <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
-              <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-identity">Site Identity</Link>
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings">General Settings</Link>
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/messaging">Messaging</Link>
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/announcements">Announcements</Link>
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/cron">Cron</Link>
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/report-automations">Report Automations</Link>
-              </div>
-            </details>}
-            {can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/billing") || pathname.startsWith("/admin/domains")} className="group">
-              <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="settings" />Billing and Domains <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
-              <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/billing">Billing</Link>
-                <Link className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/domains">Domains</Link>
-              </div>
-            </details>}
-            <p className="mt-4 border-t border-ink/10 px-4 pt-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Modules</p>
-            <ModuleNavigation />
-            <AdminLogout />
-          </nav>
+          <AdminNavigation permissions={permissions} publicWebsiteModuleEnabled={publicWebsiteModuleEnabled} />
         </aside>
         <div className={`min-h-0 min-w-0 flex-1 ${isEditor ? "overflow-hidden" : ""} ${isEditor && !editorChromeVisible ? "admin-editor-shell-expanded" : ""}`}>{children}</div>
         </>}

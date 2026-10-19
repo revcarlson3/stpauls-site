@@ -1,25 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
-import { clearAnnouncementSession } from "@/lib/announcement-session";
-import { ModuleNavigation } from "@/components/module-navigation";
+import { AdminNavigation } from "@/components/admin-navigation";
 
 export function AdminDrawer() {
   const [open, setOpen] = useState(false);
-  const [publicSiteEnabled, setPublicSiteEnabled] = useState(true);
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [publicWebsiteModuleEnabled, setPublicWebsiteModuleEnabled] = useState(false);
   const [launcherPosition, setLauncherPosition] = useState({ x: 0, y: 80 });
   const launcherRef = useRef<HTMLButtonElement>(null);
   const dragRef = useRef({ active: false, moved: false, startX: 0, startY: 0, originX: 0, originY: 0 });
-  const pathname = usePathname();
-  const [expanded, setExpanded] = useState<string | null>(() => pathname.startsWith("/admin/security") ? "security" : pathname.startsWith("/admin/navigation") ? "navigation" : pathname.startsWith("/admin/site-settings") || pathname.startsWith("/admin/site-identity") ? "site-settings" : pathname.startsWith("/admin/theme") ? "theme" : null);
-  const toggle = (section: string) => setExpanded((current) => current === section ? null : section);
-
   useEffect(() => {
+    void fetch("/api/account").then((response) => response.ok ? response.json() : null).then((value) => {
+      setPermissions(Array.isArray(value?.permissions) ? value.permissions : []);
+    }).catch(() => undefined);
     void fetch("/api/modules").then((response) => response.ok ? response.json() : null).then((value) => {
-      setPublicSiteEnabled(value?.publicSiteEnabled !== false);
+      setPublicWebsiteModuleEnabled(Array.isArray(value?.modules) && value.modules.some((module: { slug?: string }) => module.slug === "public-site"));
     }).catch(() => undefined);
   }, []);
 
@@ -121,23 +117,7 @@ export function AdminDrawer() {
           </div>
           <button type="button" aria-label="Close admin menu" className="focus-ring rounded-full px-2 py-1 text-xl text-ink/60 hover:text-coral" onClick={() => setOpen(false)}>×</button>
         </div>
-        <nav className="mt-8 grid gap-2" aria-label="Authenticated tools">
-          <Link href="/admin" className="focus-ring rounded-lg bg-mist px-4 py-3 font-semibold hover:bg-coral hover:text-white" onClick={() => setOpen(false)}>Admin Dashboard</Link>
-          {publicSiteEnabled && <><button type="button" className="focus-ring flex justify-between rounded-lg px-4 py-3 text-left font-semibold hover:bg-mist" onClick={() => toggle("pages")}>Pages <span>⌄</span></button>
-          {expanded === "pages" && <div className="ml-4 grid gap-1"><Link href="/admin/pages" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Pages</Link><Link href="/admin/pages/add" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Add a Page</Link></div>}</>}
-          <button type="button" className="focus-ring flex justify-between rounded-lg px-4 py-3 text-left font-semibold hover:bg-mist" onClick={() => toggle("security")}>Security <span>⌄</span></button>
-          {expanded === "security" && <div className="ml-4 grid gap-1"><Link href="/admin/security" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Security Groups</Link><Link href="/admin/security/settings" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Settings</Link></div>}
-          <button type="button" className="focus-ring flex justify-between rounded-lg px-4 py-3 text-left font-semibold hover:bg-mist" onClick={() => toggle("users")}>Users <span>⌄</span></button>
-          {expanded === "users" && <div className="ml-4 grid gap-1"><Link href="/admin/users/add" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Add User</Link><Link href="/admin/users" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Edit Users</Link></div>}
-          {publicSiteEnabled && <><button type="button" className="focus-ring flex justify-between rounded-lg px-4 py-3 text-left font-semibold hover:bg-mist" onClick={() => toggle("navigation")}>Navigation <span>⌄</span></button>
-          {expanded === "navigation" && <div className="ml-4 grid gap-1"><Link href="/admin/navigation" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Menus</Link><Link href="/admin/navigation/locations" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Locations</Link></div>}
-          <button type="button" className="focus-ring flex justify-between rounded-lg px-4 py-3 text-left font-semibold hover:bg-mist" onClick={() => toggle("theme")}>Theme <span>⌄</span></button>
-          {expanded === "theme" && <div className="ml-4 grid gap-1"><Link href="/admin/theme" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Visual theme</Link><Link href="/admin/theme/header" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Header</Link><Link href="/admin/theme/footer" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Footer</Link></div>}</>}
-          <button type="button" className="focus-ring flex justify-between rounded-lg px-4 py-3 text-left font-semibold hover:bg-mist" onClick={() => toggle("site-settings")}>Site Settings <span>⌄</span></button>
-          {expanded === "site-settings" && <div className="ml-4 grid gap-1"><Link href="/admin/site-identity" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Site Identity</Link><Link href="/admin/site-settings" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>General Settings</Link><Link href="/admin/site-settings/messaging" className="focus-ring rounded-lg px-4 py-2 text-sm hover:bg-mist" onClick={() => setOpen(false)}>Messaging</Link></div>}
-          <ModuleNavigation />
-          <button type="button" className="focus-ring rounded-lg px-4 py-3 text-left font-semibold text-coral hover:bg-sand" onClick={() => { clearAnnouncementSession(); void signOut({ callbackUrl: "/" }); }}>Logout</button>
-        </nav>
+        <AdminNavigation permissions={permissions} publicWebsiteModuleEnabled={publicWebsiteModuleEnabled} onNavigate={() => setOpen(false)} className="mt-8 grid gap-2" />
         <p className="absolute bottom-6 left-6 right-6 border-t border-ink/10 pt-4 text-xs leading-5 text-ink/50">This menu is visible only to authenticated users. Access is still enforced by the server.</p>
       </aside>
     </>
