@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import React, { type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { blockDefinitions, parseTableConfig } from "@/lib/blocks";
 import { listPublicWidgets, resolvePublicMenu, resolvePublicWidget } from "@/lib/content";
@@ -295,6 +295,10 @@ function responsiveStyle(props: Record<string, unknown>): CSSProperties {
   return style as CSSProperties;
 }
 
+function headlineClass(headingLevel: "h1" | "h2" | "h3" | "h4" | "h5" | "h6") {
+  return headingLevel === "h1" ? "text-5xl" : headingLevel === "h2" ? "text-4xl" : headingLevel === "h3" ? "text-3xl" : headingLevel === "h4" ? "text-2xl" : headingLevel === "h5" ? "text-xl" : "text-lg";
+}
+
 function carouselConfig(content: unknown) {
   try {
     const value = JSON.parse(typeof content === "string" ? content : "") as { slides?: CarouselSlide[]; autoplay?: boolean; interval?: string; controls?: boolean; indicators?: boolean };
@@ -481,7 +485,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
     }
     return (
       <BlockSurface key={block.id} as={surfaceType} labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}>
-        {block.type === "headline" ? (() => { const Heading = headingLevel; return <Heading id={headingId} style={textDecorationStyle(block.props ?? {})} className={`responsive-typography mt-2 font-serif text-3xl ${responsiveContentClass(block.props ?? {}, "title")}`}>{responsivePlainText(block.props ?? {}, "title", title)}</Heading>; })() : <h2 id={headingId} style={textDecorationStyle(block.props ?? {})} className={`responsive-typography mt-2 font-serif text-3xl ${responsiveContentClass(block.props ?? {}, "title")}`}>{responsivePlainText(block.props ?? {}, "title", title)}</h2>}
+        {block.type === "headline" ? (() => { const Heading = headingLevel; return <Heading id={headingId} style={{ ...responsiveStyle(block.props ?? {}), ...textDecorationStyle(block.props ?? {}) }} className={`responsive-typography mt-2 font-serif ${headlineClass(headingLevel)} ${responsiveContentClass(block.props ?? {}, "title")}`}>{responsivePlainText(block.props ?? {}, "title", title)}</Heading>; })() : <h2 id={headingId} style={{ ...responsiveStyle(block.props ?? {}), ...textDecorationStyle(block.props ?? {}) }} className={`responsive-typography mt-2 font-serif text-3xl ${responsiveContentClass(block.props ?? {}, "title")}`}>{responsivePlainText(block.props ?? {}, "title", title)}</h2>}
         {block.type !== "headline" && <p className="mt-3 text-ink/60">This {label.toLowerCase()} block is ready for its content fields.</p>}
         {menu && <nav aria-label={`${label} navigation`} className={`mt-5 border-t border-ink/10 pt-4 text-sm font-semibold ${block.type === "hero" ? "rounded-lg bg-sand/60 p-4" : ""}`}><MenuLinks items={menu.items} /></nav>}
       </BlockSurface>
