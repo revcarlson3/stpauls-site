@@ -1103,6 +1103,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   const layersDragOffset = useRef({ x: 0, y: 0 });
   const serverUpdatedAtRef = useRef<string | null>(null);
   const autosaveControllerRef = useRef<AbortController | null>(null);
+  const saveGenerationRef = useRef(0);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const { setNodeRef: setRootDropRef } = useDroppable({ id: "drop:root", data: { kind: "root" } });
 
@@ -1282,6 +1283,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
 
   async function saveDraft() {
     autosaveControllerRef.current?.abort();
+    const saveGeneration = ++saveGenerationRef.current;
     if (passwordProtected && passwordChanged && accessPassword.length < 8) {
       setMessage("Page passwords must be at least 8 characters.");
       return;
@@ -1296,6 +1298,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     }
     const body = await response.json().catch(() => ({}));
     if (!response.ok) { setMessage(body.error ?? "Unable to save."); return; }
+    if (saveGeneration !== saveGenerationRef.current) return;
     if (typeof body.updatedAt === "string") serverUpdatedAtRef.current = body.updatedAt;
     setPasswordProtected(body.passwordProtected === true);
     setPasswordChanged(false);
@@ -1321,6 +1324,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
       return;
     }
     setAutosaveState("saving");
+    const saveGeneration = ++saveGenerationRef.current;
     const controller = new AbortController();
     autosaveControllerRef.current = controller;
     const timer = window.setTimeout(() => {
@@ -1328,11 +1332,12 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
         .then(async (response) => {
           const result = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(result.error ?? "Autosave failed.");
+          if (saveGeneration !== saveGenerationRef.current) return;
           if (typeof result.updatedAt === "string") serverUpdatedAtRef.current = result.updatedAt;
           window.localStorage.removeItem(recoveryKey);
           setAutosaveState("saved");
         })
-        .catch((error: Error) => { if (error.name !== "AbortError") { setAutosaveState("error"); setMessage(error.message); } });
+        .catch((error: Error) => { if (error.name !== "AbortError" && saveGeneration === saveGenerationRef.current) { setAutosaveState("error"); setMessage(error.message); } });
     }, 900);
     return () => {
       window.clearTimeout(timer);
