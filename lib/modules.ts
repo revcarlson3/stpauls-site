@@ -29,12 +29,20 @@ export async function getEnabledModuleSlugs() {
   return Array.isArray(enabled) ? enabled.filter((slug): slug is string => typeof slug === "string") : [];
 }
 
-export async function isPublicSiteEnabled() {
+export async function isPublicSiteEnabled(churchId?: string | null) {
+  if (churchId) {
+    const church = await db.church.findUnique({ where: { id: churchId }, select: { publicSiteEnabled: true } });
+    return church?.publicSiteEnabled !== false;
+  }
   const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { publicSiteEnabled: true } });
   return settings?.publicSiteEnabled !== false;
 }
 
-export async function isMaintenanceModeEnabled() {
+export async function isMaintenanceModeEnabled(churchId?: string | null) {
+  if (churchId) {
+    const church = await db.church.findUnique({ where: { id: churchId }, select: { maintenanceMode: true } });
+    return church?.maintenanceMode === true;
+  }
   const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { maintenanceMode: true } });
   return settings?.maintenanceMode === true;
 }

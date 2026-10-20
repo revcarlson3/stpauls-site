@@ -8,13 +8,15 @@ import { hasPageAccess } from "@/lib/page-access";
 import { isPublicSiteEnabled } from "@/lib/modules";
 import { headers } from "next/headers";
 import { isPlatformHost } from "@/lib/platform-host";
+import { resolvePublicTenant } from "@/lib/platform-domain";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   if (isPlatformHost(headers().get("host"))) return <PlatformLandingPage />;
-  if (!(await isPublicSiteEnabled())) redirect("/admin/login");
-  const homePage = await db.page.findFirst({ where: { isHome: true, OR: [{ status: "PUBLISHED", OR: [{ publishAt: null }, { publishAt: { lte: new Date() } }] }, { status: "DRAFT", publishAt: { lte: new Date() } }] }, select: { id: true, slug: true, title: true, blocks: true, pageThemeFamily: true, pageThemeWidth: true, showHeader: true, showFooter: true, fullScreen: true, passwordHash: true } });
+  const tenant = await resolvePublicTenant(headers().get("host"));
+  if (!tenant || !(await isPublicSiteEnabled(tenant.id))) redirect("/admin/login");
+  const homePage = await db.page.findFirst({ where: { churchId: tenant.id, isHome: true, OR: [{ status: "PUBLISHED", OR: [{ publishAt: null }, { publishAt: { lte: new Date() } }] }, { status: "DRAFT", publishAt: { lte: new Date() } }] }, select: { id: true, slug: true, title: true, blocks: true, pageThemeFamily: true, pageThemeWidth: true, showHeader: true, showFooter: true, fullScreen: true, passwordHash: true } });
   if (homePage && !hasPageAccess(homePage.id, homePage.passwordHash)) return <PagePasswordGate pageId={homePage.id} title={homePage.title} />;
   if (homePage) return <PublishedPageShell title={homePage.title} blocks={homePage.blocks} pageId={homePage.id} pageSlug={homePage.slug} pageThemeFamily={homePage.pageThemeFamily} pageThemeWidth={homePage.pageThemeWidth} editHref={`/admin/editor/${homePage.id}`} showHeader={homePage.showHeader} showFooter={homePage.showFooter} fullScreen={homePage.fullScreen} />;
   return (

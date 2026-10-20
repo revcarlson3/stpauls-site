@@ -14,6 +14,10 @@ export function canAccessTenant(
   if (!requestedChurchId || requestedChurchId === currentChurchId) return true;
   return user.isPlatformAdmin;
 }
+
+export function tenantOwnsResource(ownerChurchId: string | null | undefined, resolvedChurchId: string | null | undefined) {
+  return Boolean(ownerChurchId && resolvedChurchId && ownerChurchId === resolvedChurchId);
+}
 import { getCurrentUser } from "@/lib/auth";
 
 export async function requireCurrentChurch(options: { allowUnsubscribed?: boolean } = {}) {

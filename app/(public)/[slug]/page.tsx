@@ -5,12 +5,15 @@ import { PublishedPageShell } from "@/components/page-renderer";
 import { PagePasswordGate } from "@/components/page-password-gate";
 import { hasPageAccess } from "@/lib/page-access";
 import { isPublicSiteEnabled } from "@/lib/modules";
+import { headers } from "next/headers";
+import { resolvePublicTenant } from "@/lib/platform-domain";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const tenant = await resolvePublicTenant(headers().get("host"));
   const page = await db.page.findFirst({
-    where: { slug: params.slug, OR: [{ status: "PUBLISHED", OR: [{ publishAt: null }, { publishAt: { lte: new Date() } }] }, { status: "DRAFT", publishAt: { lte: new Date() } }] },
+    where: { churchId: tenant?.id ?? "", slug: params.slug, OR: [{ status: "PUBLISHED", OR: [{ publishAt: null }, { publishAt: { lte: new Date() } }] }, { status: "DRAFT", publishAt: { lte: new Date() } }] },
     select: { title: true, seoTitle: true, seoDescription: true, seoKeywords: true, passwordHash: true }
   });
   if (!page) return {};
@@ -23,9 +26,10 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export default async function PublishedPage({ params }: { params: { slug: string } }) {
-  if (!(await isPublicSiteEnabled())) redirect("/admin/login");
+  const tenant = await resolvePublicTenant(headers().get("host"));
+  if (!tenant || !(await isPublicSiteEnabled(tenant.id))) redirect("/admin/login");
   const page = await db.page.findFirst({
-    where: { slug: params.slug, OR: [{ status: "PUBLISHED", OR: [{ publishAt: null }, { publishAt: { lte: new Date() } }] }, { status: "DRAFT", publishAt: { lte: new Date() } }] },
+    where: { churchId: tenant.id, slug: params.slug, OR: [{ status: "PUBLISHED", OR: [{ publishAt: null }, { publishAt: { lte: new Date() } }] }, { status: "DRAFT", publishAt: { lte: new Date() } }] },
     select: { id: true, slug: true, title: true, blocks: true, pageThemeFamily: true, pageThemeWidth: true, showHeader: true, showFooter: true, fullScreen: true, passwordHash: true }
   });
 

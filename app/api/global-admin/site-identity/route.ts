@@ -20,7 +20,7 @@ export async function GET() {
       where: { id: context.church!.id },
       select: { name: true, slug: true, siteUrl: true, tagline: true, addressStreet: true, city: true, state: true, postalCode: true, phone: true, email: true, taxId: true, enabledModules: true }
     }),
-    db.securitySettings.findUnique({ where: { id: 1 }, select: { siteName: true, siteUrl: true, siteTagline: true, siteAddressStreet: true, siteAddressCity: true, siteAddressState: true, siteAddressZip: true, sitePhone: true, siteEmail: true, siteTaxId: true } })
+    db.siteIdentity.findUnique({ where: { churchId: context.church!.id } })
   ]);
   if (!church) return NextResponse.json({ error: "The selected site is unavailable." }, { status: 404 });
   return NextResponse.json({
@@ -61,10 +61,10 @@ export async function PATCH(request: Request) {
       where: { id: churchId },
       data: { name: identity.name, siteUrl: identity.url, tagline: identity.tagline, addressStreet: identity.addressStreet, city: identity.city || null, state: identity.state || null, postalCode: identity.postalCode || null, phone: identity.phone, email: identity.email, taxId: identity.taxId, enabledModules: identity.enabledModules }
     }),
-    db.securitySettings.upsert({
-      where: { id: 1 },
+    db.siteIdentity.upsert({
+      where: { churchId },
       update: { siteName: identity.name, siteUrl: identity.url, siteTagline: identity.tagline, siteAddressStreet: identity.addressStreet, siteAddressCity: identity.city, siteAddressState: identity.state, siteAddressZip: identity.postalCode, sitePhone: identity.phone, siteEmail: identity.email, siteTaxId: identity.taxId },
-      create: { id: 1, siteName: identity.name, siteUrl: identity.url, siteTagline: identity.tagline, siteAddressStreet: identity.addressStreet, siteAddressCity: identity.city, siteAddressState: identity.state, siteAddressZip: identity.postalCode, sitePhone: identity.phone, siteEmail: identity.email, siteTaxId: identity.taxId }
+      create: { churchId, siteName: identity.name, siteUrl: identity.url, siteTagline: identity.tagline, siteAddressStreet: identity.addressStreet, siteAddressCity: identity.city, siteAddressState: identity.state, siteAddressZip: identity.postalCode, sitePhone: identity.phone, siteEmail: identity.email, siteTaxId: identity.taxId }
     })
   ]);
   const changedFields = Object.entries({

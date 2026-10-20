@@ -12,6 +12,7 @@ import { AnnouncementTicker } from "@/components/announcement-ticker";
 import { headers } from "next/headers";
 import { isPlatformHost } from "@/lib/platform-host";
 import { resolvePublicTenant } from "@/lib/platform-domain";
+import { PublicSitePreviewRefresh } from "@/components/public-site-preview-refresh";
 
 export default async function PublicLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const host = headers().get("host");
@@ -32,6 +33,7 @@ export default async function PublicLayout({ children }: Readonly<{ children: Re
   const integrated = theme.family === "bootstrap";
   return (
     <div className="flex min-h-screen flex-col">
+      <PublicSitePreviewRefresh />
       {user?.canAccessAdmin && <AdminDrawer />}
       <AnnouncementTicker publicOnly />
       {integrated ? <main className="site-public-frame site-public-frame-integrated site-section flex min-h-screen flex-col"><SiteHeader /><div className="flex-1">{children}</div><SiteFooter /></main> : <>

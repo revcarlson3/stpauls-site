@@ -38,8 +38,8 @@ function blocksValue(blocks: PageBlock[]): JsonValue[] {
 }
 
 export async function listPages() {
-  await requirePermission("EDIT_PAGES");
-  return db.page.findMany({ orderBy: [{ isHome: "desc" }, { title: "asc" }] });
+  const user = await requirePermission("EDIT_PAGES");
+  return db.page.findMany({ where: user.churchId ? { churchId: user.churchId } : undefined, orderBy: [{ isHome: "desc" }, { title: "asc" }] });
 }
 
 export async function listWidgets() {
@@ -89,9 +89,12 @@ export async function deleteWidget(id: string) {
 
 export async function createPage(input: PageInputLike) {
   const author = await requirePermission("EDIT_PAGES");
+  if (!author.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const churchId = author.churchId;
   await validateMenu(input.menuId);
   return db.page.create({
     data: {
+      churchId,
       title: input.title,
       seoTitle: input.seoTitle || null,
       seoDescription: input.seoDescription || null,
@@ -115,6 +118,8 @@ export async function createPage(input: PageInputLike) {
 
 export async function updatePage(id: string, input: PageInputLike, revisionKind: RevisionKind = "MANUAL") {
   const author = await requirePermission("EDIT_PAGES");
+  if (!author.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const churchId = author.churchId;
   await validateMenu(input.menuId);
   const latestRevision = revisionKind === "AUTOSAVE" ? await db.pageRevision.findFirst({ where: { pageId: id, kind: "AUTOSAVE" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }) : null;
   const shouldRecordRevision = revisionKind === "MANUAL" || !latestRevision || Date.now() - latestRevision.createdAt.getTime() >= 5 * 60 * 1000;
@@ -122,13 +127,13 @@ export async function updatePage(id: string, input: PageInputLike, revisionKind:
   return db.$transaction(async (tx) => {
     const result = await tx.page.updateMany({
       where: {
-        id,
+        id, churchId,
         ...(input.expectedUpdatedAt ? { updatedAt: new Date(input.expectedUpdatedAt) } : {})
       },
       data: { ...pageData(input), ...passwordData }
     });
     if (result.count === 0) {
-      const exists = await tx.page.findUnique({ where: { id }, select: { id: true } });
+      const exists = await tx.page.findFirst({ where: { id, churchId }, select: { id: true } });
       if (!exists) throw new Error("Page not found.");
       throw new Error("Page conflict.");
     }
@@ -138,9 +143,9 @@ export async function updatePage(id: string, input: PageInputLike, revisionKind:
 }
 
 export async function listPageRevisions(id: string) {
-  await requirePermission("EDIT_PAGES");
+  const user = await requirePermission("EDIT_PAGES");
   return db.pageRevision.findMany({
-    where: { pageId: id },
+    where: { pageId: id, ...(user.churchId ? { page: { churchId: user.churchId } } : {}) },
     orderBy: { createdAt: "desc" },
     take: 50,
     select: { id: true, title: true, kind: true, createdAt: true, author: { select: { name: true } }, snapshot: true, blocks: true }
@@ -149,10 +154,12 @@ export async function listPageRevisions(id: string) {
 
 export async function restorePageRevision(id: string, revisionId: string, expectedUpdatedAt?: string) {
   const author = await requirePermission("EDIT_PAGES");
-  const revision = await db.pageRevision.findFirst({ where: { id: revisionId, pageId: id } });
+  if (!author.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const revision = await db.pageRevision.findFirst({ where: { id: revisionId, pageId: id, page: { churchId: author.churchId } } });
   if (!revision) throw new Error("Revision not found.");
   const snapshot = revision.snapshot && typeof revision.snapshot === "object" && !Array.isArray(revision.snapshot) ? revision.snapshot as Record<string, unknown> : null;
-  const page = await db.page.findUnique({ where: { id }, select: { title: true, slug: true, blocks: true, menuId: true, seoTitle: true, seoDescription: true, seoKeywords: true, publishAt: true, pageThemeFamily: true, pageThemeWidth: true, showHeader: true, showFooter: true, fullScreen: true, updatedAt: true } });
+  const churchId = author.churchId;
+  const page = await db.page.findFirst({ where: { id, churchId }, select: { title: true, slug: true, blocks: true, menuId: true, seoTitle: true, seoDescription: true, seoKeywords: true, publishAt: true, pageThemeFamily: true, pageThemeWidth: true, showHeader: true, showFooter: true, fullScreen: true, updatedAt: true } });
   if (!page) throw new Error("Page not found.");
   if (expectedUpdatedAt && page.updatedAt.getTime() !== new Date(expectedUpdatedAt).getTime()) throw new Error("Page conflict.");
   const savedValue = <T>(key: string, fallback: T): T => snapshot && Object.prototype.hasOwnProperty.call(snapshot, key) ? snapshot[key] as T : fallback;
@@ -188,38 +195,43 @@ export async function restorePageRevision(id: string, revisionId: string, expect
   };
   return db.$transaction(async (tx) => {
     await tx.pageRevision.create({ data: { ...revisionData(currentInput, author, "MANUAL"), pageId: id } });
-    const result = await tx.page.updateMany({ where: { id, updatedAt: page.updatedAt }, data: pageData(input) });
+    const result = await tx.page.updateMany({ where: { id, churchId, updatedAt: page.updatedAt }, data: pageData(input) });
     if (result.count === 0) throw new Error("Page conflict.");
     return tx.page.findUniqueOrThrow({ where: { id } });
   });
 }
 
 export async function getPage(id: string) {
-  await requirePermission("EDIT_PAGES");
-  return db.page.findUnique({ where: { id } });
+  const user = await requirePermission("EDIT_PAGES");
+  return db.page.findFirst({ where: { id, ...(user.churchId ? { churchId: user.churchId } : {}) } });
 }
 
 export async function publishPage(id: string) {
   const author = await requirePermission("PUBLISH_PAGES");
-  return db.page.update({
-    where: { id },
+  if (!author.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const churchId = author.churchId;
+  await db.page.updateMany({
+    where: { id, churchId },
     data: { status: "PUBLISHED", publishedAt: new Date(), publishedById: author.id }
   });
+  return db.page.findFirst({ where: { id, churchId } });
 }
 
 export async function archivePage(id: string) {
-  await requirePermission("EDIT_PAGES");
-  return db.page.update({ where: { id }, data: { status: "ARCHIVED" } });
+  const user = await requirePermission("EDIT_PAGES");
+  return db.page.updateMany({ where: { id, ...(user.churchId ? { churchId: user.churchId } : {}) }, data: { status: "ARCHIVED" } });
 }
 
 export async function restorePage(id: string) {
-  await requirePermission("EDIT_PAGES");
-  return db.page.update({ where: { id }, data: { status: "DRAFT", publishedAt: null, publishedById: null } });
+  const user = await requirePermission("EDIT_PAGES");
+  return db.page.updateMany({ where: { id, ...(user.churchId ? { churchId: user.churchId } : {}) }, data: { status: "DRAFT", publishedAt: null, publishedById: null } });
 }
 
 export async function duplicatePage(id: string) {
   const author = await requirePermission("EDIT_PAGES");
-  const source = await db.page.findUnique({ where: { id } });
+  if (!author.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const churchId = author.churchId;
+  const source = await db.page.findFirst({ where: { id, churchId } });
   if (!source) throw new Error("Page not found.");
   const baseSlug = `${source.slug}-copy`;
   let slug = baseSlug;
@@ -231,6 +243,7 @@ export async function duplicatePage(id: string) {
   return db.page.create({
     data: {
       title: `${source.title} (Copy)`,
+      churchId,
       slug,
       seoTitle: source.seoTitle,
       seoDescription: source.seoDescription,
@@ -250,15 +263,19 @@ export async function duplicatePage(id: string) {
 }
 
 export async function deletePage(id: string) {
-  await requirePermission("EDIT_PAGES");
-  return db.page.delete({ where: { id } });
+  const user = await requirePermission("EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const churchId = user.churchId;
+  return db.page.deleteMany({ where: { id, churchId } });
 }
 
 export async function setHomePage(id: string) {
-  await requirePermission("EDIT_PAGES");
+  const user = await requirePermission("EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const churchId = user.churchId;
   return db.$transaction(async (tx) => {
-    await tx.page.updateMany({ data: { isHome: false } });
-    return tx.page.update({ where: { id }, data: { isHome: true } });
+    await tx.page.updateMany({ where: { churchId }, data: { isHome: false } });
+    return tx.page.updateMany({ where: { id, churchId }, data: { isHome: true } });
   });
 }
 
@@ -363,8 +380,8 @@ export async function deleteMenu(id: string) {
 }
 
 export async function listMenuPageOptions() {
-  await requirePermission("MANAGE_MENUS");
-  return db.page.findMany({ where: { status: "PUBLISHED" }, select: { id: true, title: true, slug: true }, orderBy: { title: "asc" } });
+  const user = await requirePermission("MANAGE_MENUS");
+  return db.page.findMany({ where: { status: "PUBLISHED", ...(user.churchId ? { churchId: user.churchId } : {}) }, select: { id: true, title: true, slug: true }, orderBy: { title: "asc" } });
 }
 
 const defaultMenuLocations = [

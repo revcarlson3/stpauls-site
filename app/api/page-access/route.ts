@@ -2,6 +2,8 @@ import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createPageAccessToken, pageAccessCookieName } from "@/lib/page-access";
+import { headers } from "next/headers";
+import { resolvePublicTenant } from "@/lib/platform-domain";
 
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
@@ -22,8 +24,9 @@ export async function POST(request: Request) {
   if (rate && rate.resetAt > now && rate.count >= 10) return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
   attempts.set(key, rate && rate.resetAt > now ? { ...rate, count: rate.count + 1 } : { count: 1, resetAt: now + 15 * 60 * 1000 });
 
+  const tenant = await resolvePublicTenant(headers().get("host"));
   const page = await db.page.findFirst({
-    where: { id: input.pageId, OR: [{ status: "PUBLISHED", OR: [{ publishAt: null }, { publishAt: { lte: new Date() } }] }, { status: "DRAFT", publishAt: { lte: new Date() } }] },
+    where: { id: input.pageId, churchId: tenant?.id ?? "", OR: [{ status: "PUBLISHED", OR: [{ publishAt: null }, { publishAt: { lte: new Date() } }] }, { status: "DRAFT", publishAt: { lte: new Date() } }] },
     select: { id: true, passwordHash: true }
   });
   if (!page?.passwordHash || !(await bcrypt.compare(input.password, page.passwordHash))) {

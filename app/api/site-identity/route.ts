@@ -6,11 +6,13 @@ import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import { siteIdentityAssetUrl } from "@/lib/site-identity";
+import { requireCurrentChurch } from "@/lib/tenant";
 
 export async function GET() {
   try {
-    const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { siteName: true, siteUrl: true, siteTagline: true, siteAddressStreet: true, siteAddressCity: true, siteAddressState: true, siteAddressZip: true, sitePhone: true, siteEmail: true, siteTaxId: true, siteLogoUrl: true, siteLogoLightUrl: true, siteLogoDarkUrl: true, siteFaviconUrl: true, siteShowTitle: true, siteShowTagline: true, siteShowLogo: true } });
-    return NextResponse.json({ siteName: settings?.siteName ?? "St. Paul's", siteUrl: settings?.siteUrl ?? "", siteTagline: settings?.siteTagline ?? "A place to belong.", siteAddressStreet: settings?.siteAddressStreet ?? "", siteAddressCity: settings?.siteAddressCity ?? "", siteAddressState: settings?.siteAddressState ?? "", siteAddressZip: settings?.siteAddressZip ?? "", sitePhone: settings?.sitePhone ?? "", siteEmail: settings?.siteEmail ?? "", siteTaxId: settings?.siteTaxId ?? "", siteLogoUrl: siteIdentityAssetUrl(settings?.siteLogoUrl), siteLogoLightUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl), siteLogoDarkUrl: siteIdentityAssetUrl(settings?.siteLogoDarkUrl), siteFaviconUrl: siteIdentityAssetUrl(settings?.siteFaviconUrl), siteFaviconConfigured: Boolean(settings?.siteFaviconUrl), siteShowTitle: settings?.siteShowTitle ?? true, siteShowTagline: settings?.siteShowTagline ?? true, siteShowLogo: settings?.siteShowLogo ?? false });
+    const { church } = await requireCurrentChurch();
+    const settings = await db.siteIdentity.findUnique({ where: { churchId: church.id } });
+    return NextResponse.json({ siteName: settings?.siteName ?? church.name, siteUrl: settings?.siteUrl ?? church.siteUrl, siteTagline: settings?.siteTagline ?? church.tagline, siteAddressStreet: settings?.siteAddressStreet ?? church.addressStreet, siteAddressCity: settings?.siteAddressCity ?? church.city ?? "", siteAddressState: settings?.siteAddressState ?? church.state ?? "", siteAddressZip: settings?.siteAddressZip ?? church.postalCode ?? "", sitePhone: settings?.sitePhone ?? church.phone, siteEmail: settings?.siteEmail ?? church.email, siteTaxId: settings?.siteTaxId ?? church.taxId, siteLogoUrl: siteIdentityAssetUrl(settings?.siteLogoUrl, church.id), siteLogoLightUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl, church.id), siteLogoDarkUrl: siteIdentityAssetUrl(settings?.siteLogoDarkUrl, church.id), siteFaviconUrl: siteIdentityAssetUrl(settings?.siteFaviconUrl, church.id), siteFaviconConfigured: Boolean(settings?.siteFaviconUrl), siteShowTitle: settings?.siteShowTitle ?? true, siteShowTagline: settings?.siteShowTagline ?? true, siteShowLogo: settings?.siteShowLogo ?? false });
   } catch {
     return NextResponse.json({ error: "Unable to load site identity." }, { status: 403 });
   }
@@ -24,7 +26,8 @@ export async function PATCH(request: Request) {
     }
     try {
       await requirePermission("MANAGE_SETTINGS");
-      await db.securitySettings.upsert({ where: { id: 1 }, update: { siteFaviconUrl: input.siteFaviconUrl }, create: { id: 1, siteFaviconUrl: input.siteFaviconUrl } });
+      const { church } = await requireCurrentChurch();
+      await db.siteIdentity.upsert({ where: { churchId: church.id }, update: { siteFaviconUrl: input.siteFaviconUrl }, create: { churchId: church.id, siteFaviconUrl: input.siteFaviconUrl } });
       return NextResponse.json({ saved: true });
     } catch (error) {
       return apiErrorResponse(error, "Unable to save favicon.");
@@ -40,14 +43,8 @@ export async function PATCH(request: Request) {
       ["siteUrl", input.siteUrl.trim()],
       ...["siteAddressStreet", "siteAddressCity", "siteAddressState", "siteAddressZip", "sitePhone", "siteEmail", "siteTaxId"].map((field) => [field, typeof input[field] === "string" ? input[field].trim() : ""])
     ]);
-    await db.securitySettings.upsert({
-      where: { id: 1 },
-      update: identity,
-      create: {
-        id: 1, ...identity
-      }
-    });
     if (user.churchId) {
+      await db.siteIdentity.upsert({ where: { churchId: user.churchId }, update: identity, create: { churchId: user.churchId, ...identity } });
       await db.church.update({
         where: { id: user.churchId },
         data: { name: identity.siteName, siteUrl: identity.siteUrl, addressStreet: identity.siteAddressStreet, city: identity.siteAddressCity || null, state: identity.siteAddressState || null, postalCode: identity.siteAddressZip || null, phone: identity.sitePhone, email: identity.siteEmail, taxId: identity.siteTaxId }
@@ -70,10 +67,11 @@ export async function POST(request: Request) {
     }
 
     const extension = asset.name.includes(".") ? `.${asset.name.split(".").pop()?.toLowerCase()}` : ".bin";
-    const relativePath = `/uploads/site-identity/${kind}-${randomUUID()}${extension}`;
-    await mkdir(path.join(process.cwd(), "public", "uploads", "site-identity"), { recursive: true });
+    const { church } = await requireCurrentChurch();
+    const relativePath = `/uploads/site-identity/${church.id}/${kind}-${randomUUID()}${extension}`;
+    await mkdir(path.join(process.cwd(), "public", "uploads", "site-identity", church.id), { recursive: true });
     await writeFile(path.join(process.cwd(), "public", relativePath), Buffer.from(await asset.arrayBuffer()));
-    return NextResponse.json({ url: siteIdentityAssetUrl(relativePath) });
+    return NextResponse.json({ url: siteIdentityAssetUrl(relativePath, church.id) });
   } catch (error) {
     return apiErrorResponse(error, "Unable to upload site identity asset.");
   }
@@ -84,11 +82,12 @@ export async function DELETE(request: Request) {
     await requirePermission("MANAGE_SETTINGS");
     const input = await request.json();
     if (!input || !["logo", "logo-light", "logo-dark", "favicon"].includes(input.kind)) return NextResponse.json({ error: "Invalid identity asset." }, { status: 400 });
-    const current = await db.securitySettings.findUnique({ where: { id: 1 }, select: { siteLogoUrl: true, siteLogoLightUrl: true, siteLogoDarkUrl: true, siteFaviconUrl: true } });
+    const { church } = await requireCurrentChurch();
+    const current = await db.siteIdentity.findUnique({ where: { churchId: church.id }, select: { siteLogoUrl: true, siteLogoLightUrl: true, siteLogoDarkUrl: true, siteFaviconUrl: true } });
     const field = input.kind === "logo" ? "siteLogoUrl" : input.kind === "logo-light" ? "siteLogoLightUrl" : input.kind === "logo-dark" ? "siteLogoDarkUrl" : "siteFaviconUrl";
     const currentPath = input.kind === "logo" ? current?.siteLogoUrl : input.kind === "logo-light" ? current?.siteLogoLightUrl : input.kind === "logo-dark" ? current?.siteLogoDarkUrl : current?.siteFaviconUrl;
     if (currentPath?.startsWith("/uploads/site-identity/")) await unlink(path.join(process.cwd(), "public", currentPath)).catch(() => undefined);
-    await db.securitySettings.update({ where: { id: 1 }, data: { [field]: "", ...(input.kind === "logo-light" ? { siteLogoUrl: "" } : {}) } });
+    await db.siteIdentity.update({ where: { churchId: church.id }, data: { [field]: "", ...(input.kind === "logo-light" ? { siteLogoUrl: "" } : {}) } });
     return NextResponse.json({ removed: true });
   } catch (error) {
     return apiErrorResponse(error, "Unable to remove site identity asset.");

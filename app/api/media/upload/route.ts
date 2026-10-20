@@ -3,6 +3,11 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
 import { allowedMediaMimeTypes, inferMediaMimeType, parseMediaByteRange, readMediaFile, saveUploadedMediaFile } from "@/lib/media";
+import { db } from "@/lib/db";
+import { headers as requestHeaders } from "next/headers";
+import { getCurrentUser } from "@/lib/auth";
+import { resolvePublicTenant } from "@/lib/platform-domain";
+import { tenantOwnsResource } from "@/lib/tenant";
 
 export async function POST(request: Request) {
   try {
@@ -25,7 +30,14 @@ export async function GET(request: Request) {
   const filename = new URL(request.url).searchParams.get("file") ?? "";
   if (!/^[a-zA-Z0-9-]+\.(png|jpe?g|webp|gif|mp4|webm|mov|pdf|docx?|xlsx?|pptx?|rtf|txt|csv|xml|json|zip|rar|7z|gz|odt|ods|odp)$/.test(filename)) return NextResponse.json({ error: "Invalid media file." }, { status: 400 });
   try {
-    const file = await readMediaFile(filename);
+    const requestedTenant = new URL(request.url).searchParams.get("tenant");
+    const publicTenant = await resolvePublicTenant(requestHeaders().get("host"));
+    const user = await getCurrentUser();
+    const churchId = publicTenant?.id ?? user?.churchId;
+    if (!churchId || (requestedTenant && !tenantOwnsResource(requestedTenant, churchId))) return NextResponse.json({ error: "Image not found." }, { status: 404 });
+    const asset = await db.mediaAsset.findFirst({ where: { storedFilename: filename, churchId }, select: { churchId: true, url: true } });
+    if (!asset) return NextResponse.json({ error: "Image not found." }, { status: 404 });
+    const file = await readMediaFile(filename, churchId, asset.url.startsWith("/api/media/upload?file="));
     const contentType = inferMediaMimeType(filename);
     const range = parseMediaByteRange(request.headers.get("range"), file.byteLength);
     if (range === null) {

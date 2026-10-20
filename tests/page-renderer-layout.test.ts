@@ -41,4 +41,30 @@ describe("public page headline layout", () => {
     expect(className).toContain("p-0");
     expect(className).not.toContain("p-5");
   });
+
+  it("keeps image dimensions and margins on the live block wrapper", async () => {
+    const markup = renderToStaticMarkup(await PageRenderer({
+      blocks: [
+        {
+          id: "image-1",
+          type: "image",
+          props: {
+            imageUrl: "/api/media/upload?file=image.png",
+            widthValue: "75",
+            widthUnit: "%",
+            heightValue: "240",
+            heightUnit: "px",
+            marginLeft: "12",
+            marginBottom: "8",
+          },
+        },
+      ],
+    }));
+
+    expect(markup).toContain("width:75%");
+    expect(markup).toContain("height:240px");
+    expect(markup).toContain("margin-left:12px");
+    expect(markup).toContain("margin-bottom:8px");
+    expect(markup).toContain("box-sizing:border-box");
+  });
 });

@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { mkdir, readdir, readFile, stat, unlink, writeFile } from "fs/promises";
+import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 import sharp from "sharp";
 import exifr from "exifr";
@@ -42,12 +42,18 @@ const extensionMimeTypes = new Map([
 
 export const allowedMediaMimeTypes = new Set(extensionMimeTypes.values());
 
-export function mediaServeUrl(filename: string) {
-  return `/api/media/upload?file=${encodeURIComponent(filename)}`;
+export function mediaServeUrl(filename: string, churchId?: string) {
+  return `/api/media/upload?${churchId ? `tenant=${encodeURIComponent(churchId)}&` : ""}file=${encodeURIComponent(filename)}`;
 }
 
-export function mediaAbsolutePath(filename: string) {
-  return path.join(mediaDirectory, filename);
+export function mediaAbsolutePath(filename: string, churchId?: string) {
+  const safeFilename = filename.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (churchId && !safeFilename.includes("/")) return path.join(mediaDirectory, churchId, safeFilename);
+  return path.join(mediaDirectory, safeFilename);
+}
+
+function isLegacyMediaUrl(url: string) {
+  return url.startsWith("/api/media/upload?file=");
 }
 
 export function inferMediaMimeType(filename: string) {
@@ -87,6 +93,7 @@ export function mediaTypeFromMimeType(mimeType: string): Exclude<MediaFilter, "a
 }
 
 export async function createUploadedMediaAsset(input: {
+  churchId: string;
   originalName: string;
   storedFilename: string;
   mimeType: string;
@@ -98,7 +105,7 @@ export async function createUploadedMediaAsset(input: {
   description?: string | null;
   tags?: string[];
 }) {
-  const buffer = await readFile(mediaAbsolutePath(input.storedFilename)).catch(() => null);
+  const buffer = await readFile(mediaAbsolutePath(input.storedFilename, input.churchId)).catch(() => null);
   const dimensions = input.mimeType.startsWith("image/") && buffer ? await imageDimensions(buffer) : {};
   const embedded = input.mimeType.startsWith("image/") && buffer ? await embeddedImageMetadata(buffer) : {};
   const folder = folderForDate(new Date());
@@ -106,7 +113,8 @@ export async function createUploadedMediaAsset(input: {
     data: {
       originalName: input.originalName,
       storedFilename: input.storedFilename,
-      url: mediaServeUrl(input.storedFilename),
+      churchId: input.churchId,
+      url: mediaServeUrl(input.storedFilename, input.churchId),
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,
       folder,
@@ -123,8 +131,9 @@ export async function createUploadedMediaAsset(input: {
 }
 
 export async function listMediaAssets(input: { search?: string | null; type?: MediaFilter; linked?: MediaLinkedFilter; folder?: string | null; generated?: "all" | "generated" | "standard"; permission?: "EDIT_PAGES" | "MANAGE_SETTINGS" }) {
-  await requirePermission(input.permission ?? "EDIT_PAGES");
-  await syncLegacyMediaAssets();
+  const user = await requirePermission(input.permission ?? "EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  await syncLegacyMediaAssets(user.churchId);
   const search = input.search?.trim() ?? "";
   const filters: Prisma.MediaAssetWhereInput[] = [];
   const typeWhere = mediaTypeWhere(input.type ?? "all");
@@ -148,18 +157,19 @@ export async function listMediaAssets(input: { search?: string | null; type?: Me
     });
   }
   const assets = await db.mediaAsset.findMany({
-    where: filters.length ? { AND: filters } : undefined,
+    where: { churchId: user.churchId, ...(filters.length ? { AND: filters } : {}) },
     include: mediaInclude,
     orderBy: [{ createdAt: "desc" }, { originalName: "asc" }]
   });
-  const linkedPages = await linkedPagesByUrl();
+  const linkedPages = await linkedPagesByUrl(user.churchId);
   return assets.map((asset) => serializeMediaAsset(asset, linkedPages.get(asset.url) ?? [])).filter((asset) => input.linked === "linked" ? asset.linkedPages.length > 0 : input.linked === "unlinked" ? asset.linkedPages.length === 0 : true);
 }
 
 export async function backfillEmbeddedMediaMetadata() {
-  await requirePermission("EDIT_PAGES");
+  const user = await requirePermission("EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
   const assets = await db.mediaAsset.findMany({
-    where: {
+    where: { churchId: user.churchId,
       mimeType: { startsWith: "image/" },
       OR: [{ caption: null }, { description: null }]
     },
@@ -167,7 +177,7 @@ export async function backfillEmbeddedMediaMetadata() {
   });
   let updated = 0;
   for (const asset of assets) {
-    const file = await readFile(mediaAbsolutePath(asset.storedFilename)).catch(() => null);
+    const file = await readMediaFile(asset.storedFilename, user.churchId, true).catch(() => null);
     if (!file) continue;
     const metadata = await embeddedImageMetadata(file);
     const data = {
@@ -182,9 +192,11 @@ export async function backfillEmbeddedMediaMetadata() {
 }
 
 export async function listMediaFolders() {
-  await requirePermission("EDIT_PAGES");
+  const user = await requirePermission("EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
   const folders = await db.mediaAsset.groupBy({
     by: ["folder"],
+    where: { churchId: user.churchId },
     _count: { _all: true },
     orderBy: { folder: "asc" }
   });
@@ -192,16 +204,20 @@ export async function listMediaFolders() {
 }
 
 export async function mergeMediaFolders(from: string, to: string) {
-  await requirePermission("EDIT_PAGES");
+  const user = await requirePermission("EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
   if (!from || !to || from === to || from.length > 80 || to.length > 80) throw new Error("Choose two different valid folders.");
-  const result = await db.mediaAsset.updateMany({ where: { folder: from }, data: { folder: to } });
+  const result = await db.mediaAsset.updateMany({ where: { churchId: user.churchId, folder: from }, data: { folder: to } });
   return { moved: result.count, from, to };
 }
 
 export async function updateMediaAsset(id: string, input: MediaAssetUpdateInput) {
-  await requirePermission("EDIT_PAGES");
+  const user = await requirePermission("EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const existing = await db.mediaAsset.findFirst({ where: { id, churchId: user.churchId }, select: { id: true } });
+  if (!existing) throw new Error("Media asset not found.");
   const asset = await db.mediaAsset.update({
-    where: { id },
+    where: { id: existing.id },
     data: {
       ...(input.folder !== undefined ? { folder: input.folder } : {}),
       ...(input.altText !== undefined ? { altText: input.altText } : {}),
@@ -212,19 +228,18 @@ export async function updateMediaAsset(id: string, input: MediaAssetUpdateInput)
     },
     include: mediaInclude
   });
-  return serializeMediaAsset(asset, (await linkedPagesByUrl()).get(asset.url) ?? []);
+  return serializeMediaAsset(asset, (await linkedPagesByUrl(user.churchId)).get(asset.url) ?? []);
 }
 
 export async function deleteMediaAsset(id: string) {
-  await requirePermission("EDIT_PAGES");
-  const asset = await db.mediaAsset.findUnique({ where: { id }, select: { id: true, storedFilename: true, url: true } });
+  const user = await requirePermission("EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const asset = await db.mediaAsset.findFirst({ where: { id, churchId: user.churchId }, select: { id: true, churchId: true, storedFilename: true, url: true } });
   if (!asset) throw new Error("Media asset not found.");
-  const linked = (await linkedPagesByUrl()).get(asset.url) ?? [];
+  const linked = (await linkedPagesByUrl(user.churchId)).get(asset.url) ?? [];
   if (linked.length) throw new Error(`Cannot delete linked media asset. It is used by: ${linked.map((page) => page.title).join(", ")}.`);
   await db.mediaAsset.delete({ where: { id } });
-  if (asset.url.startsWith("/api/media/upload?file=")) {
-    await unlink(mediaAbsolutePath(asset.storedFilename)).catch(() => undefined);
-  }
+  await unlink(isLegacyMediaUrl(asset.url) ? mediaAbsolutePath(asset.storedFilename) : mediaAbsolutePath(asset.storedFilename, asset.churchId)).catch(() => undefined);
   return { deleted: true, id: asset.id };
 }
 
@@ -238,13 +253,17 @@ export async function saveUploadedMediaFile(input: {
   description?: string | null;
   tags?: string[];
 }) {
+  if (!input.uploader?.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const churchId = input.uploader.churchId;
   const buffer = Buffer.from(await input.asset.arrayBuffer());
-  await mkdir(mediaDirectory, { recursive: true });
-  await writeFile(mediaAbsolutePath(input.filename), buffer);
+  await mkdir(path.join(mediaDirectory, churchId), { recursive: true });
+  const storedFilename = input.filename;
+  await writeFile(mediaAbsolutePath(storedFilename, churchId), buffer);
   try {
     return await createUploadedMediaAsset({
       originalName: input.asset.name,
-      storedFilename: input.filename,
+      churchId,
+      storedFilename,
       mimeType: input.asset.type,
       sizeBytes: input.asset.size,
       uploaderId: input.uploader?.id ?? null,
@@ -255,13 +274,18 @@ export async function saveUploadedMediaFile(input: {
       tags: input.tags ?? []
     });
   } catch (error) {
-    await unlink(mediaAbsolutePath(input.filename)).catch(() => undefined);
+    await unlink(mediaAbsolutePath(storedFilename, churchId)).catch(() => undefined);
     throw error;
   }
 }
 
-export async function readMediaFile(filename: string) {
-  return readFile(mediaAbsolutePath(filename));
+export async function readMediaFile(filename: string, churchId: string, allowLegacy = false) {
+  try {
+    return await readFile(mediaAbsolutePath(filename, churchId));
+  } catch (error) {
+    if (!allowLegacy) throw error;
+    return readFile(mediaAbsolutePath(filename));
+  }
 }
 
 export async function editMediaAsset(input: {
@@ -274,12 +298,13 @@ export async function editMediaAsset(input: {
   flipVertical?: boolean;
   uploader?: User | null;
 }) {
-  await requirePermission("EDIT_PAGES");
-  const source = await db.mediaAsset.findUnique({ where: { id: input.assetId } });
+  const user = await requirePermission("EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const source = await db.mediaAsset.findFirst({ where: { id: input.assetId, churchId: user.churchId } });
   if (!source) throw new Error("Media asset not found.");
   if (!source.mimeType.startsWith("image/") || source.mimeType === "image/gif") throw new Error("Only PNG, JPEG, and WebP images can be edited.");
 
-  const sourceBuffer = await readFile(mediaAbsolutePath(source.storedFilename)).catch(() => null);
+  const sourceBuffer = await readMediaFile(source.storedFilename, source.churchId, isLegacyMediaUrl(source.url)).catch(() => null);
   if (!sourceBuffer) throw new Error("Media file not found.");
 
   const rotate = input.rotate ?? 0;
@@ -312,11 +337,12 @@ export async function editMediaAsset(input: {
 
   const output = await image.toFormat("png").toBuffer();
   const filename = `${randomUUID()}.png`;
-  await mkdir(mediaDirectory, { recursive: true });
-  await writeFile(mediaAbsolutePath(filename), output);
+  await mkdir(path.join(mediaDirectory, user.churchId), { recursive: true });
+  await writeFile(mediaAbsolutePath(filename, user.churchId), output);
   try {
     return await createUploadedMediaAsset({
       originalName: `${source.originalName.replace(/\.[^.]+$/, "")}-edited.png`,
+      churchId: user.churchId,
       storedFilename: filename,
       mimeType: "image/png",
       sizeBytes: output.byteLength,
@@ -328,12 +354,14 @@ export async function editMediaAsset(input: {
       tags: source.tags
     });
   } catch (error) {
-    await unlink(mediaAbsolutePath(filename)).catch(() => undefined);
+    await unlink(mediaAbsolutePath(filename, user.churchId)).catch(() => undefined);
     throw error;
   }
 }
 
-async function syncLegacyMediaAssets() {
+async function syncLegacyMediaAssets(churchId: string) {
+  const fallbackChurch = await db.church.findFirst({ orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true } });
+  if (fallbackChurch?.id !== churchId) return;
   const existing = await readdir(mediaDirectory, { withFileTypes: true }).catch(() => []);
   const legacyFiles = existing.filter((entry) => entry.isFile() && extensionMimeTypes.has(fileExtension(entry.name)));
   if (!legacyFiles.length) return;
@@ -341,12 +369,17 @@ async function syncLegacyMediaAssets() {
   const missing = legacyFiles.filter((entry) => !known.has(entry.name));
   if (!missing.length) return;
   const records = await Promise.all(missing.map(async (entry) => {
-    const file = await stat(mediaAbsolutePath(entry.name));
-    const dimensions = inferMediaMimeType(entry.name).startsWith("image/") ? await imageDimensions(await readFile(mediaAbsolutePath(entry.name))) : {};
+    const legacyPath = mediaAbsolutePath(entry.name);
+    const tenantPath = mediaAbsolutePath(entry.name, churchId);
+    await mkdir(path.dirname(tenantPath), { recursive: true });
+    await rename(legacyPath, tenantPath);
+    const file = await stat(tenantPath);
+    const dimensions = inferMediaMimeType(entry.name).startsWith("image/") ? await imageDimensions(await readFile(tenantPath)) : {};
     return {
       originalName: entry.name,
       storedFilename: entry.name,
-      url: mediaServeUrl(entry.name),
+      churchId,
+      url: mediaServeUrl(entry.name, churchId),
       mimeType: inferMediaMimeType(entry.name),
       sizeBytes: Number(file.size),
       folder: folderForDate(file.birthtime),
@@ -467,8 +500,8 @@ function firstMetadataString(metadata: Record<string, unknown>, keys: string[]) 
   return undefined;
 }
 
-async function linkedPagesByUrl() {
-  const pages = await db.page.findMany({ select: { id: true, title: true, slug: true, blocks: true } });
+async function linkedPagesByUrl(churchId: string) {
+  const pages = await db.page.findMany({ where: { churchId }, select: { id: true, title: true, slug: true, blocks: true } });
   const result = new Map<string, { id: string; title: string; slug: string }[]>();
   for (const page of pages) {
     const urls = new Set<string>();

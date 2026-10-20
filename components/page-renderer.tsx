@@ -369,12 +369,12 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
     const style: CSSProperties = {
       ...blockStyle,
       ...responsiveStyle(block.props ?? {}),
-      ...(!["image", "map"].includes(block.type) && typeof block.props?.heightValue === "string" && typeof block.props?.heightUnit === "string" ? { height: `${block.props.heightValue}${block.props.heightUnit}` } : {}),
-      ...(!["image", "map"].includes(block.type) && width ? { width } : {}),
-      ...(!["image", "map"].includes(block.type) && (block.props?.marginTop || block.props?.marginRight || block.props?.marginBottom || block.props?.marginLeft) ? { marginTop: typeof block.props.marginTop === "string" ? `${block.props.marginTop}px` : undefined, marginRight: typeof block.props.marginRight === "string" ? `${block.props.marginRight}px` : undefined, marginBottom: typeof block.props.marginBottom === "string" ? `${block.props.marginBottom}px` : undefined, marginLeft: typeof block.props.marginLeft === "string" ? `${block.props.marginLeft}px` : undefined } : {}),
+      ...(typeof block.props?.heightValue === "string" && typeof block.props?.heightUnit === "string" ? { height: `${block.props.heightValue}${block.props.heightUnit}` } : {}),
+      ...(width ? { width } : {}),
+      ...((block.props?.marginTop || block.props?.marginRight || block.props?.marginBottom || block.props?.marginLeft) ? { marginTop: typeof block.props.marginTop === "string" ? `${block.props.marginTop}px` : undefined, marginRight: typeof block.props.marginRight === "string" ? `${block.props.marginRight}px` : undefined, marginBottom: typeof block.props.marginBottom === "string" ? `${block.props.marginBottom}px` : undefined, marginLeft: typeof block.props.marginLeft === "string" ? `${block.props.marginLeft}px` : undefined } : {}),
       ...(typeof block.props?.borderRadius === "string" ? { borderRadius: `${block.props.borderRadius}px` } : {}),
       ...(block.props?.borderStyle && block.props.borderStyle !== "none" ? { borderStyle: block.props.borderStyle as CSSProperties["borderStyle"], borderWidth: `${typeof block.props.borderWidth === "string" ? block.props.borderWidth : "1"}px`, borderColor: typeof block.props.borderColor === "string" ? block.props.borderColor : undefined } : {}),
-      ...(!["image", "map"].includes(block.type) ? { boxSizing: "border-box" } : {}),
+      boxSizing: "border-box",
       ...(block.props?.justify === "center" ? { marginLeft: "auto", marginRight: "auto" } : block.props?.justify === "right" ? { marginLeft: "auto" } : {})
     };
     const imageStyle: CSSProperties = {

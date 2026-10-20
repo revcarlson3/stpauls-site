@@ -269,6 +269,9 @@ model Church {
   updatedAt                            DateTime                              @updatedAt
   publicSiteEnabled                    Boolean                               @default(true)
   maintenanceMode                      Boolean                               @default(false)
+  siteIdentity                         SiteIdentity?
+  mediaAssets                          MediaAsset[]
+  pages                                Page[]
 
   @@index([status])
   @@index([lifecycleStatus])
@@ -697,6 +700,8 @@ model GroupPermission {
 
 model Page {
   id              String         @id @default(cuid())
+  churchId        String
+  church          Church         @relation(fields: [churchId], references: [id], onDelete: Cascade)
   slug            String         @unique
   title           String
   seoTitle        String?
@@ -722,6 +727,7 @@ model Page {
   updatedAt       DateTime       @updatedAt
 
   @@index([status])
+  @@index([churchId, status])
 }
 
 model Widget {
@@ -776,6 +782,8 @@ model FormSubmission {
 
 model MediaAsset {
   id             String   @id @default(cuid())
+  churchId       String
+  church         Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
   originalName   String
   storedFilename String   @unique
   url            String   @unique
@@ -798,6 +806,32 @@ model MediaAsset {
   @@index([mimeType])
   @@index([uploaderId])
   @@index([folder])
+  @@index([churchId, createdAt])
+}
+
+model SiteIdentity {
+  id                 String   @id @default(cuid())
+  churchId           String   @unique
+  church             Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  siteName           String   @default("St. Paul's")
+  siteUrl            String   @default("")
+  siteTagline        String   @default("A place to belong.")
+  siteAddressStreet  String   @default("")
+  siteAddressCity    String   @default("")
+  siteAddressState   String   @default("")
+  siteAddressZip     String   @default("")
+  sitePhone          String   @default("")
+  siteEmail          String   @default("")
+  siteTaxId          String   @default("")
+  siteLogoUrl        String   @default("")
+  siteLogoLightUrl   String   @default("")
+  siteLogoDarkUrl    String   @default("")
+  siteFaviconUrl     String   @default("")
+  siteShowTitle      Boolean  @default(true)
+  siteShowTagline    Boolean  @default(true)
+  siteShowLogo       Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model MemberProfile {

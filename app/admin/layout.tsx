@@ -9,6 +9,7 @@ import { Container } from "@/components/ui";
 import { AdminNavigation } from "@/components/admin-navigation";
 import { NotificationBell } from "@/components/notification-bell";
 import { AnnouncementTicker } from "@/components/announcement-ticker";
+import { openPublicSitePreview } from "@/lib/public-site-preview";
 
 export default function AdminLayout({ children, restrictPublicContent = false }: Readonly<{ children: React.ReactNode; restrictPublicContent?: boolean }>) {
   const pathname = usePathname();
@@ -130,7 +131,7 @@ export default function AdminLayout({ children, restrictPublicContent = false }:
             {!isPlatformAdmin && permissions.includes("CREATE_SUPPORT_TICKETS") && <Link className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href="/account/support">Support</Link>}
             <NotificationBell />
             {subscriptionActive && membershipLinked && <div className="relative"><button ref={membershipButtonRef} type="button" aria-expanded={membershipMenuOpen} aria-controls="admin-member-navigation" className="focus-ring rounded-full border border-coral px-3 py-2 text-sm font-semibold text-coral hover:bg-coral hover:text-white" onClick={() => setMembershipMenuOpen((current) => !current)}>My membership <span aria-hidden="true">{membershipMenuOpen ? "⌃" : "⌄"}</span></button>{membershipMenuOpen && mounted && createPortal(<div id="admin-member-navigation" className="fixed right-6 top-20 z-[100] grid min-w-56 gap-1 rounded-xl border border-ink/10 bg-white p-2 text-ink shadow-lg"><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership">Member center</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/profile">Member profile</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/prayer-requests">Prayer requests</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/scheduling">Scheduling</Link>{onlineGivingEnabled && <Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving">Online giving</Link>}<Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/giving-history">Giving history and pledges</Link><Link className="focus-ring rounded-lg px-3 py-2 text-sm text-ink hover:bg-mist" href="/account/membership/documents">Documents and forms</Link></div>, document.body)}</div>}
-            {subscriptionActive && publicSiteBridgeUrl && <a className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href={publicSiteBridgeUrl} target="_blank" rel="noopener noreferrer">View site</a>}
+            {subscriptionActive && publicSiteBridgeUrl && <a className="focus-ring text-sm font-medium text-ink/60 hover:text-coral" href={publicSiteBridgeUrl} target="_blank" onClick={(event) => { event.preventDefault(); openPublicSitePreview(publicSiteBridgeUrl); }}>View site</a>}
           </div>
         </Container>
       </header>
