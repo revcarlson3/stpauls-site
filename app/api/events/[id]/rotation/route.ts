@@ -61,18 +61,17 @@ export async function POST(request: Request, { params }: { params: { id: string 
       }
       if (existing) return NextResponse.json({ error: "That volunteer is already assigned to this event." }, { status: 400 });
       const order = await db.membershipVolunteerRotationOrder.findFirst({ where: { groupId, isActive: true, group: { churchId: scope.church.id } }, orderBy: { updatedAt: "desc" }, select: { id: true, notificationLeadDays: true, notifyEmail: true, notifySms: true, notifyDayBefore: true } });
-      if (!order) return NextResponse.json({ error: "Choose an active rotation order for this group before adding an event volunteer." }, { status: 400 });
       const assignment = await db.membershipEventVolunteerAssignment.create({
-        data: { eventId: event.id, groupId, individualId, scheduledIndividualId: null, rotationOrderId: order.id, source: "OVERRIDE", notificationLeadMinutes: order.notificationLeadDays * 24 * 60 }
+        data: { eventId: event.id, groupId, individualId, scheduledIndividualId: null, rotationOrderId: order?.id ?? null, source: "OVERRIDE", notificationLeadMinutes: order ? order.notificationLeadDays * 24 * 60 : null }
       });
       const channels = [
-        ...(order.notifyEmail ? ["EMAIL" as const] : []),
-        ...(order.notifySms ? ["SMS" as const] : [])
+        ...(order?.notifyEmail ? ["EMAIL" as const] : []),
+        ...(order?.notifySms ? ["SMS" as const] : [])
       ];
       if (channels.length) {
-        const scheduledFor = new Date(event.startsAt.getTime() - order.notificationLeadDays * 24 * 60 * 60_000);
+        const scheduledFor = new Date(event.startsAt.getTime() - (order?.notificationLeadDays ?? 0) * 24 * 60 * 60_000);
         const notifications = channels.map((channel) => ({ assignmentId: assignment.id, channel, kind: "PRIMARY", scheduledFor }));
-        if (order.notifyDayBefore) notifications.push(...channels.map((channel) => ({ assignmentId: assignment.id, channel, kind: "DAY_BEFORE", scheduledFor: new Date(event.startsAt.getTime() - 24 * 60 * 60_000) })));
+        if (order?.notifyDayBefore) notifications.push(...channels.map((channel) => ({ assignmentId: assignment.id, channel, kind: "DAY_BEFORE", scheduledFor: new Date(event.startsAt.getTime() - 24 * 60 * 60_000) })));
         await db.membershipVolunteerNotification.createMany({ data: notifications });
       }
       await logAudit({ activityType: "membership-event-volunteer-assignment-updated", summary: `Added a volunteer to event ${event.id}.`, details: JSON.stringify({ eventId: event.id, groupId, individualId, action: adjustment }), actorId: user.id });

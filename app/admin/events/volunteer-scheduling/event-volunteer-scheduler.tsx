@@ -265,7 +265,18 @@ export function EventVolunteerScheduler() {
     setEventAssignments(assignments.assignments ?? []);
   }
 
-  const assignedByGroup = Array.from(new Map(eventAssignments.map((assignment) => [assignment.groupId, { name: assignment.group.name, members: eventAssignments.filter((entry) => entry.groupId === assignment.groupId).map((entry) => entry.individual) }])).values());
+  async function addAdditionalVolunteer(groupId: string, individualId: string) {
+    if (!selectedEventId) return;
+    setMessage(""); setError("");
+    const response = await fetch(`/api/events/${selectedEventId}/rotation`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId, individualId, action: "add" }) });
+    const value = await response.json();
+    if (!response.ok) {
+      setError(value.error ?? "Unable to add the additional volunteer.");
+      return;
+    }
+    await refreshSelectedEvent();
+    setMessage("Additional volunteer added without changing the rotation.");
+  }
 
   return <div className="mt-8 grid gap-5">
     {message && <p className="rounded-lg bg-teal/10 px-4 py-3 text-sm font-semibold text-teal-900">{message}</p>}
@@ -293,8 +304,8 @@ export function EventVolunteerScheduler() {
       </section>
       <section className="rounded-2xl border border-ink/10 bg-white p-4 shadow-sm xl:col-span-4">
         <h2 className="font-serif text-2xl">Assigned volunteers</h2>
-        <p className="mt-1 text-sm text-ink/60">Volunteers assigned to this event by its rotation orders.</p>
-        <div className="mt-4 grid gap-4">{assignedByGroup.length ? assignedByGroup.map((group) => <div key={group.name}><h3 className="font-semibold">{group.name}</h3><ul className="mt-2 grid gap-1 text-sm text-ink/70">{group.members.map((member) => { const assignment = eventAssignments.find((entry) => entry.individual.id === member.id && entry.group.name === group.name); const replaced = assignment?.source === "OVERRIDE" && assignment.scheduledIndividualId !== null; const manual = assignment?.source === "OVERRIDE" && assignment.scheduledIndividualId === null; return <li key={member.id} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${replaced || manual ? "bg-coral/15 ring-1 ring-coral/25" : "bg-mist/50"}`}><span>{member.lastName ?? ""}, {member.firstName}</span>{assignment && <button type="button" onClick={() => setOverrideAssignment(assignment)} className={`focus-ring rounded-md px-2 py-1 text-xs font-semibold ${replaced || manual ? "bg-coral text-white" : "border border-coral text-coral"}`}>{manual ? "Manual" : replaced ? "Replaced" : "Override"}</button>}</li>; })}</ul></div>) : <p className="rounded-xl border border-dashed border-ink/20 p-5 text-sm text-ink/60">{selectedEventId ? "No volunteers have been assigned to this event." : "Select an event to view its volunteers."}</p>}</div>
+        <p className="mt-1 text-sm text-ink/60">Rotation assignments are shown here. Add additional volunteers for this event without changing the rotation order.</p>
+        <div className="mt-4 grid gap-4">{assignedGroups.length ? assignedGroups.map((group) => { const assignments = eventAssignments.filter((entry) => entry.groupId === group.id); const assignedIds = new Set(assignments.map((assignment) => assignment.individual.id)); return <div key={group.id}><h3 className="font-semibold">{group.name}</h3><ul className="mt-2 grid gap-1 text-sm text-ink/70">{assignments.map((assignment) => { const replaced = assignment.source === "OVERRIDE" && assignment.scheduledIndividualId !== null; const manual = assignment.source === "OVERRIDE" && assignment.scheduledIndividualId === null; return <li key={assignment.id} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 ${replaced || manual ? "bg-coral/15 ring-1 ring-coral/25" : "bg-mist/50"}`}><span>{assignment.individual.lastName ?? ""}, {assignment.individual.firstName}</span><button type="button" onClick={() => setOverrideAssignment(assignment)} className={`focus-ring rounded-md px-2 py-1 text-xs font-semibold ${replaced || manual ? "bg-coral text-white" : "border border-coral text-coral"}`}>{manual ? "Additional" : replaced ? "Replaced" : "Override"}</button></li>; })}</ul><div className="mt-3 border-t border-ink/10 pt-3"><p className="text-xs font-semibold uppercase tracking-wide text-ink/50">Add additional volunteer</p><div className="mt-2 flex flex-wrap gap-2">{group.members.filter((member) => !assignedIds.has(member.id)).map((member) => <button key={member.id} type="button" onClick={() => void addAdditionalVolunteer(group.id, member.id)} className="focus-ring rounded-full border border-teal/40 px-3 py-1.5 text-xs font-semibold text-teal-900 hover:bg-teal/10">{member.name}</button>)}{!group.members.some((member) => !assignedIds.has(member.id)) && <span className="text-xs text-ink/55">All group members are already assigned.</span>}</div></div></div>; }) : <p className="rounded-xl border border-dashed border-ink/20 p-5 text-sm text-ink/60">{selectedEventId ? "No volunteer groups are linked to this event." : "Select an event to view its volunteers."}</p>}</div>
       </section>
       <section className="rounded-2xl border border-ink/10 bg-white p-4 shadow-sm xl:col-span-4">
         <h2 className="font-serif text-2xl">Scheduling and Rotation</h2>
