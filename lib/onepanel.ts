@@ -254,6 +254,7 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
       alias: `custom-${hostname.replace(/[^a-z0-9-]/gi, "-")}`,
       remark: `Managed custom domain ${hostname}`,
       webSiteGroupID: groupId,
+      primaryDomain: hostname,
       domains: [{ domain: hostname, port: 80, ssl: false }],
       appType: "installed"
     }, "dedicated website creation");

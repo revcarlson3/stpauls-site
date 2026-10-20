@@ -100,6 +100,7 @@ describe("1Panel API compatibility", () => {
     expect(JSON.parse((fetchMock.mock.calls[4][1] as RequestInit).body as string)).toMatchObject({
       type: "static",
       webSiteGroupID: 3,
+      primaryDomain: "www.example.org",
       domains: [{ domain: "www.example.org", port: 80, ssl: false }]
     });
     expect(fetchMock.mock.calls[5][0]).toBe("https://panel.example.test/api/v2/websites/domains/42");
