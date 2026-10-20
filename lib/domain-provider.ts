@@ -86,8 +86,15 @@ export async function createTenantDomain(input: { hostname: string; kind: "PLATF
   if (!actor.churchId) throw new Error("A tenant site is required.");
   const hostname = normalizeHostname(input.hostname);
   if (!hostname) throw new Error("Provide a valid domain.");
-  const existing = await db.siteDomain.findFirst({ where: { ...tenantDomainWhere(actor.churchId), hostname }, select: { id: true } });
-  if (existing) throw new Error("That hostname is already registered.");
+  const existing = await db.siteDomain.findUnique({
+    where: { hostname },
+    select: { id: true, churchId: true, hostname: true, kind: true, status: true, tlsStatus: true, dnsGuidance: true, verificationToken: true }
+  });
+  if (existing) {
+    if (existing.churchId !== actor.churchId) throw new Error("That hostname is already registered.");
+    if (existing.kind !== input.kind) throw new Error("That hostname is already registered with a different domain type.");
+    return { ...existing, existing: true, verificationRecord: existing.kind === "CUSTOM_DOMAIN" ? buildDomainVerificationRecord(existing.hostname, existing.verificationToken) : null };
+  }
   const domain = await db.siteDomain.create({
     data: {
       churchId: actor.churchId,

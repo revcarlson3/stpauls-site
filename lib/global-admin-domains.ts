@@ -166,6 +166,62 @@ export async function addSelectedChurchDomain(input: { hostname?: unknown; kind:
   return serializeDomain(domain);
 }
 
+export async function activateExistingSelectedChurchDomain(input: { hostname?: unknown }) {
+  const { context, church } = await requireMutableSelectedChurch();
+  const hostname = normalizeHostname(input.hostname);
+  if (!hostname) throw new Error("Provide a valid custom hostname.");
+  const now = new Date();
+  const existing = await db.siteDomain.findUnique({ where: { hostname }, select: { id: true, churchId: true } });
+  if (existing && existing.churchId !== church.id) throw new Error("That hostname is already assigned to another site.");
+  const domain = existing
+    ? await db.siteDomain.update({
+      where: { id: existing.id },
+      data: {
+        kind: "CUSTOM_DOMAIN",
+        status: "ACTIVE",
+        isPrimary: false,
+        verificationToken: null,
+        verifiedAt: now,
+        tlsStatus: "ACTIVE",
+        dnsManaged: false,
+        lastCheckedAt: now,
+        lastError: null,
+        registrarProvider: "MANUAL",
+        registrarDetectedAt: now,
+        dnsGuidance: "Manually activated by Global Admin. Existing external DNS, reverse proxy, and SSL configuration were preserved."
+      },
+      select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true, registrarProvider: true, registrarDetectedAt: true, dnsGuidance: true }
+    })
+    : await db.siteDomain.create({
+      data: {
+        churchId: church.id,
+        hostname,
+        kind: "CUSTOM_DOMAIN",
+        status: "ACTIVE",
+        isPrimary: false,
+        verificationToken: null,
+        verifiedAt: now,
+        tlsStatus: "ACTIVE",
+        dnsManaged: false,
+        lastCheckedAt: now,
+        lastError: null,
+        registrarProvider: "MANUAL",
+        registrarDetectedAt: now,
+        dnsGuidance: "Manually activated by Global Admin. Existing external DNS, reverse proxy, and SSL configuration were preserved."
+      },
+      select: { id: true, hostname: true, kind: true, status: true, isPrimary: true, verifiedAt: true, tlsStatus: true, dnsManaged: true, lastCheckedAt: true, lastError: true, registrarProvider: true, registrarDetectedAt: true, dnsGuidance: true }
+    });
+  await db.auditLog.create({
+    data: {
+      activityType: "global-admin-domain-added",
+      summary: `Manually activated existing domain ${hostname}.`,
+      actorId: context.user.id,
+      details: buildGlobalAuditDetails({ churchId: church.id, targetType: "site-domain", targetId: domain.id, metadata: { hostname, kind: "CUSTOM_DOMAIN", action: "manual-activate-existing", externalProvisioning: "bypassed" } })
+    }
+  });
+  return serializeDomain(domain);
+}
+
 export async function enableSelectedChurchDomain(domainId: string) {
   const { context, church } = await requireMutableSelectedChurch();
   const domain = await db.siteDomain.findFirst({ where: { id: domainId, churchId: church.id }, select: { id: true, hostname: true, kind: true } });

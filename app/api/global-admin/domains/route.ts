@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { addSelectedChurchDomain, listSelectedChurchDomains } from "@/lib/global-admin-domains";
+import { activateExistingSelectedChurchDomain, addSelectedChurchDomain, listSelectedChurchDomains } from "@/lib/global-admin-domains";
 
 export async function GET() {
   try {
@@ -14,6 +14,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const input = await request.json().catch(() => ({}));
   try {
+    if (input.action === "activate-existing") return NextResponse.json({ domain: await activateExistingSelectedChurchDomain({ hostname: input.hostname }) });
     return NextResponse.json({ domain: await addSelectedChurchDomain({ hostname: input.hostname, kind: input.kind }) }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === "Reauthentication required.") return NextResponse.json({ error: error.message }, { status: 428 });

@@ -19,6 +19,7 @@ type Domain = {
 export default function GlobalAdminDomainsPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [hostname, setHostname] = useState("");
+  const [existingHostname, setExistingHostname] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -47,11 +48,34 @@ export default function GlobalAdminDomainsPage() {
         window.location.href = `/global-admin/login?callbackUrl=${encodeURIComponent("/global-admin/domains")}&reauth=1`;
         return;
       }
+
       setError(value.error ?? "Unable to add domain.");
       return;
     }
     setHostname("");
     setMessage(kind === "CUSTOM_DOMAIN" ? "Custom domain added. Registrar guidance was recorded; DNS/TLS verification remains pending." : "Platform subdomain provisioning completed or returned an explicit configuration error.");
+    await load();
+  }
+
+  async function activateExisting() {
+    setError("");
+    setMessage("");
+    const response = await fetch("/api/global-admin/domains", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "activate-existing", hostname: existingHostname })
+    });
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (response.status === 428) {
+        window.location.href = `/global-admin/login?callbackUrl=${encodeURIComponent("/global-admin/domains")}&reauth=1`;
+        return;
+      }
+      setError(value.error ?? "Unable to activate existing domain.");
+      return;
+    }
+    setExistingHostname("");
+    setMessage("Existing domain activated locally. Namecheap, DNS, and 1Panel provisioning were bypassed.");
     await load();
   }
 
@@ -96,5 +120,5 @@ export default function GlobalAdminDomainsPage() {
     </Card>
   );
 
-  return <main className="min-h-screen bg-sand py-10 sm:py-14"><Container><div className="flex justify-end"><GlobalAdminBackLink /></div><p className="mt-8 text-sm font-semibold uppercase tracking-[0.2em] text-coral">Global platform</p><h1 className="mt-2 font-serif text-4xl">Manage domains</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-ink/60">Platform subdomains and custom domains are managed across the platform. Namecheap credentials are configured separately in the global platform settings; this console never fakes external DNS or TLS verification.</p>{error && <Notification variant="danger" className="mt-6">{error}</Notification>}{message && <Notification variant="success" className="mt-6">{message}</Notification>}<Card className="mt-8 grid gap-4 p-6 sm:p-8"><div><h2 className="font-serif text-2xl">Platform subdomain</h2><p className="mt-1 text-sm text-ink/60">Generate a unique active hostname using the configured platform suffix. No external DNS claim is required.</p></div><Button type="button" onClick={() => void add("PLATFORM_SUBDOMAIN")} className="w-fit">Generate platform subdomain</Button></Card><Card className="mt-6 grid gap-4 p-6 sm:p-8"><div><h2 className="font-serif text-2xl">Custom domain</h2><p className="mt-1 text-sm text-ink/60">Add a hostname owned by the church. It will remain pending until DNS and TLS are verified outside this application.</p></div><div className="flex flex-wrap gap-3"><input aria-label="Custom hostname" value={hostname} onChange={(event) => setHostname(event.target.value)} placeholder="www.example.org" className="focus-ring min-w-[260px] flex-1 rounded-lg border border-ink/15 px-3 py-2" /><Button type="button" onClick={() => void add("CUSTOM_DOMAIN")}>Add custom domain</Button></div></Card><section className="mt-8 grid gap-4"><h2 className="font-serif text-2xl">Platform subdomains</h2>{platformDomains.map(domainCard)}{!platformDomains.length && <Card className="p-6 text-sm text-ink/60">No platform subdomain has been generated.</Card>}</section><section className="mt-8 grid gap-4"><h2 className="font-serif text-2xl">Custom domains</h2>{customDomains.map(domainCard)}{!customDomains.length && <Card className="p-6 text-sm text-ink/60">No custom domains are configured.</Card>}</section></Container></main>;
+  return <main className="min-h-screen bg-sand py-10 sm:py-14"><Container><div className="flex justify-end"><GlobalAdminBackLink /></div><p className="mt-8 text-sm font-semibold uppercase tracking-[0.2em] text-coral">Global platform</p><h1 className="mt-2 font-serif text-4xl">Manage domains</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-ink/60">Platform subdomains and custom domains are managed across the platform. Namecheap credentials are configured separately in the global platform settings; this console never fakes external DNS or TLS verification.</p>{error && <Notification variant="danger" className="mt-6">{error}</Notification>}{message && <Notification variant="success" className="mt-6">{message}</Notification>}<Card className="mt-8 grid gap-4 p-6 sm:p-8"><div><h2 className="font-serif text-2xl">Platform subdomain</h2><p className="mt-1 text-sm text-ink/60">Generate a unique active hostname using the configured platform suffix. No external DNS claim is required.</p></div><Button type="button" onClick={() => void add("PLATFORM_SUBDOMAIN")} className="w-fit">Generate platform subdomain</Button></Card><Card className="mt-6 grid gap-4 p-6 sm:p-8"><div><h2 className="font-serif text-2xl">Custom domain</h2><p className="mt-1 text-sm text-ink/60">Add a hostname owned by the church. It will remain pending until DNS and TLS are verified outside this application.</p></div><div className="flex flex-wrap gap-3"><input aria-label="Custom hostname" value={hostname} onChange={(event) => setHostname(event.target.value)} placeholder="www.example.org" className="focus-ring min-w-[260px] flex-1 rounded-lg border border-ink/15 px-3 py-2" /><Button type="button" onClick={() => void add("CUSTOM_DOMAIN")}>Add custom domain</Button></div></Card><Card className="mt-6 grid gap-4 p-6 sm:p-8"><div><h2 className="font-serif text-2xl">Activate an existing domain</h2><p className="mt-1 text-sm text-ink/60">Use this when DNS, the reverse proxy, and SSL are already configured outside the application. This only updates the local domain record and bypasses Namecheap and 1Panel provisioning.</p></div><div className="flex flex-wrap gap-3"><input aria-label="Existing domain hostname" value={existingHostname} onChange={(event) => setExistingHostname(event.target.value)} placeholder="stpaulsmilaca.org" className="focus-ring min-w-[260px] flex-1 rounded-lg border border-ink/15 px-3 py-2" /><Button type="button" onClick={() => void activateExisting()}>Activate existing domain</Button></div></Card><section className="mt-8 grid gap-4"><h2 className="font-serif text-2xl">Platform subdomains</h2>{platformDomains.map(domainCard)}{!platformDomains.length && <Card className="p-6 text-sm text-ink/60">No platform subdomain has been generated.</Card>}</section><section className="mt-8 grid gap-4"><h2 className="font-serif text-2xl">Custom domains</h2>{customDomains.map(domainCard)}{!customDomains.length && <Card className="p-6 text-sm text-ink/60">No custom domains are configured.</Card>}</section></Container></main>;
 }

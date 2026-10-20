@@ -89,7 +89,7 @@ export function DomainsWorkspace() {
       return;
     }
     setHostname("");
-    setMessage("Domain added. Add the DNS verification record shown below, then retry verification.");
+    setMessage(value.existing ? "That domain is already configured and was left unchanged." : "Domain added. Add the DNS verification record shown below, then retry verification.");
     await load();
   }
 
