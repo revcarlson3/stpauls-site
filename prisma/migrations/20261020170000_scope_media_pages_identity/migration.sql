@@ -58,8 +58,11 @@ BEGIN
       COALESCE(s."siteLogoDarkUrl", ''), COALESCE(s."siteFaviconUrl", ''),
       COALESCE(s."siteShowTitle", true), COALESCE(s."siteShowTagline", true),
       COALESCE(s."siteShowLogo", false), CURRENT_TIMESTAMP
-    FROM "SecuritySettings" s WHERE s."id" = 1
-    ON CONFLICT ("churchId") DO NOTHING;
+    FROM "SecuritySettings" s
+    WHERE s."id" = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM "SiteIdentity" existing WHERE existing."churchId" = fallback_church
+      );
   END IF;
 END $$;
 
