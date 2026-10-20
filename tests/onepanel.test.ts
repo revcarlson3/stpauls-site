@@ -62,7 +62,7 @@ describe("1Panel API compatibility", () => {
     expect(secondHeaders["1Panel-Token"]).toBe(crypto.createHash("md5").update(`1panelapi-key${secondHeaders["1Panel-Timestamp"]}`).digest("hex"));
   });
 
-  it("requests a Let’s Encrypt certificate and attaches it to the configured website", async () => {
+  it("creates a dedicated static website and attaches its certificate there", async () => {
     db.onePanelConfiguration.findUnique.mockResolvedValue({
       baseUrl: "https://panel.example.test",
       apiKeyEncrypted: "encrypted",
@@ -74,43 +74,50 @@ describe("1Panel API compatibility", () => {
       platformSuffix: "mychurch.one"
     });
     const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response('{"data":[{"id":7,"domains":["beta.mychurch.one"]}]}'))
+      .mockResolvedValueOnce(response('{"data":{"webSiteGroupId":3}}'))
+      .mockResolvedValueOnce(response('{"data":[{"id":8,"domain":"www.example.org"}]}'))
       .mockResolvedValueOnce(response("{}"))
-      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org:80"},{"domain":"beta.mychurch.one"}]}'))
+      .mockResolvedValueOnce(response('{"data":{"id":42}}'))
+      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
-      .mockResolvedValueOnce(response('{"data":{"id":42}}'))
+      .mockResolvedValueOnce(response('{"data":{"id":99}}'))
       .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
       .mockResolvedValueOnce(response("{}"));
     vi.stubGlobal("fetch", fetchMock);
 
     const { provisionCustomDomainTls } = await import("@/lib/onepanel");
-    await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 7 });
+    await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 99, websiteId: 42 });
 
-    expect(fetchMock).toHaveBeenCalledTimes(7);
-    expect(fetchMock.mock.calls[0][0]).toBe("https://panel.example.test/api/v2/websites/domains");
-    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({
-      websiteID: 7,
-      domains: "www.example.org"
-    });
-    expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v2/websites/domains/7");
-    expect(fetchMock.mock.calls[2][0]).toBe("https://panel.example.test/api/v2/websites/acme/search");
-    expect(JSON.parse((fetchMock.mock.calls[2][1] as RequestInit).body as string)).toMatchObject({ page: 1, pageSize: 100 });
-    expect(fetchMock.mock.calls[3][0]).toBe("https://panel.example.test/api/v2/websites/dns/search");
-    expect(JSON.parse((fetchMock.mock.calls[3][1] as RequestInit).body as string)).toMatchObject({ page: 1, pageSize: 100 });
-    expect(fetchMock.mock.calls[4][0]).toBe("https://panel.example.test/api/v2/websites/ssl");
+    expect(fetchMock).toHaveBeenCalledTimes(11);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://panel.example.test/api/v2/websites/list");
+    expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v2/websites/7");
+    expect(fetchMock.mock.calls[2][0]).toBe("https://panel.example.test/api/v2/websites/domains/7");
+    expect(fetchMock.mock.calls[3][0]).toBe("https://panel.example.test/api/v2/websites/domains/del");
+    expect(JSON.parse((fetchMock.mock.calls[3][1] as RequestInit).body as string)).toMatchObject({ id: 8 });
+    expect(fetchMock.mock.calls[4][0]).toBe("https://panel.example.test/api/v2/websites");
     expect(JSON.parse((fetchMock.mock.calls[4][1] as RequestInit).body as string)).toMatchObject({
+      type: "static",
+      webSiteGroupID: 3,
+      domains: [{ domain: "www.example.org", port: 80, ssl: false }]
+    });
+    expect(fetchMock.mock.calls[5][0]).toBe("https://panel.example.test/api/v2/websites/domains/42");
+    expect(fetchMock.mock.calls[6][0]).toBe("https://panel.example.test/api/v2/websites/acme/search");
+    expect(fetchMock.mock.calls[7][0]).toBe("https://panel.example.test/api/v2/websites/dns/search");
+    expect(fetchMock.mock.calls[8][0]).toBe("https://panel.example.test/api/v2/websites/ssl");
+    expect(JSON.parse((fetchMock.mock.calls[8][1] as RequestInit).body as string)).toMatchObject({
       primaryDomain: "www.example.org",
-      otherDomains: "beta.mychurch.one",
+      otherDomains: "",
       provider: "dnsAccount",
       acmeAccountId: 11,
       dnsAccountId: 12,
       autoRenew: true
     });
-    expect(fetchMock.mock.calls[5][0]).toBe("https://panel.example.test/api/v2/websites/ssl/42");
-    expect((fetchMock.mock.calls[5][1] as RequestInit).method).toBe("GET");
-    expect(JSON.parse((fetchMock.mock.calls[6][1] as RequestInit).body as string)).toMatchObject({
-      ids: [7],
-      websiteSSLId: 42,
+    expect(fetchMock.mock.calls[9][0]).toBe("https://panel.example.test/api/v2/websites/ssl/99");
+    expect(JSON.parse((fetchMock.mock.calls[10][1] as RequestInit).body as string)).toMatchObject({
+      ids: [42],
+      websiteSSLId: 99,
       type: "existed",
       httpConfig: "HTTPToHTTPS"
     });
@@ -128,8 +135,8 @@ describe("1Panel API compatibility", () => {
       platformSuffix: "mychurch.one"
     });
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(response("{}"))
-      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"},{"domain":"beta.mychurch.one"}]}'))
+      .mockResolvedValueOnce(response('{"data":[{"id":42,"domains":["www.example.org"]}]}'))
+      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
       .mockResolvedValueOnce(response('{"data":{"sslId":"42"}}'))
@@ -138,31 +145,10 @@ describe("1Panel API compatibility", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { provisionCustomDomainTls } = await import("@/lib/onepanel");
-    await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 7 });
+    await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 42 });
   });
 
-  it("identifies a domain-binding failure before attempting certificate creation", async () => {
-    db.onePanelConfiguration.findUnique.mockResolvedValue({
-      baseUrl: "https://panel.example.test",
-      apiKeyEncrypted: "encrypted",
-      version: "1.10.34-lts",
-      websiteId: "7",
-      acmeAccountId: "11",
-      dnsAccountId: "12",
-      wildcardSslId: null,
-      platformSuffix: "mychurch.one"
-    });
-    const fetchMock = vi.fn().mockResolvedValue(failureResponse('{"message":"website domain creation failed"}'));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { provisionCustomDomainTls } = await import("@/lib/onepanel");
-    await expect(provisionCustomDomainTls("www.example.org")).rejects.toThrow(
-      "1Panel domain binding failed (500): website domain creation failed"
-    );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("continues with SSL when 1Panel reports an existing domain in Chinese", async () => {
+  it("identifies a dedicated website creation failure before certificate creation", async () => {
     db.onePanelConfiguration.findUnique.mockResolvedValue({
       baseUrl: "https://panel.example.test",
       apiKeyEncrypted: "encrypted",
@@ -174,19 +160,44 @@ describe("1Panel API compatibility", () => {
       platformSuffix: "mychurch.one"
     });
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(failureResponse('{"message":"域名已存在"}', 400))
+      .mockResolvedValueOnce(response('{"data":[]}'))
+      .mockResolvedValueOnce(response('{"data":{"webSiteGroupId":3}}'))
+      .mockResolvedValueOnce(response('{"data":[]}'))
+      .mockResolvedValueOnce(failureResponse('{"message":"website creation failed"}'));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { provisionCustomDomainTls } = await import("@/lib/onepanel");
+    await expect(provisionCustomDomainTls("www.example.org")).rejects.toThrow(
+      "1Panel dedicated website creation failed (500): website creation failed"
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("reuses an existing dedicated website on retry", async () => {
+    db.onePanelConfiguration.findUnique.mockResolvedValue({
+      baseUrl: "https://panel.example.test",
+      apiKeyEncrypted: "encrypted",
+      version: "1.10.34-lts",
+      websiteId: "7",
+      acmeAccountId: "11",
+      dnsAccountId: "12",
+      wildcardSslId: null,
+      platformSuffix: "mychurch.one"
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response('{"data":[{"id":42,"domains":["www.example.org"]}]}'))
       .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
-      .mockResolvedValueOnce(response('{"data":{"id":42}}'))
+      .mockResolvedValueOnce(response('{"data":{"id":99}}'))
       .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
       .mockResolvedValueOnce(response("{}"));
     vi.stubGlobal("fetch", fetchMock);
 
     const { provisionCustomDomainTls } = await import("@/lib/onepanel");
-    await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 7 });
+    await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 99, websiteId: 42 });
     expect(fetchMock).toHaveBeenCalledTimes(7);
-    expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v1/websites/domains/7");
+    expect(fetchMock.mock.calls[0][0]).toBe("https://panel.example.test/api/v1/websites/list");
   });
 
   it("rejects a Let's Encrypt URL account number that is not a local 1Panel account", async () => {
@@ -201,7 +212,7 @@ describe("1Panel API compatibility", () => {
       platformSuffix: "mychurch.one"
     });
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(response("{}"))
+      .mockResolvedValueOnce(response('{"data":[{"id":42,"domains":["www.example.org"]}]}'))
       .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'));
     vi.stubGlobal("fetch", fetchMock);

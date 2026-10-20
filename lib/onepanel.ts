@@ -65,7 +65,7 @@ function numericId(body: unknown): number | null {
   }
   if (!data || typeof data !== "object") return null;
   const record = data as Record<string, unknown>;
-  for (const key of ["id", "ID", "certificateId", "sslId", "websiteSSLId"]) {
+  for (const key of ["id", "ID", "websiteId", "websiteID", "certificateId", "sslId", "websiteSSLId"]) {
     const value = numericId(record[key]);
     if (value !== null) return value;
   }
@@ -95,6 +95,7 @@ function containsDomain(body: unknown, hostname: string): boolean {
 }
 
 function panelDomains(body: unknown): string[] {
+  if (typeof body === "string") return body.split(/[,\n]/).map((domain) => domain.trim()).filter(Boolean);
   if (Array.isArray(body)) return body.flatMap(panelDomains);
   if (!body || typeof body !== "object") return [];
   const record = body as Record<string, unknown>;
@@ -106,6 +107,60 @@ function panelDomains(body: unknown): string[] {
     }
   }
   return [...domains, ...Object.values(record).flatMap(panelDomains)];
+}
+
+function directNumericField(body: unknown, keys: string[]): number | null {
+  if (!body || typeof body !== "object") return null;
+  const record = body as Record<string, unknown>;
+  for (const key of keys) {
+    const value = numericId(record[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function findWebsiteId(body: unknown, hostname: string, excludedId: number): number | null {
+  const normalizedHostname = hostname.trim().toLowerCase().replace(/\.+$/, "").replace(/:\d+$/, "");
+  if (Array.isArray(body)) {
+    for (const item of body) {
+      const found = findWebsiteId(item, hostname, excludedId);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  if (!body || typeof body !== "object") return null;
+  const record = body as Record<string, unknown>;
+  const id = directNumericField(record, ["id", "ID"]);
+  if (id !== null && id !== excludedId && panelDomains(record).some((domain) => domain.toLowerCase().replace(/\.+$/, "").replace(/:\d+$/, "") === normalizedHostname)) {
+    return id;
+  }
+  for (const value of Object.values(record)) {
+    const found = findWebsiteId(value, hostname, excludedId);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+function findDomainRecordId(body: unknown, hostname: string): number | null {
+  const normalizedHostname = hostname.trim().toLowerCase().replace(/\.+$/, "").replace(/:\d+$/, "");
+  if (Array.isArray(body)) {
+    for (const item of body) {
+      const found = findDomainRecordId(item, hostname);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  if (!body || typeof body !== "object") return null;
+  const record = body as Record<string, unknown>;
+  if (panelDomains(record).some((domain) => domain.toLowerCase().replace(/\.+$/, "").replace(/:\d+$/, "") === normalizedHostname)) {
+    const id = directNumericField(record, ["id", "ID"]);
+    if (id !== null) return id;
+  }
+  for (const value of Object.values(record)) {
+    const found = findDomainRecordId(value, hostname);
+    if (found !== null) return found;
+  }
+  return null;
 }
 
 async function panelRequest<T>(
@@ -183,24 +238,33 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
   const config = await configuration();
   if (!config) throw new Error("Configure 1Panel before provisioning SSL.");
   if (!config.websiteId || !config.acmeAccountId || !config.dnsAccountId) throw new Error("Configure the 1Panel website ID, Let’s Encrypt account ID, and DNS account ID before provisioning SSL.");
-  try {
-    await panelRequest(config, "/websites/domains", {
-      websiteID: Number(config.websiteId),
-      domains: hostname
-    }, "domain binding");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (!/already exists|already added|duplicate|record exists|domain.*exist|已存在|重复/i.test(message)) throw error;
+  const sharedWebsiteId = Number(config.websiteId);
+  const websites = await panelGet<unknown>(config, "/websites/list");
+  let websiteId = findWebsiteId(websites, hostname, sharedWebsiteId);
+  if (websiteId === null) {
+    const sharedWebsite = await panelGet<unknown>(config, `/websites/${sharedWebsiteId}`);
+    const sharedDomains = await panelGet<unknown>(config, `/websites/domains/${sharedWebsiteId}`);
+    const oldDomainId = findDomainRecordId(sharedDomains, hostname);
+    if (oldDomainId !== null) {
+      await panelRequest(config, "/websites/domains/del", { id: oldDomainId }, "shared website domain migration");
+    }
+    const groupId = directNumericField(responseData(sharedWebsite), ["webSiteGroupId", "websiteGroupId", "WebsiteGroupID"]) ?? 1;
+    const createdWebsite = await panelRequest<unknown>(config, "/websites", {
+      type: "static",
+      alias: `custom-${hostname.replace(/[^a-z0-9-]/gi, "-")}`,
+      remark: `Managed custom domain ${hostname}`,
+      webSiteGroupID: groupId,
+      domains: [{ domain: hostname, port: 80, ssl: false }],
+      appType: "installed"
+    }, "dedicated website creation");
+    websiteId = numericId(createdWebsite);
+    if (websiteId === null) throw new Error(`1Panel did not return a website ID for dedicated domain ${hostname}.`);
   }
-  const boundDomains = await panelGet<unknown>(config, `/websites/domains/${Number(config.websiteId)}`);
+  const boundDomains = await panelGet<unknown>(config, `/websites/domains/${websiteId}`);
   if (!containsDomain(boundDomains, hostname)) {
     const detail = responseMessage(boundDomains);
-    throw new Error(`1Panel domain binding did not persist ${hostname} on website ${config.websiteId}${detail ? `; returned: ${detail}` : "."}`);
+    throw new Error(`1Panel dedicated website did not persist ${hostname} on website ${websiteId}${detail ? `; returned: ${detail}` : "."}`);
   }
-  const normalizedHostname = hostname.trim().toLowerCase().replace(/\.+$/, "").replace(/:\d+$/, "");
-  const otherDomains = Array.from(new Set(panelDomains(boundDomains)
-    .map((domain) => domain.replace(/:\d+$/, "").replace(/\.+$/, "").trim())
-    .filter((domain) => domain && domain.toLowerCase() !== normalizedHostname))).join("\n");
   const acmeAccounts = await panelRequest<unknown>(config, "/websites/acme/search", {
     page: 1,
     pageSize: 100
@@ -217,7 +281,7 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
   }
   const created = await panelRequest<unknown>(config, "/websites/ssl", {
     primaryDomain: hostname,
-    otherDomains,
+    otherDomains: "",
     provider: "dnsAccount",
     acmeAccountId: Number(config.acmeAccountId),
     dnsAccountId: Number(config.dnsAccountId),
@@ -238,13 +302,13 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
     if (attempt === 59) throw new Error("1Panel Let’s Encrypt certificate issuance timed out.");
   }
   await panelRequest(config, "/websites/batch/ssl", {
-    ids: [Number(config.websiteId)],
+    ids: [websiteId],
     taskID: crypto.randomUUID(),
     websiteSSLId: certificateId,
     type: "existed",
     httpConfig: "HTTPToHTTPS"
   }, "certificate attachment");
-  return { certificateId, websiteId: Number(config.websiteId) };
+  return { certificateId, websiteId };
 }
 
 export function platformTlsStatus(config: { wildcardSslId: string | null } | null) {
