@@ -20,6 +20,7 @@ async function configuration() {
     version: row.version,
     websiteId: row.websiteId,
     acmeAccountId: row.acmeAccountId,
+    dnsAccountId: row.dnsAccountId,
     wildcardSslId: row.wildcardSslId,
     platformSuffix: row.platformSuffix
   } : null;
@@ -167,7 +168,7 @@ export type DomainTlsProvisioningResult = {
 export async function provisionCustomDomainTls(hostname: string): Promise<DomainTlsProvisioningResult> {
   const config = await configuration();
   if (!config) throw new Error("Configure 1Panel before provisioning SSL.");
-  if (!config.websiteId || !config.acmeAccountId) throw new Error("Configure the 1Panel website ID and Let’s Encrypt account ID before provisioning SSL.");
+  if (!config.websiteId || !config.acmeAccountId || !config.dnsAccountId) throw new Error("Configure the 1Panel website ID, Let’s Encrypt account ID, and DNS account ID before provisioning SSL.");
   try {
     await panelRequest(config, "/websites/domains", {
       websiteID: Number(config.websiteId),
@@ -189,15 +190,21 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
   if (!containsRecordId(acmeAccounts, Number(config.acmeAccountId))) {
     throw new Error(`1Panel ACME account ${config.acmeAccountId} was not found. Enter the local 1Panel ACME account ID, not the account number from the Let's Encrypt URL.`);
   }
+  const dnsAccounts = await panelRequest<unknown>(config, "/websites/dns/search", {
+    page: 1,
+    pageSize: 100
+  }, "DNS account lookup");
+  if (!containsRecordId(dnsAccounts, Number(config.dnsAccountId))) {
+    throw new Error(`1Panel DNS account ${config.dnsAccountId} was not found. Enter the local DNS account record ID configured in 1Panel.`);
+  }
   const created = await panelRequest<unknown>(config, "/websites/ssl", {
     primaryDomain: hostname,
     otherDomains: "",
-    provider: "http",
+    provider: "dnsAccount",
     acmeAccountId: Number(config.acmeAccountId),
-    autoRenew: true,
+    dnsAccountId: Number(config.dnsAccountId),
     keyType: "EC256",
-    skipDNS: true,
-    apply: true
+    autoRenew: true
   }, "certificate creation");
   const certificateId = numericId(created);
   if (!certificateId) throw new Error("1Panel did not return a certificate ID.");
@@ -233,13 +240,14 @@ export async function onePanelPlatformTlsStatus() {
 
 export async function onePanelStatus() {
   await requireGlobalAdmin();
-  const row = await db.onePanelConfiguration.findUnique({ where: { id: "platform" }, select: { baseUrl: true, version: true, websiteId: true, acmeAccountId: true, wildcardSslId: true, platformSuffix: true, updatedAt: true } });
+  const row = await db.onePanelConfiguration.findUnique({ where: { id: "platform" }, select: { baseUrl: true, version: true, websiteId: true, acmeAccountId: true, dnsAccountId: true, wildcardSslId: true, platformSuffix: true, updatedAt: true } });
   return {
     configured: Boolean(row),
     baseUrl: row?.baseUrl ?? null,
     version: row?.version ?? null,
     websiteId: row?.websiteId ?? null,
     acmeAccountId: row?.acmeAccountId ?? null,
+    dnsAccountId: row?.dnsAccountId ?? null,
     wildcardSslId: row?.wildcardSslId ?? null,
     platformSuffix: row?.platformSuffix ?? "mychurch.one",
     updatedAt: row?.updatedAt?.toISOString() ?? null
@@ -253,6 +261,7 @@ export async function saveOnePanelConfig(input: Record<string, unknown>) {
   const version = typeof input.version === "string" ? input.version.trim() : null;
   const websiteId = typeof input.websiteId === "number" && Number.isInteger(input.websiteId) && input.websiteId > 0 ? String(input.websiteId) : null;
   const acmeAccountId = typeof input.acmeAccountId === "number" && Number.isInteger(input.acmeAccountId) && input.acmeAccountId > 0 ? String(input.acmeAccountId) : null;
+  const dnsAccountId = typeof input.dnsAccountId === "number" && Number.isInteger(input.dnsAccountId) && input.dnsAccountId > 0 ? String(input.dnsAccountId) : null;
   const wildcardSslId = typeof input.wildcardSslId === "number" && Number.isInteger(input.wildcardSslId) && input.wildcardSslId > 0 ? String(input.wildcardSslId) : null;
   const platformSuffix = typeof input.platformSuffix === "string" && input.platformSuffix.trim() ? input.platformSuffix.trim().toLowerCase() : "mychurch.one";
   if (!/^https?:\/\//i.test(baseUrl)) throw new Error("1Panel base URL must include http:// or https://.");
@@ -260,8 +269,8 @@ export async function saveOnePanelConfig(input: Record<string, unknown>) {
   if (!apiKey && !existing) throw new Error("1Panel API key is required.");
   await db.onePanelConfiguration.upsert({
     where: { id: "platform" },
-    create: { id: "platform", baseUrl, apiKeyEncrypted: encryptConfig(apiKey), version, websiteId, acmeAccountId, wildcardSslId, platformSuffix },
-    update: { baseUrl, ...(apiKey ? { apiKeyEncrypted: encryptConfig(apiKey) } : {}), version, websiteId, acmeAccountId, wildcardSslId, platformSuffix }
+    create: { id: "platform", baseUrl, apiKeyEncrypted: encryptConfig(apiKey), version, websiteId, acmeAccountId, dnsAccountId, wildcardSslId, platformSuffix },
+    update: { baseUrl, ...(apiKey ? { apiKeyEncrypted: encryptConfig(apiKey) } : {}), version, websiteId, acmeAccountId, dnsAccountId, wildcardSslId, platformSuffix }
   });
   await logAudit({ activityType: "global-admin-onepanel-configuration-updated", summary: "Updated 1Panel platform configuration.", actorId: context.user.id, details: buildGlobalAuditDetails({ scope: "platform", targetType: "onepanel-configuration", metadata: { baseUrl, version, secretsUpdated: Boolean(apiKey) } }) });
   return onePanelStatus();

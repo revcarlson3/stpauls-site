@@ -2111,6 +2111,7 @@ model OnePanelConfiguration {
   version         String?
   websiteId       String?
   acmeAccountId   String?
+  dnsAccountId    String?
   wildcardSslId   String?
   platformSuffix  String   @default("mychurch.one")
   updatedAt       DateTime @updatedAt

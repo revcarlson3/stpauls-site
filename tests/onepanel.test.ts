@@ -69,6 +69,7 @@ describe("1Panel API compatibility", () => {
       version: "2.0.0",
       websiteId: 7,
       acmeAccountId: 11,
+      dnsAccountId: 12,
       wildcardSslId: 13,
       platformSuffix: "mychurch.one"
     });
@@ -76,6 +77,7 @@ describe("1Panel API compatibility", () => {
       .mockResolvedValueOnce(response("{}"))
       .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org:80"}]}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
+      .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
       .mockResolvedValueOnce(response('{"data":{"id":42}}'))
       .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
       .mockResolvedValueOnce(response("{}"));
@@ -84,7 +86,7 @@ describe("1Panel API compatibility", () => {
     const { provisionCustomDomainTls } = await import("@/lib/onepanel");
     await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 7 });
 
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(fetchMock.mock.calls[0][0]).toBe("https://panel.example.test/api/v2/websites/domains");
     expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({
       websiteID: 7,
@@ -93,17 +95,19 @@ describe("1Panel API compatibility", () => {
     expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v2/websites/domains/7");
     expect(fetchMock.mock.calls[2][0]).toBe("https://panel.example.test/api/v2/websites/acme/search");
     expect(JSON.parse((fetchMock.mock.calls[2][1] as RequestInit).body as string)).toMatchObject({ page: 1, pageSize: 100 });
-    expect(fetchMock.mock.calls[3][0]).toBe("https://panel.example.test/api/v2/websites/ssl");
-    expect(JSON.parse((fetchMock.mock.calls[3][1] as RequestInit).body as string)).toMatchObject({
+    expect(fetchMock.mock.calls[3][0]).toBe("https://panel.example.test/api/v2/websites/dns/search");
+    expect(JSON.parse((fetchMock.mock.calls[3][1] as RequestInit).body as string)).toMatchObject({ page: 1, pageSize: 100 });
+    expect(fetchMock.mock.calls[4][0]).toBe("https://panel.example.test/api/v2/websites/ssl");
+    expect(JSON.parse((fetchMock.mock.calls[4][1] as RequestInit).body as string)).toMatchObject({
       primaryDomain: "www.example.org",
-      provider: "http",
+      provider: "dnsAccount",
       acmeAccountId: 11,
-      autoRenew: true,
-      skipDNS: true
+      dnsAccountId: 12,
+      autoRenew: true
     });
-    expect(fetchMock.mock.calls[4][0]).toBe("https://panel.example.test/api/v2/websites/ssl/42");
-    expect((fetchMock.mock.calls[4][1] as RequestInit).method).toBe("GET");
-    expect(JSON.parse((fetchMock.mock.calls[5][1] as RequestInit).body as string)).toMatchObject({
+    expect(fetchMock.mock.calls[5][0]).toBe("https://panel.example.test/api/v2/websites/ssl/42");
+    expect((fetchMock.mock.calls[5][1] as RequestInit).method).toBe("GET");
+    expect(JSON.parse((fetchMock.mock.calls[6][1] as RequestInit).body as string)).toMatchObject({
       ids: [7],
       websiteSSLId: 42,
       type: "existed",
@@ -118,6 +122,7 @@ describe("1Panel API compatibility", () => {
       version: "1.10.34-lts",
       websiteId: "7",
       acmeAccountId: "11",
+      dnsAccountId: "12",
       wildcardSslId: null,
       platformSuffix: "mychurch.one"
     });
@@ -125,6 +130,7 @@ describe("1Panel API compatibility", () => {
       .mockResolvedValueOnce(response("{}"))
       .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
+      .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
       .mockResolvedValueOnce(response('{"data":{"sslId":"42"}}'))
       .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
       .mockResolvedValueOnce(response("{}"));
@@ -141,6 +147,7 @@ describe("1Panel API compatibility", () => {
       version: "1.10.34-lts",
       websiteId: "7",
       acmeAccountId: "11",
+      dnsAccountId: "12",
       wildcardSslId: null,
       platformSuffix: "mychurch.one"
     });
@@ -161,6 +168,7 @@ describe("1Panel API compatibility", () => {
       version: "1.10.34-lts",
       websiteId: "7",
       acmeAccountId: "11",
+      dnsAccountId: "12",
       wildcardSslId: null,
       platformSuffix: "mychurch.one"
     });
@@ -168,6 +176,7 @@ describe("1Panel API compatibility", () => {
       .mockResolvedValueOnce(failureResponse('{"message":"域名已存在"}', 400))
       .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
+      .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
       .mockResolvedValueOnce(response('{"data":{"id":42}}'))
       .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
       .mockResolvedValueOnce(response("{}"));
@@ -175,7 +184,7 @@ describe("1Panel API compatibility", () => {
 
     const { provisionCustomDomainTls } = await import("@/lib/onepanel");
     await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 7 });
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v1/websites/domains/7");
   });
 
@@ -186,6 +195,7 @@ describe("1Panel API compatibility", () => {
       version: "1.10.34-lts",
       websiteId: "7",
       acmeAccountId: "3761153346",
+      dnsAccountId: "12",
       wildcardSslId: null,
       platformSuffix: "mychurch.one"
     });
