@@ -10,7 +10,7 @@ import { siteIdentityAssetUrl } from "@/lib/site-identity";
 export async function GET() {
   try {
     const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { siteName: true, siteUrl: true, siteTagline: true, siteAddressStreet: true, siteAddressCity: true, siteAddressState: true, siteAddressZip: true, sitePhone: true, siteEmail: true, siteTaxId: true, siteLogoUrl: true, siteLogoLightUrl: true, siteLogoDarkUrl: true, siteFaviconUrl: true, siteShowTitle: true, siteShowTagline: true, siteShowLogo: true } });
-    return NextResponse.json({ siteName: settings?.siteName ?? "St. Paul's", siteUrl: settings?.siteUrl ?? "", siteTagline: settings?.siteTagline ?? "A place to belong.", siteAddressStreet: settings?.siteAddressStreet ?? "", siteAddressCity: settings?.siteAddressCity ?? "", siteAddressState: settings?.siteAddressState ?? "", siteAddressZip: settings?.siteAddressZip ?? "", sitePhone: settings?.sitePhone ?? "", siteEmail: settings?.siteEmail ?? "", siteTaxId: settings?.siteTaxId ?? "", siteLogoUrl: siteIdentityAssetUrl(settings?.siteLogoUrl), siteLogoLightUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl), siteLogoDarkUrl: siteIdentityAssetUrl(settings?.siteLogoDarkUrl), siteFaviconUrl: siteIdentityAssetUrl(settings?.siteFaviconUrl), siteShowTitle: settings?.siteShowTitle ?? true, siteShowTagline: settings?.siteShowTagline ?? true, siteShowLogo: settings?.siteShowLogo ?? false });
+    return NextResponse.json({ siteName: settings?.siteName ?? "St. Paul's", siteUrl: settings?.siteUrl ?? "", siteTagline: settings?.siteTagline ?? "A place to belong.", siteAddressStreet: settings?.siteAddressStreet ?? "", siteAddressCity: settings?.siteAddressCity ?? "", siteAddressState: settings?.siteAddressState ?? "", siteAddressZip: settings?.siteAddressZip ?? "", sitePhone: settings?.sitePhone ?? "", siteEmail: settings?.siteEmail ?? "", siteTaxId: settings?.siteTaxId ?? "", siteLogoUrl: siteIdentityAssetUrl(settings?.siteLogoUrl), siteLogoLightUrl: siteIdentityAssetUrl(settings?.siteLogoLightUrl || settings?.siteLogoUrl), siteLogoDarkUrl: siteIdentityAssetUrl(settings?.siteLogoDarkUrl), siteFaviconUrl: siteIdentityAssetUrl(settings?.siteFaviconUrl), siteFaviconConfigured: Boolean(settings?.siteFaviconUrl), siteShowTitle: settings?.siteShowTitle ?? true, siteShowTagline: settings?.siteShowTagline ?? true, siteShowLogo: settings?.siteShowLogo ?? false });
   } catch {
     return NextResponse.json({ error: "Unable to load site identity." }, { status: 403 });
   }
@@ -18,6 +18,18 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   const input = await request.json();
+  if (input && typeof input.siteFaviconUrl === "string" && input.siteUrl === undefined) {
+    if (input.siteFaviconUrl && !input.siteFaviconUrl.startsWith("/api/media/upload?file=") && !input.siteFaviconUrl.startsWith("/uploads/site-identity/")) {
+      return NextResponse.json({ error: "Invalid favicon asset." }, { status: 400 });
+    }
+    try {
+      await requirePermission("MANAGE_SETTINGS");
+      await db.securitySettings.upsert({ where: { id: 1 }, update: { siteFaviconUrl: input.siteFaviconUrl }, create: { id: 1, siteFaviconUrl: input.siteFaviconUrl } });
+      return NextResponse.json({ saved: true });
+    } catch (error) {
+      return apiErrorResponse(error, "Unable to save favicon.");
+    }
+  }
   if (!input || typeof input.siteUrl !== "string") {
     return NextResponse.json({ error: "Invalid site identity." }, { status: 400 });
   }

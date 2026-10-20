@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 type MediaAsset = { id: string; originalName: string; url: string; mimeType: string; altText: string | null; title: string | null };
 
-export function MediaPicker({ label = "Add media", value, mediaType = "image", onSelect, onSelectUrl }: { label?: string; value?: string; mediaType?: "image" | "video" | "audio" | "document" | "all"; onSelect: (asset: MediaAsset) => void; onSelectUrl?: (url: string) => void }) {
+export function MediaPicker({ label = "Add media", value, mediaType = "image", permission = "EDIT_PAGES", onSelect, onSelectUrl }: { label?: string; value?: string; mediaType?: "image" | "video" | "audio" | "document" | "all"; permission?: "EDIT_PAGES" | "MANAGE_SETTINGS"; onSelect: (asset: MediaAsset) => void; onSelectUrl?: (url: string) => void }) {
   const [open, setOpen] = useState(false);
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [search, setSearch] = useState("");
@@ -17,7 +17,8 @@ export function MediaPicker({ label = "Add media", value, mediaType = "image", o
     if (!open) return;
     setExternalUrl(value && !value.startsWith("/api/media/upload?file=") ? value : "");
     setLoading(true);
-    const query = search.trim() ? `?type=${mediaType}&search=${encodeURIComponent(search.trim())}` : `?type=${mediaType}`;
+    const context = permission === "MANAGE_SETTINGS" ? "&context=site-settings" : "";
+    const query = search.trim() ? `?type=${mediaType}&search=${encodeURIComponent(search.trim())}${context}` : `?type=${mediaType}${context}`;
     void fetch(`/api/media${query}`).then(async (response) => {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Unable to load media.");
@@ -28,7 +29,7 @@ export function MediaPicker({ label = "Add media", value, mediaType = "image", o
   async function upload(file: File) {
     setUploading(true); setError("");
     try {
-      const data = new FormData(); data.set("asset", file);
+      const data = new FormData(); data.set("asset", file); if (permission === "MANAGE_SETTINGS") data.set("context", "site-settings");
       const response = await fetch("/api/media/upload", { method: "POST", body: data });
       const body = await response.json();
       if (!response.ok || !body.asset) throw new Error(body.error ?? "Unable to upload media.");

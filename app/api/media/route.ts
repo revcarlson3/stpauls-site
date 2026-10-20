@@ -10,7 +10,8 @@ export async function GET(request: Request) {
       type: parseMediaFilter(url.searchParams.get("type")),
       linked: parseMediaLinkedFilter(url.searchParams.get("linked")),
       folder: url.searchParams.get("folder"),
-      generated: url.searchParams.get("generated") === "generated" ? "generated" : url.searchParams.get("generated") === "standard" ? "standard" : "all"
+      generated: url.searchParams.get("generated") === "generated" ? "generated" : url.searchParams.get("generated") === "standard" ? "standard" : "all",
+      permission: url.searchParams.get("context") === "site-settings" ? "MANAGE_SETTINGS" : "EDIT_PAGES"
     }));
   } catch (error) {
     return unauthorizedResponse(error);

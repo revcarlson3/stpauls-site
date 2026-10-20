@@ -99,8 +99,8 @@ export async function createUploadedMediaAsset(input: {
   }).then(serializeMediaAsset);
 }
 
-export async function listMediaAssets(input: { search?: string | null; type?: MediaFilter; linked?: MediaLinkedFilter; folder?: string | null; generated?: "all" | "generated" | "standard" }) {
-  await requirePermission("EDIT_PAGES");
+export async function listMediaAssets(input: { search?: string | null; type?: MediaFilter; linked?: MediaLinkedFilter; folder?: string | null; generated?: "all" | "generated" | "standard"; permission?: "EDIT_PAGES" | "MANAGE_SETTINGS" }) {
+  await requirePermission(input.permission ?? "EDIT_PAGES");
   await syncLegacyMediaAssets();
   const search = input.search?.trim() ?? "";
   const filters: Prisma.MediaAssetWhereInput[] = [];

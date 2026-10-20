@@ -6,8 +6,8 @@ import { allowedMediaMimeTypes, inferMediaMimeType, readMediaFile, saveUploadedM
 
 export async function POST(request: Request) {
   try {
-    const user = await requirePermission("EDIT_PAGES");
     const formData = await request.formData();
+    const user = await requirePermission(formData.get("context") === "site-settings" ? "MANAGE_SETTINGS" : "EDIT_PAGES");
     const asset = formData.get("asset");
     if (!(asset instanceof File) || !asset.size || !allowedMediaMimeTypes.has(asset.type) || asset.size > 100 * 1024 * 1024) {
       return NextResponse.json({ error: "Choose a supported image, video, audio, or document file up to 100 MB." }, { status: 400 });
