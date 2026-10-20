@@ -1,8 +1,10 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
+import { isPlatformHost } from "@/lib/platform-host";
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  if (pathname.startsWith("/global-admin") && !isPlatformHost(request.headers.get("host"))) return new NextResponse("Not Found", { status: 404 });
   if (pathname === "/admin/login" || pathname === "/global-admin/login") return NextResponse.next();
   const token = await getToken({ req: request });
   if (pathname.startsWith("/global-admin")) {

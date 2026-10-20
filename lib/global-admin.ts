@@ -4,6 +4,8 @@ import crypto from "node:crypto";
 import { authOptions } from "@/lib/auth-options";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { headers } from "next/headers";
+import { isPlatformHost } from "@/lib/platform-host";
 import type { OnboardingStatus, TenantLifecycleStatus } from "@prisma/client";
 
 export const GLOBAL_ADMIN_BOUNDARY = "global-admin" as const;
@@ -70,7 +72,12 @@ export function isGlobalAdminSession(session: { user?: { authBoundary?: string; 
   return session?.user?.authBoundary === GLOBAL_ADMIN_BOUNDARY && session.user.mfaPending !== true && session.user.globalAdminMfaSetupRequired !== true;
 }
 
+export function isGlobalAdminHost(host: string | null | undefined) {
+  return isPlatformHost(host);
+}
+
 export async function requireGlobalAdmin(options: { selectedChurch?: boolean; sensitive?: boolean } = {}) {
+  if (!isGlobalAdminHost(headers().get("host"))) throw new Error("Unauthorized: global administration is only available on the platform domain.");
   const session = await getServerSession(authOptions);
   if (!session || !isGlobalAdminSession(session) || !session.user?.id) throw new Error("Unauthorized: bridge access is required.");
   const user = await db.user.findUnique({ where: { id: session.user.id }, select: { id: true, name: true, email: true, isActive: true, isPlatformAdmin: true, sessionVersion: true } });

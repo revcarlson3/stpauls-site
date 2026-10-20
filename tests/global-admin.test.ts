@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { buildGlobalAuditDetails, createGlobalAdminReauthToken, hasRecentReauthentication, hasValidGlobalAdminReauthToken, isActiveSelectedChurch, isGlobalAdminSession, lifecycleAuditMetadata, nextLifecycleState } from "@/lib/global-admin";
+import { buildGlobalAuditDetails, createGlobalAdminReauthToken, hasRecentReauthentication, hasValidGlobalAdminReauthToken, isActiveSelectedChurch, isGlobalAdminHost, isGlobalAdminSession, lifecycleAuditMetadata, nextLifecycleState } from "@/lib/global-admin";
 
 describe("global administrator bridge authorization", () => {
   it("accepts only a completed global-admin session", () => {
     expect(isGlobalAdminSession({ user: { authBoundary: "global-admin", mfaPending: false } })).toBe(true);
     expect(isGlobalAdminSession({ user: { authBoundary: "tenant-admin", mfaPending: false } })).toBe(false);
     expect(isGlobalAdminSession({ user: { authBoundary: "global-admin", mfaPending: true } })).toBe(false);
+  });
+
+  it("allows Global Admin only on platform hosts", () => {
+    expect(isGlobalAdminHost("beta.mychurch.one")).toBe(true);
+    expect(isGlobalAdminHost("stpaulsmilaca.org")).toBe(false);
   });
 
   it("requires recent reauthentication for sensitive actions", () => {
