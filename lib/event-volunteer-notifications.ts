@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { sendMembershipEmail, sendSmsText } from "@/lib/membership-delivery";
-import { membershipMessageEligibility } from "@/lib/membership-privacy";
+import { resolveMembershipMessageRecipient } from "@/lib/membership-privacy";
 import { htmlToText, sanitizeEmailHtml } from "@/lib/membership-messaging";
 import { isWithinQuietHours } from "@/lib/event-notification-schedule";
 
@@ -26,7 +26,20 @@ export async function processDueVolunteerNotifications(churchId?: string) {
         include: {
           event: { select: { churchId: true, title: true, startsAt: true, location: true, readingsUrl: true } },
           group: { select: { id: true, name: true, singularName: true } },
-          individual: { select: { firstName: true, lastName: true, email: true, cellphone: true, emailMessagesAllowed: true, smsMessagesAllowed: true, doNotContact: true, status: true } }
+          individual: {
+            select: {
+              id: true, firstName: true, lastName: true, email: true, cellphone: true, emailMessagesAllowed: true, smsMessagesAllowed: true, doNotContact: true, status: true,
+              family: {
+                select: {
+                  email: true, phone: true, phoneIsMobile: true,
+                  individuals: {
+                    where: { status: { not: "REMOVED" } },
+                    select: { id: true, status: true, email: true, cellphone: true, emailMessagesAllowed: true, smsMessagesAllowed: true, doNotContact: true }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -43,7 +56,7 @@ export async function processDueVolunteerNotifications(churchId?: string) {
   for (const notification of due) {
     const member = notification.assignment.individual;
     const channel = notification.channel as "EMAIL" | "SMS";
-    const eligibility = membershipMessageEligibility(member, channel);
+    const eligibility = resolveMembershipMessageRecipient(member, channel);
     if (!eligibility.eligible || !eligibility.address) {
       await db.membershipVolunteerNotification.update({ where: { id: notification.id }, data: { status: "SKIPPED", failureReason: eligibility.reason ?? "Not eligible for this channel." } });
       skipped++;
