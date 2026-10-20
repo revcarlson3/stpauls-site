@@ -127,13 +127,6 @@ export default function SiteSettingsPage() {
             <label className="grid gap-1 text-sm font-semibold">Pollinations.AI API key<input type="password" autoComplete="new-password" placeholder={settings.pollinationsApiKeyConfigured ? "Leave blank to keep current key" : "Enter Pollinations.AI API key"} value={settings.pollinationsApiKey} onChange={(event) => setSettings({ ...settings, pollinationsApiKey: event.target.value })} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>
             {settings.pollinationsApiKeyConfigured && <p className="text-sm text-ink/60">An API key is configured.</p>}
           </section>}
-          {!messagingPage && canManageModules && <section className="grid gap-3 rounded-2xl border border-coral/25 bg-white p-6 shadow-sm">
-            <h2 className="font-serif text-2xl">Public website</h2>
-            <p className="text-sm text-ink/60">Turn the public-facing church website on or off. When disabled, visitors are sent to the administrator sign-in page and site-building tools are hidden from the admin menu.</p>
-            <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={settings.publicSiteEnabled} onChange={(event) => setSettings((current) => ({ ...current, publicSiteEnabled: event.target.checked }))} /> Enable public website</label>
-            {settings.publicSiteEnabled && <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={settings.maintenanceMode} onChange={(event) => setSettings((current) => ({ ...current, maintenanceMode: event.target.checked }))} /> Enable maintenance mode</label>}
-            {settings.publicSiteEnabled && settings.maintenanceMode && <p className="text-xs text-ink/60">Visitors will see the maintenance page until this switch is turned off. Administrator login remains available.</p>}
-          </section>}
           {!messagingPage && canManageModules && <section className="grid gap-3 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
             <h2 className="font-serif text-2xl">Available modules</h2>
             <p className="text-sm text-ink/60">Enabled modules appear in the admin menu for users who have the module&apos;s management permission.</p>
