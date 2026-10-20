@@ -3,6 +3,7 @@ import { buildRecurringDates, selectRotationAssignments } from "@/lib/event-sche
 import { eventReportPreset, eventReportSummary } from "@/lib/event-reporting";
 import { normalizeAttendanceEntries } from "@/lib/membership-attendance";
 import { isValidNotificationTime, isWithinQuietHours } from "@/lib/event-notification-schedule";
+import { getOtherVolunteerGroupNames } from "@/lib/event-volunteer-conflicts";
 
 describe("event scheduling reliability", () => {
   it("keeps recurring-series dates stable while applying a changed occurrence count", () => {
@@ -36,5 +37,15 @@ describe("event scheduling reliability", () => {
     expect(isValidNotificationTime("8:00")).toBe(false);
     expect(isWithinQuietHours(new Date("2026-09-13T02:00:00.000Z"), "America/Chicago", "20:00", "08:00")).toBe(true);
     expect(isWithinQuietHours(new Date("2026-09-13T16:00:00.000Z"), "America/Chicago", "20:00", "08:00")).toBe(false);
+  });
+
+  it("identifies the other volunteer groups serving the same person", () => {
+    const assignments = [
+      { groupId: "readers", group: { name: "Readers" }, individual: { id: "member-1" } },
+      { groupId: "greeters", group: { name: "Greeters" }, individual: { id: "member-1" } },
+      { groupId: "sound", group: { name: "Sound" }, individual: { id: "member-2" } }
+    ];
+    expect(getOtherVolunteerGroupNames(assignments, assignments[0])).toEqual(["Greeters"]);
+    expect(getOtherVolunteerGroupNames(assignments, assignments[2])).toEqual([]);
   });
 });
