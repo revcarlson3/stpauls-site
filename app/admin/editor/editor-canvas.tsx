@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragOverEvent } from "@dnd-kit/core";
+import { closestCenter, DndContext, pointerWithin, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent, type DragOverEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Button, Card } from "@/components/ui";
@@ -411,6 +411,17 @@ function createBlock(type: BlockType): Block {
   const definition = blockDefinitions[type];
   return { id: `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type, title: structuralTypes.includes(type) || type === "hero" || type === "buttons" || type === "cta" || type === "table" || type === "calendar" ? "" : `New ${definition.label.toLowerCase()} element`, content: type === "buttons" ? buttonsContent({ items: [{ id: `button-${Date.now()}`, label: "Learn more", href: "#", variant: "primary", size: "md", target: "_self" }], layout: "row", alignment: "left" }) : type === "table" ? tableConfigContent(defaultTableConfig()) : "", formId: type === "form" ? null : undefined, mediaType: type === "hero" ? "image" : undefined, mediaUrl: type === "hero" ? "" : undefined, imageFit: type === "image" ? "contain" : undefined, imageHoverEffect: type === "image" ? "none" : undefined, imageHoverOverlay: type === "image" ? false : undefined, imageHoverOverlayColor: type === "image" ? "#17324d" : undefined, imageHoverOverlayOpacity: type === "image" ? "45" : undefined, imageHoverText: type === "image" ? "" : undefined, imageLightbox: type === "image" ? false : undefined, imageEnterAnimation: type === "image" ? "none" : undefined, imageExitAnimation: type === "image" ? "none" : undefined, imageAnimationTrigger: type === "image" ? "load" : undefined, youtubeMute: type === "youtube" ? true : undefined, youtubeControls: type === "youtube" ? true : undefined, mapProvider: type === "map" ? "google" : undefined, quoteCitation: type === "blockquote" ? "" : undefined, blockquoteStyle: type === "blockquote" ? "classic" : undefined, listItems: type === "list" ? "" : undefined, listStyle: type === "list" ? "unordered" : undefined, ctaPanels: type === "cta" ? [defaultCtaPanel()] : undefined, ctaColumns: type === "cta" ? 1 : undefined, ctaGap: type === "cta" ? "md" : undefined, ctaAlignment: type === "cta" ? "left" : undefined, ctaPanelStyle: type === "cta" ? "filled" : undefined, headingLevel: type === "headline" ? "h2" : undefined, alignment: "left", backgroundType: "none", overlayType: "none", overlayColor: "#17324d", overlaySecondaryColor: "#e66f51", overlayOpacity: "45", overlayAngle: "180", borderStyle: "none", justify: "left", animation: "none", span: definition.defaultSpan, columns: type === "grid" ? 2 : undefined, flexDirection: type === "flex" ? "row" : undefined, flexWrap: type === "flex" ? "wrap" : undefined, flexGap: type === "flex" ? "16" : undefined, flexJustify: type === "flex" ? "start" : undefined, flexAlign: type === "flex" ? "stretch" : undefined, children: structuralTypes.includes(type) ? [] : undefined };
 }
+
+const editorCollisionDetection: CollisionDetection = (args) => {
+  const activeKind = args.active.data.current?.kind;
+  const nonInsertTargets = args.droppableContainers.filter((container) => container.data.current?.kind !== "insert");
+  if (activeKind === "palette") {
+    const insertTargets = args.droppableContainers.filter((container) => container.data.current?.kind === "insert");
+    const insertHits = pointerWithin({ ...args, droppableContainers: insertTargets });
+    if (insertHits.length) return insertHits;
+  }
+  return closestCenter({ ...args, droppableContainers: nonInsertTargets });
+};
 
 function updateAtPath(blocks: Block[], path: number[], update: (block: Block) => Block): Block[] {
   if (!path.length) return blocks;
@@ -1038,7 +1049,6 @@ function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, dragg
     ...typographyStyle(block),
     ...(block.backgroundColor && block.backgroundType !== "image" && block.backgroundType !== "video" ? { backgroundColor: block.backgroundColor } : {}),
     ...(block.backgroundTransparent ? { backgroundColor: "transparent" } : {}),
-    ...(block.type !== "image" && block.backgroundType === "image" && block.backgroundUrl && !block.backgroundHidden ? { backgroundImage: `url("${block.backgroundUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : {}),
     ...(block.paddingTop && Number(block.paddingTop) >= 0 ? { paddingTop: `${block.paddingTop}px` } : {}),
     ...(block.paddingRight && Number(block.paddingRight) >= 0 ? { paddingRight: `${block.paddingRight}px` } : {}),
     ...(block.paddingBottom && Number(block.paddingBottom) >= 0 ? { paddingBottom: `${block.paddingBottom}px` } : {}),
@@ -1071,7 +1081,8 @@ function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, dragg
       ? { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gridAutoRows: "max-content", alignContent: block.verticalAlign === "center" ? "center" : block.verticalAlign === "bottom" ? "end" : "start", gap: 0, backgroundColor: "transparent", minHeight: "14rem", height: "100%" }
       : undefined;
   return <article className={`group relative min-w-0 overflow-hidden rounded-xl border transition ${blockPadding} ${blockAlignment} ${blockAnimation} ${block.hidden ? "opacity-45 outline outline-2 outline-dashed outline-coral/50" : ""} ${selected ? "border-coral ring-2 ring-coral/20" : "border-transparent"}`} style={blockStyle} onClick={(event) => { event.stopPropagation(); if (event.target instanceof HTMLElement && (event.target.closest("[contenteditable='true']") || event.target.closest("input, textarea, select, button"))) return; onSelect(path); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onSelect(path); onContextMenu(event, path); }}>
-    {block.backgroundType === "video" && block.backgroundUrl && !block.backgroundHidden && <video className="pointer-events-none absolute inset-0 h-full w-full object-cover" src={block.backgroundUrl} controls={block.videoControls} autoPlay muted playsInline loop={block.videoLoop} />}
+    {block.backgroundType === "image" && block.backgroundUrl && !block.backgroundHidden && <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url("${block.backgroundUrl}")` }} />}
+    {block.backgroundType === "video" && block.backgroundUrl && !block.backgroundHidden && <video className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover" src={block.backgroundUrl} controls={block.videoControls} autoPlay muted playsInline loop={block.videoLoop} />}
     {block.type !== "image" && block.overlayType && block.overlayType !== "none" && !block.overlayHidden && <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0" style={{ ...overlayStyle(block), opacity: overlayOpacity(block.overlayOpacity) }} />}
     <div className={`relative z-10 flex items-start justify-between gap-4 ${isStructural ? "h-full" : ""}`} style={{ flexDirection: textBlocks.includes(block.type) ? "column" : undefined, justifyContent: textBlocks.includes(block.type) ? block.verticalAlign === "center" ? "center" : block.verticalAlign === "bottom" ? "flex-end" : "flex-start" : undefined, marginTop: Number(block.paddingTop) < 0 ? `${block.paddingTop}px` : undefined, marginRight: Number(block.paddingRight) < 0 ? `${block.paddingRight}px` : undefined, marginBottom: Number(block.paddingBottom) < 0 ? `${block.paddingBottom}px` : undefined, marginLeft: Number(block.paddingLeft) < 0 ? `${block.paddingLeft}px` : undefined }}>
       <div className={`min-w-0 flex-1 ${isStructural ? "h-full" : ""}`}>
@@ -1570,7 +1581,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     setActiveDropPath(null);
   };
 
-  return   <DndContext sensors={sensors} onDragStart={({ active }) => { const data = active.data.current as { kind?: string; type?: BlockType } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
+  return   <DndContext sensors={sensors} collisionDetection={editorCollisionDetection} onDragStart={({ active }) => { const data = active.data.current as { kind?: string; type?: BlockType } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
     {message && <p role="status" aria-live="polite" className="lg:col-span-2 rounded-lg border border-emerald-600/20 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{message}</p>}
     {recoveryOffer && <div role="alert" className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/25 bg-amber-50 px-4 py-3 text-sm text-amber-950"><div><p className="font-bold">A newer local draft is available.</p><p className="mt-1 text-amber-950/75">Recovered from {new Date(recoveryOffer.savedAt).toLocaleString()}.</p></div><div className="flex gap-2"><button type="button" className="focus-ring rounded-lg bg-ink px-3 py-2 text-xs font-bold text-white hover:bg-ink/90" onClick={restoreRecovery}>Restore draft</button><button type="button" className="focus-ring rounded-lg border border-amber-900/25 px-3 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-100" onClick={discardRecovery}>Discard</button></div></div>}
     <div className="flex flex-wrap items-center gap-2 lg:col-span-2">

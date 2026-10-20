@@ -186,15 +186,15 @@ function formatListNumber(value: number, style: RenderListConfig["numberStyle"])
 function backgroundMediaLayers(props: Record<string, unknown>) {
   const baseUrl = typeof props.backgroundUrl === "string" ? props.backgroundUrl : "";
   return <>
-    {props.backgroundType === "image" && baseUrl && <div aria-hidden="true" className="responsive-background-base responsive-background-image pointer-events-none absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url("${baseUrl}")` }} />}
-    {props.backgroundType === "video" && baseUrl && <video className="responsive-background-base responsive-background-video pointer-events-none absolute inset-0 h-full w-full object-cover" src={baseUrl} controls={props.videoControls === true} autoPlay loop={props.videoLoop === true} muted playsInline />}
+    {props.backgroundType === "image" && baseUrl && <div aria-hidden="true" className="responsive-background-base responsive-background-image pointer-events-none absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url("${baseUrl}")` }} />}
+    {props.backgroundType === "video" && baseUrl && <video className="responsive-background-base responsive-background-video pointer-events-none absolute inset-0 z-0 h-full w-full object-cover" src={baseUrl} controls={props.videoControls === true} autoPlay loop={props.videoLoop === true} muted playsInline />}
     {responsiveDevices.map((device) => {
       const item = responsiveSettings(props, device);
       const url = typeof item?.backgroundUrl === "string" ? item.backgroundUrl : "";
       if (!url || (item?.backgroundType !== "image" && item?.backgroundType !== "video")) return null;
       return item.backgroundType === "image"
-        ? <div key={`${device}-background`} aria-hidden="true" className={`responsive-background-variant responsive-background-${device} pointer-events-none absolute inset-0 bg-cover bg-center`} style={{ backgroundImage: `url("${url}")` }} />
-        : <video key={`${device}-background`} className={`responsive-background-variant responsive-background-${device} pointer-events-none absolute inset-0 h-full w-full object-cover`} src={url} autoPlay muted loop playsInline />;
+        ? <div key={`${device}-background`} aria-hidden="true" className={`responsive-background-variant responsive-background-${device} pointer-events-none absolute inset-0 z-0 bg-cover bg-center`} style={{ backgroundImage: `url("${url}")` }} />
+        : <video key={`${device}-background`} className={`responsive-background-variant responsive-background-${device} pointer-events-none absolute inset-0 z-0 h-full w-full object-cover`} src={url} autoPlay muted loop playsInline />;
     })}
   </>;
 }
