@@ -71,6 +71,18 @@ jobs:
             -e "ssh -p $DEPLOY_PORT -i $HOME/.ssh/beta_deploy_key" \
             ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
 
+      - name: Install background notification worker
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.BETA_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.BETA_DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.BETA_DEPLOY_PORT || 22 }}
+          DEPLOY_PATH: ${{ secrets.BETA_DEPLOY_PATH || '/var/www/mychurch' }}
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" -i "$HOME/.ssh/beta_deploy_key" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && if ! grep -q '^VOLUNTEER_NOTIFICATION_WORKER_SECRET=' .env 2>/dev/null; then printf '%s\n' \"VOLUNTEER_NOTIFICATION_WORKER_SECRET=\$(openssl rand -hex 32)\" >> .env; fi && sudo -n install -m 644 deploy/volunteer-notifications.service /etc/systemd/system/stpauls-volunteer-notifications.service && sudo -n install -m 644 deploy/volunteer-notifications.timer /etc/systemd/system/stpauls-volunteer-notifications.timer && sudo -n systemctl daemon-reload && sudo -n systemctl enable --now stpauls-volunteer-notifications.timer"
+
       - name: Install, build, and restart beta
         shell: bash
         env:
