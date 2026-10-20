@@ -383,6 +383,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
       ...(block.props?.justify === "center" ? { marginLeft: "auto", marginRight: "auto" } : block.props?.justify === "right" ? { marginLeft: "auto" } : {})
     };
     const imageContainerStyle: CSSProperties = {
+      alignSelf: alignment === "text-center" ? "center" : alignment === "text-right" ? "flex-end" : "flex-start",
       ...(width ? { width } : {}),
       ...(height ? { height } : {}),
       ...(typeof block.props?.marginTop === "string" ? { marginTop: `${block.props.marginTop}px` } : {}),

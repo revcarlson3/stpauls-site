@@ -66,6 +66,7 @@ describe("public page headline layout", () => {
     expect(markup).toContain("margin-left:12px");
     expect(markup).toContain("margin-bottom:8px");
     expect(markup).toContain("box-sizing:border-box");
+    expect(markup).toContain("align-self:flex-start");
     expect(markup).toContain("responsive-image-container");
     expect(markup).toContain("--desktop-width:75%");
     expect(markup).toContain("--desktop-height:240px");
