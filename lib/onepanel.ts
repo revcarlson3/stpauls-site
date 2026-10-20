@@ -82,13 +82,14 @@ function containsRecordId(body: unknown, expectedId: number): boolean {
 }
 
 function containsDomain(body: unknown, hostname: string): boolean {
+  const normalizeDomain = (value: string) => value.trim().toLowerCase().replace(/\.+$/, "").replace(/:\d+$/, "");
   if (Array.isArray(body)) return body.some((item) => containsDomain(item, hostname));
   if (!body || typeof body !== "object") return false;
   const record = body as Record<string, unknown>;
   for (const key of ["domain", "primaryDomain"]) {
-    if (typeof record[key] === "string" && record[key].trim().toLowerCase() === hostname) return true;
+    if (typeof record[key] === "string" && normalizeDomain(record[key]) === normalizeDomain(hostname)) return true;
   }
-  if (typeof record.domains === "string" && record.domains.split(/[,\n]/).some((domain) => domain.trim().toLowerCase() === hostname)) return true;
+  if (typeof record.domains === "string" && record.domains.split(/[,\n]/).some((domain) => normalizeDomain(domain) === normalizeDomain(hostname))) return true;
   return Object.values(record).some((value) => containsDomain(value, hostname));
 }
 
@@ -178,7 +179,8 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
   }
   const boundDomains = await panelGet<unknown>(config, `/websites/domains/${Number(config.websiteId)}`);
   if (!containsDomain(boundDomains, hostname)) {
-    throw new Error(`1Panel domain binding did not persist ${hostname} on website ${config.websiteId}.`);
+    const detail = responseMessage(boundDomains);
+    throw new Error(`1Panel domain binding did not persist ${hostname} on website ${config.websiteId}${detail ? `; returned: ${detail}` : "."}`);
   }
   const acmeAccounts = await panelRequest<unknown>(config, "/websites/acme/search", {
     page: 1,

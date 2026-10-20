@@ -74,7 +74,7 @@ describe("1Panel API compatibility", () => {
     });
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response("{}"))
-      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
+      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org:80"}]}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
       .mockResolvedValueOnce(response('{"data":{"id":42}}'))
       .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
