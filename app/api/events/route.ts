@@ -6,7 +6,7 @@ import { logAudit } from "@/lib/audit";
 import { buildRecurringDates } from "@/lib/event-scheduling";
 import { requireTenantScope } from "@/lib/tenant";
 import { apiErrorResponse } from "@/lib/api-errors";
-import { DEFAULT_EVENT_TYPES } from "@/lib/event-validation";
+import { DEFAULT_EVENT_TYPES, resolveEventType } from "@/lib/event-validation";
 
 export async function GET(request: Request) {
   try {
@@ -56,10 +56,13 @@ export async function POST(request: Request) {
       recurrence?: { enabled?: unknown; frequency?: unknown; interval?: unknown; endMode?: unknown; endDate?: unknown; occurrences?: unknown };
     };
     const eventSettings = await db.membershipEventSettings.findUnique({ where: { churchId: scope.church.id }, select: { eventTypes: true } });
-    const eventTypes: readonly string[] = Array.isArray(eventSettings?.eventTypes) ? eventSettings.eventTypes.filter((value): value is string => typeof value === "string") : DEFAULT_EVENT_TYPES;
+    const eventTypes: readonly string[] = Array.isArray(eventSettings?.eventTypes) && eventSettings.eventTypes.length
+      ? eventSettings.eventTypes.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : DEFAULT_EVENT_TYPES;
+    const resolvedEventType = input.eventType === undefined ? "Other" : resolveEventType(input.eventType, eventTypes);
     if (
       typeof input.title !== "string" || !input.title.trim() ||
-      (input.eventType !== undefined && !eventTypes.includes(String(input.eventType))) ||
+      (input.eventType !== undefined && !resolvedEventType) ||
       (input.status !== undefined && !["SCHEDULED", "COMPLETED", "CANCELLED"].includes(String(input.status))) ||
       (input.timeZone !== undefined && typeof input.timeZone !== "string") ||
       typeof input.startsAt !== "string" || Number.isNaN(new Date(input.startsAt).getTime()) ||
@@ -104,7 +107,7 @@ export async function POST(request: Request) {
       data: dates.map((date) => ({
         churchId: scope.church.id,
         title: title.trim(),
-        eventType: typeof input.eventType === "string" ? input.eventType : "Other",
+        eventType: resolvedEventType ?? "Other",
         status: typeof input.status === "string" ? input.status as "SCHEDULED" | "COMPLETED" | "CANCELLED" : "SCHEDULED",
         timeZone: typeof input.timeZone === "string" ? input.timeZone : null,
         category: typeof input.category === "string" && input.category.trim() ? input.category.trim() : null,
@@ -137,11 +140,14 @@ export async function PATCH(request: Request) {
     const scope = await requireTenantScope();
     const input = await request.json() as { id?: unknown; applyToSeries?: unknown; title?: unknown; eventType?: unknown; category?: unknown; status?: unknown; timeZone?: unknown; description?: unknown; location?: unknown; readingsUrl?: unknown; startsAt?: unknown; endsAt?: unknown; allDay?: unknown; published?: unknown; attendanceEnabled?: unknown; attendanceAudienceType?: unknown; attendanceAudienceId?: unknown };
     const eventSettings = await db.membershipEventSettings.findUnique({ where: { churchId: scope.church.id }, select: { eventTypes: true } });
-    const eventTypes: readonly string[] = Array.isArray(eventSettings?.eventTypes) ? eventSettings.eventTypes.filter((value): value is string => typeof value === "string") : DEFAULT_EVENT_TYPES;
+    const eventTypes: readonly string[] = Array.isArray(eventSettings?.eventTypes) && eventSettings.eventTypes.length
+      ? eventSettings.eventTypes.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : DEFAULT_EVENT_TYPES;
+    const resolvedEventType = resolveEventType(input.eventType, eventTypes);
     if (
       typeof input.id !== "string" || !input.id ||
       typeof input.title !== "string" || !input.title.trim() ||
-      typeof input.eventType !== "string" || !eventTypes.includes(input.eventType) ||
+      !resolvedEventType ||
       !["SCHEDULED", "COMPLETED", "CANCELLED"].includes(String(input.status)) ||
       typeof input.timeZone !== "string" ||
       typeof input.startsAt !== "string" || Number.isNaN(new Date(input.startsAt).getTime()) ||
@@ -177,7 +183,7 @@ export async function PATCH(request: Request) {
     const requestedEnd = new Date(input.endsAt);
     const data = {
         title: input.title.trim(),
-        eventType: input.eventType,
+        eventType: resolvedEventType,
         status: input.status as "SCHEDULED" | "COMPLETED" | "CANCELLED",
         timeZone: input.timeZone,
         category: input.category && input.category.trim() ? input.category.trim() : null,

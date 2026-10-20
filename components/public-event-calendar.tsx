@@ -60,8 +60,7 @@ function EventTile({ event, compact = false }: { event: PublicEvent; compact?: b
   const [open, setOpen] = useState(false);
   return <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={(focusEvent) => { if (!focusEvent.currentTarget.contains(focusEvent.relatedTarget)) setOpen(false); }}>
     <button type="button" aria-expanded={open} className={`focus-ring w-full truncate rounded-lg bg-teal/10 px-2 py-1 text-left text-xs font-semibold text-teal-950 hover:bg-teal/20 ${compact ? "py-1" : "p-2"}`}>
-      {!compact && <span className="block text-[11px] font-medium text-teal-900/70">{eventTime(event)}</span>}
-      <span className="block truncate">{event.title}</span>
+      <span className={`flex min-w-0 items-center gap-1 ${compact ? "text-[10px]" : ""}`}><span className="shrink-0 font-medium text-teal-900/70">{event.allDay ? "All day" : timeFormatter.format(new Date(event.startsAt))}</span><span className="truncate">{event.title}</span></span>
     </button>
     {open && <div role="tooltip" className="absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border border-ink/10 bg-white p-4 text-left shadow-xl">
       <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-coral">{event.eventType.replace(/_/g, " ")}</p>
