@@ -119,11 +119,16 @@ function directNumericField(body: unknown, keys: string[]): number | null {
   return null;
 }
 
-function findWebsiteId(body: unknown, hostname: string, excludedId: number): number | null {
+type WebsiteMatch = {
+  id: number;
+  type: string;
+};
+
+function findWebsite(body: unknown, hostname: string, excludedId: number): WebsiteMatch | null {
   const normalizedHostname = hostname.trim().toLowerCase().replace(/\.+$/, "").replace(/:\d+$/, "");
   if (Array.isArray(body)) {
     for (const item of body) {
-      const found = findWebsiteId(item, hostname, excludedId);
+      const found = findWebsite(item, hostname, excludedId);
       if (found !== null) return found;
     }
     return null;
@@ -132,10 +137,10 @@ function findWebsiteId(body: unknown, hostname: string, excludedId: number): num
   const record = body as Record<string, unknown>;
   const id = directNumericField(record, ["id", "ID"]);
   if (id !== null && id !== excludedId && panelDomains(record).some((domain) => domain.toLowerCase().replace(/\.+$/, "").replace(/:\d+$/, "") === normalizedHostname)) {
-    return id;
+    return { id, type: typeof record.type === "string" ? record.type : "" };
   }
   for (const value of Object.values(record)) {
-    const found = findWebsiteId(value, hostname, excludedId);
+    const found = findWebsite(value, hostname, excludedId);
     if (found !== null) return found;
   }
   return null;
@@ -252,13 +257,26 @@ export type DomainTlsProvisioningResult = {
   websiteId: number;
 };
 
+const APPLICATION_PROXY = "http://127.0.0.1:3000";
+
 export async function provisionCustomDomainTls(hostname: string): Promise<DomainTlsProvisioningResult> {
   const config = await configuration();
   if (!config) throw new Error("Configure 1Panel before provisioning SSL.");
   if (!config.websiteId || !config.acmeAccountId || !config.dnsAccountId) throw new Error("Configure the 1Panel website ID, Let’s Encrypt account ID, and DNS account ID before provisioning SSL.");
   const sharedWebsiteId = Number(config.websiteId);
   const websites = await panelGet<unknown>(config, "/websites/list");
-  let websiteId = findWebsiteId(websites, hostname, sharedWebsiteId);
+  const existingWebsite = findWebsite(websites, hostname, sharedWebsiteId);
+  let websiteId = existingWebsite?.id ?? null;
+  if (existingWebsite && existingWebsite.type && existingWebsite.type !== "proxy") {
+    await panelRequest(config, "/websites/del", {
+      id: existingWebsite.id,
+      deleteApp: false,
+      deleteBackup: false,
+      forceDelete: true,
+      deleteDB: false
+    }, "dedicated website replacement");
+    websiteId = null;
+  }
   if (websiteId === null) {
     const sharedWebsite = await panelGet<unknown>(config, `/websites/${sharedWebsiteId}`);
     const sharedDomains = await panelGet<unknown>(config, `/websites/domains/${sharedWebsiteId}`);
@@ -268,13 +286,13 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
     }
     const groupId = directNumericField(responseData(sharedWebsite), ["webSiteGroupId", "websiteGroupId", "WebsiteGroupID"]) ?? 1;
     const createdWebsite = await panelRequest<unknown>(config, "/websites", {
-      type: "static",
+      type: "proxy",
       alias: `custom-${hostname.replace(/[^a-z0-9-]/gi, "-")}`,
       remark: `Managed custom domain ${hostname}`,
       webSiteGroupID: groupId,
       primaryDomain: hostname,
       domains: [{ domain: hostname, port: 80, ssl: false }],
-      appType: "installed"
+      proxy: APPLICATION_PROXY
     }, "dedicated website creation");
     websiteId = numericId(createdWebsite);
     if (websiteId === null) throw new Error(`1Panel did not return a website ID for dedicated domain ${hostname}.`);

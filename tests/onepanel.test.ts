@@ -62,7 +62,7 @@ describe("1Panel API compatibility", () => {
     expect(secondHeaders["1Panel-Token"]).toBe(crypto.createHash("md5").update(`1panelapi-key${secondHeaders["1Panel-Timestamp"]}`).digest("hex"));
   });
 
-  it("creates a dedicated static website and attaches its certificate there", async () => {
+  it("creates a dedicated proxy website and attaches its certificate there", async () => {
     db.onePanelConfiguration.findUnique.mockResolvedValue({
       baseUrl: "https://panel.example.test",
       apiKeyEncrypted: "encrypted",
@@ -98,10 +98,11 @@ describe("1Panel API compatibility", () => {
     expect(JSON.parse((fetchMock.mock.calls[3][1] as RequestInit).body as string)).toMatchObject({ id: 8 });
     expect(fetchMock.mock.calls[4][0]).toBe("https://panel.example.test/api/v2/websites");
     expect(JSON.parse((fetchMock.mock.calls[4][1] as RequestInit).body as string)).toMatchObject({
-      type: "static",
+      type: "proxy",
       webSiteGroupID: 3,
       primaryDomain: "www.example.org",
-      domains: [{ domain: "www.example.org", port: 80, ssl: false }]
+      domains: [{ domain: "www.example.org", port: 80, ssl: false }],
+      proxy: "http://127.0.0.1:3000"
     });
     expect(fetchMock.mock.calls[5][0]).toBe("https://panel.example.test/api/v2/websites/domains/42");
     expect(fetchMock.mock.calls[6][0]).toBe("https://panel.example.test/api/v2/websites/acme/search");
@@ -148,6 +149,44 @@ describe("1Panel API compatibility", () => {
 
     const { provisionCustomDomainTls } = await import("@/lib/onepanel");
     await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 42 });
+  });
+
+  it("replaces an existing static dedicated site with a proxy site", async () => {
+    db.onePanelConfiguration.findUnique.mockResolvedValue({
+      baseUrl: "https://panel.example.test",
+      apiKeyEncrypted: "encrypted",
+      version: "1.10.34-lts",
+      websiteId: "7",
+      acmeAccountId: "11",
+      dnsAccountId: "12",
+      wildcardSslId: null,
+      platformSuffix: "mychurch.one"
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response('{"data":[{"id":42,"type":"static","domains":["www.example.org"]}]}'))
+      .mockResolvedValueOnce(response("{}"))
+      .mockResolvedValueOnce(response('{"data":{"webSiteGroupId":3}}'))
+      .mockResolvedValueOnce(response('{"data":[]}'))
+      .mockResolvedValueOnce(response('{"data":{"id":43}}'))
+      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
+      .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
+      .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
+      .mockResolvedValueOnce(response('{"data":{"id":99}}'))
+      .mockResolvedValueOnce(response('{"data":{"status":"ready","pem":"-----BEGIN CERTIFICATE-----\\nvalid\\n-----END CERTIFICATE-----"}}'))
+      .mockResolvedValueOnce(response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { provisionCustomDomainTls } = await import("@/lib/onepanel");
+    await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 99, websiteId: 43 });
+    expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v1/websites/del");
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toMatchObject({
+      id: 42,
+      forceDelete: true
+    });
+    expect(JSON.parse((fetchMock.mock.calls[4][1] as RequestInit).body as string)).toMatchObject({
+      type: "proxy",
+      proxy: "http://127.0.0.1:3000"
+    });
   });
 
   it("identifies a dedicated website creation failure before certificate creation", async () => {
