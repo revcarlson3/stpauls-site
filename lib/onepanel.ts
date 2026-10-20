@@ -94,6 +94,20 @@ function containsDomain(body: unknown, hostname: string): boolean {
   return Object.values(record).some((value) => containsDomain(value, hostname));
 }
 
+function panelDomains(body: unknown): string[] {
+  if (Array.isArray(body)) return body.flatMap(panelDomains);
+  if (!body || typeof body !== "object") return [];
+  const record = body as Record<string, unknown>;
+  const domains: string[] = [];
+  for (const key of ["domain", "primaryDomain", "domains"]) {
+    const value = record[key];
+    if (typeof value === "string") {
+      domains.push(...value.split(/[,\n]/).map((domain) => domain.trim()).filter(Boolean));
+    }
+  }
+  return [...domains, ...Object.values(record).flatMap(panelDomains)];
+}
+
 async function panelRequest<T>(
   config: NonNullable<Awaited<ReturnType<typeof configuration>>>,
   path: string,
@@ -183,6 +197,10 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
     const detail = responseMessage(boundDomains);
     throw new Error(`1Panel domain binding did not persist ${hostname} on website ${config.websiteId}${detail ? `; returned: ${detail}` : "."}`);
   }
+  const normalizedHostname = hostname.trim().toLowerCase().replace(/\.+$/, "").replace(/:\d+$/, "");
+  const otherDomains = Array.from(new Set(panelDomains(boundDomains)
+    .map((domain) => domain.replace(/:\d+$/, "").replace(/\.+$/, "").trim())
+    .filter((domain) => domain && domain.toLowerCase() !== normalizedHostname))).join("\n");
   const acmeAccounts = await panelRequest<unknown>(config, "/websites/acme/search", {
     page: 1,
     pageSize: 100
@@ -199,7 +217,7 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
   }
   const created = await panelRequest<unknown>(config, "/websites/ssl", {
     primaryDomain: hostname,
-    otherDomains: "",
+    otherDomains,
     provider: "dnsAccount",
     acmeAccountId: Number(config.acmeAccountId),
     dnsAccountId: Number(config.dnsAccountId),

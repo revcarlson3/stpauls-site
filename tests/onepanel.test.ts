@@ -75,7 +75,7 @@ describe("1Panel API compatibility", () => {
     });
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response("{}"))
-      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org:80"}]}'))
+      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org:80"},{"domain":"beta.mychurch.one"}]}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
       .mockResolvedValueOnce(response('{"data":{"id":42}}'))
@@ -100,6 +100,7 @@ describe("1Panel API compatibility", () => {
     expect(fetchMock.mock.calls[4][0]).toBe("https://panel.example.test/api/v2/websites/ssl");
     expect(JSON.parse((fetchMock.mock.calls[4][1] as RequestInit).body as string)).toMatchObject({
       primaryDomain: "www.example.org",
+      otherDomains: "beta.mychurch.one",
       provider: "dnsAccount",
       acmeAccountId: 11,
       dnsAccountId: 12,
@@ -128,7 +129,7 @@ describe("1Panel API compatibility", () => {
     });
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response("{}"))
-      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
+      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"},{"domain":"beta.mychurch.one"}]}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
       .mockResolvedValueOnce(response('{"data":{"sslId":"42"}}'))
