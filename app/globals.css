@@ -606,10 +606,14 @@ body[data-theme-radius="soft"] {
 }
 
 .site-header {
-  position: sticky;
-  top: 0;
-  z-index: 40;
   backdrop-filter: blur(12px);
+  background-color: var(--site-header-background);
+  color: var(--site-header-text);
+  transition: opacity 180ms ease, background-color 180ms ease;
+}
+
+.site-header.is-stylistic.is-scrolling-up {
+  opacity: 0.9;
 }
 
 .site-header-container {
@@ -847,7 +851,6 @@ body[data-theme-width="contained"] .site-public-frame-integrated > .site-footer 
 }
 
 body[data-theme-width="contained"] .site-header {
-  position: static;
   margin-top: var(--site-section-space);
   backdrop-filter: none;
 }

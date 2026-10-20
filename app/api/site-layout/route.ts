@@ -16,7 +16,7 @@ export async function PATCH(request: Request) {
   const input = await request.json();
   const header = input?.header;
   const footer = input?.footer;
-  if (!header || !footer || !["compact", "standard", "tall"].includes(header.height) || typeof header.background !== "string" || typeof header.textColor !== "string" || typeof header.sticky !== "boolean" || (header.menuId !== null && typeof header.menuId !== "string") || !["simple", "columns", "centered"].includes(footer.style) || typeof footer.background !== "string" || typeof footer.textColor !== "string" || typeof footer.copyright !== "string" || typeof footer.credit !== "string" || !Array.isArray(footer.columns)) {
+  if (!header || !footer || !["compact", "standard", "tall"].includes(header.height) || typeof header.background !== "string" || typeof header.textColor !== "string" || typeof header.sticky !== "boolean" || typeof header.stylistic !== "boolean" || (header.menuId !== null && typeof header.menuId !== "string") || !["simple", "columns", "centered"].includes(footer.style) || typeof footer.background !== "string" || typeof footer.textColor !== "string" || typeof footer.copyright !== "string" || typeof footer.credit !== "string" || !Array.isArray(footer.columns) || footer.columns.length < 2 || footer.columns.length > 5) {
     return NextResponse.json({ error: "Invalid site layout." }, { status: 400 });
   }
   try {

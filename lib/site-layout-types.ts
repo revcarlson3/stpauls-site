@@ -3,6 +3,7 @@ export type HeaderLayout = {
   background: string;
   textColor: string;
   sticky: boolean;
+  stylistic: boolean;
   menuId: string | null;
 };
 
@@ -25,6 +26,7 @@ export const defaultHeaderLayout: HeaderLayout = {
   background: "#f4eee6",
   textColor: "#17324d",
   sticky: false,
+  stylistic: false,
   menuId: null
 };
 

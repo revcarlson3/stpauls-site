@@ -104,8 +104,8 @@ export default function SecurityPage() {
         </form>
         {error ? <Notification variant="danger" className="mt-6">{error}</Notification> : (
           <div>
-          <div className="mt-8 grid gap-6 lg:grid-cols-2">
-            {groups.map((group) => {
+          <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {[...groups].sort((a, b) => Number(canEditSecurityGroupPermissions(a.slug)) - Number(canEditSecurityGroupPermissions(b.slug)) || a.name.localeCompare(b.name)).map((group) => {
               const selected = new Set(group.permissions.map((item) => item.permission));
               const protectedGroup = !canEditSecurityGroupPermissions(group.slug);
               return <Card key={group.id} className="p-6">

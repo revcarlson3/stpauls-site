@@ -52,7 +52,6 @@ export function AdminNavigation({ permissions, publicWebsiteModuleEnabled, subsc
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings">General Settings</Link>
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/messaging">Messaging</Link>
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/announcements">Announcements</Link>
-          <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/cron">Cron</Link>
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/report-automations">Report Automations</Link>
         </div>
       </details>}

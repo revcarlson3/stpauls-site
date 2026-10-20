@@ -29,19 +29,33 @@ export function MenuEditor({ id }: { id: string }) {
   }, [id]);
 
   function editItem(item: MenuItem) { setDraft({ ...item }); setEditingId(item.id ?? item.tempId); }
+  async function persistItems(items: MenuItem[]) {
+    if (!menu) return;
+    setMessage("Saving menu items...");
+    const response = await fetch(`/api/menus/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, slug, items: items.map(({ tempId: _tempId, ...item }) => item) }) });
+    if (!response.ok) {
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      setMessage(result?.error ?? "Unable to save menu items.");
+      return;
+    }
+    setMenu(await response.json() as Menu);
+    setMessage("Menu items saved.");
+  }
   function addOrUpdateItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft.label.trim() || (draft.itemType === "EXTERNAL" && !draft.href.trim()) || !menu) return;
     const items = editingId ? menu.items.map((item) => (item.id ?? item.tempId) === editingId ? { ...draft } : item) : [...menu.items, { ...draft, parentId: draft.parentId && menu.items.some((item) => item.id === draft.parentId) ? draft.parentId : null, tempId: `new-${Date.now()}`, position: menu.items.length }];
-    setMenu({ ...menu, items }); setDraft(emptyItem()); setEditingId(undefined);
+    setMenu({ ...menu, items }); setDraft(emptyItem()); setEditingId(undefined); void persistItems(items);
   }
-  function removeItem(itemKey: string) { if (menu) setMenu({ ...menu, items: menu.items.filter((item) => (item.id ?? item.tempId) !== itemKey).map((item, position) => ({ ...item, position })) }); }
+  function removeItem(itemKey: string) { if (menu) { const items = menu.items.filter((item) => (item.id ?? item.tempId) !== itemKey).map((item, position) => ({ ...item, position })); setMenu({ ...menu, items }); void persistItems(items); } }
   function moveItem(index: number, direction: -1 | 1) {
     if (!menu) return;
     const target = index + direction;
     if (target < 0 || target >= menu.items.length) return;
     const items = [...menu.items]; [items[index], items[target]] = [items[target], items[index]];
-    setMenu({ ...menu, items: items.map((item, position) => ({ ...item, position })) });
+    const nextItems = items.map((item, position) => ({ ...item, position }));
+    setMenu({ ...menu, items: nextItems });
+    void persistItems(nextItems);
   }
   async function saveMenu(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setMessage("");

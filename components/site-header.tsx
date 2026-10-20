@@ -7,6 +7,7 @@ import { getSiteIdentity } from "@/lib/site-identity";
 import { getSiteTheme } from "@/lib/theme";
 import { getSiteLayout } from "@/lib/site-layout";
 import { NotificationBell } from "@/components/notification-bell";
+import { SiteHeaderFrame } from "@/components/site-header-frame";
 
 export async function SiteHeader({ menuId = null, menuLocationId = null }: { menuId?: string | null; menuLocationId?: string | null }) {
   const user = await getCurrentUser();
@@ -19,7 +20,7 @@ export async function SiteHeader({ menuId = null, menuLocationId = null }: { men
   const heightClass = header.height === "compact" ? "min-h-16" : header.height === "tall" ? "min-h-28" : "min-h-20";
 
   return (
-    <header className={`site-header border-b border-black/10 ${header.sticky ? "sticky top-0 z-40" : ""}`} style={{ backgroundColor: header.background, color: header.textColor }}>
+    <SiteHeaderFrame sticky={header.sticky} stylistic={header.stylistic} style={{ backgroundColor: header.background, color: header.textColor }}>
       <Container className={`site-header-container px-0 flex ${heightClass} items-center gap-6`}>
         <div className="site-header-identity flex shrink-0 items-center gap-3">
           {identity.showLogo && logoUrl && <img src={logoUrl} alt="" className="h-10 w-auto object-contain" />}
@@ -33,6 +34,6 @@ export async function SiteHeader({ menuId = null, menuLocationId = null }: { men
         </div>
         {user && <NotificationBell />}
       </Container>
-    </header>
+    </SiteHeaderFrame>
   );
 }

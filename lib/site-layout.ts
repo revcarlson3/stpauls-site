@@ -11,13 +11,14 @@ function headerFrom(value: unknown): HeaderLayout {
     background: typeof input.background === "string" ? input.background : defaultHeaderLayout.background,
     textColor: typeof input.textColor === "string" ? input.textColor : defaultHeaderLayout.textColor,
     sticky: input.sticky === true,
+    stylistic: input.stylistic === true,
     menuId: typeof input.menuId === "string" && input.menuId ? input.menuId : null
   };
 }
 
 function footerFrom(value: unknown): FooterLayout {
   const input = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-  const columns = Array.isArray(input.columns) ? input.columns.filter((column): column is Record<string, unknown> => Boolean(column) && typeof column === "object" && !Array.isArray(column)).slice(0, 4).map((column) => ({
+  const columns = Array.isArray(input.columns) ? input.columns.filter((column): column is Record<string, unknown> => Boolean(column) && typeof column === "object" && !Array.isArray(column)).slice(0, 5).map((column) => ({
     heading: typeof column.heading === "string" ? column.heading : "",
     widgetId: typeof column.widgetId === "string" && column.widgetId ? column.widgetId : null
   })) : defaultFooterLayout.columns;
