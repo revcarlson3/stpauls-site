@@ -5,6 +5,8 @@ export async function register() {
   state.__volunteerNotificationWorkerStarted = true;
   let running = false;
 
+  const configuredInterval = Number(process.env.VOLUNTEER_NOTIFICATION_WORKER_INTERVAL_MINUTES ?? "1");
+  const intervalMinutes = [1, 10, 30, 60].includes(configuredInterval) ? configuredInterval : 1;
   const processNotifications = async () => {
     if (running) return;
     running = true;
@@ -19,5 +21,5 @@ export async function register() {
   };
 
   setTimeout(() => void processNotifications(), 15_000);
-  setInterval(() => void processNotifications(), 60_000);
+  setInterval(() => void processNotifications(), intervalMinutes * 60_000);
 }

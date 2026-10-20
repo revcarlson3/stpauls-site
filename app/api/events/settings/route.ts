@@ -3,8 +3,9 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { requireTenantScope } from "@/lib/tenant";
+import { isValidNotificationTime } from "@/lib/event-notification-schedule";
 
-const defaults = { eventTypes: ["Worship", "Class", "Fellowship", "Outreach", "Meeting", "Other"], categories: [], locations: ["Church campus", "Sanctuary", "Fellowship hall", "Off-site"], timeZone: "America/Chicago" };
+const defaults = { eventTypes: ["Worship", "Class", "Fellowship", "Outreach", "Meeting", "Other"], categories: [], locations: ["Church campus", "Sanctuary", "Fellowship hall", "Off-site"], timeZone: "America/Chicago", notificationQuietHoursEnabled: false, notificationQuietHoursStart: "20:00", notificationQuietHoursEnd: "08:00" };
 async function authorize() {
   const user = await requirePermission("MANAGE_EVENTS");
   await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
@@ -22,7 +23,7 @@ export async function GET() {
     const eventTypes = cleanList(settings?.eventTypes, defaults.eventTypes);
     if (eventTypes.length === 0) eventTypes.push(...defaults.eventTypes);
     for (const event of usedTypes) if (!eventTypes.includes(event.eventType)) eventTypes.push(event.eventType);
-    return NextResponse.json({ settings: { eventTypes, categories: cleanList(settings?.categories, defaults.categories), locations: cleanList(settings?.locations, defaults.locations), timeZone: settings?.timeZone || defaults.timeZone } });
+    return NextResponse.json({ settings: { eventTypes, categories: cleanList(settings?.categories, defaults.categories), locations: cleanList(settings?.locations, defaults.locations), timeZone: settings?.timeZone || defaults.timeZone, notificationQuietHoursEnabled: settings?.notificationQuietHoursEnabled ?? defaults.notificationQuietHoursEnabled, notificationQuietHoursStart: settings?.notificationQuietHoursStart || defaults.notificationQuietHoursStart, notificationQuietHoursEnd: settings?.notificationQuietHoursEnd || defaults.notificationQuietHoursEnd } });
   } catch { return NextResponse.json({ error: "Unable to load event settings." }, { status: 403 }); }
 }
 export async function PUT(request: Request) {
@@ -37,7 +38,11 @@ export async function PUT(request: Request) {
     if (removedType) return NextResponse.json({ error: `The event type "${removedType.eventType}" is still used by events and cannot be deleted.` }, { status: 409 });
     const timeZone = typeof input?.timeZone === "string" && input.timeZone.trim() ? input.timeZone.trim().slice(0, 100) : defaults.timeZone;
     Intl.DateTimeFormat("en-US", { timeZone }).format();
-    const settings = await db.membershipEventSettings.upsert({ where: { churchId: scope.church.id }, update: { eventTypes, categories: cleanList(input?.categories, defaults.categories), locations: cleanList(input?.locations, defaults.locations), timeZone }, create: { churchId: scope.church.id, eventTypes, categories: cleanList(input?.categories, defaults.categories), locations: cleanList(input?.locations, defaults.locations), timeZone } });
+    const notificationQuietHoursEnabled = input?.notificationQuietHoursEnabled === true;
+    const notificationQuietHoursStart = typeof input?.notificationQuietHoursStart === "string" ? input.notificationQuietHoursStart : defaults.notificationQuietHoursStart;
+    const notificationQuietHoursEnd = typeof input?.notificationQuietHoursEnd === "string" ? input.notificationQuietHoursEnd : defaults.notificationQuietHoursEnd;
+    if (!isValidNotificationTime(notificationQuietHoursStart) || !isValidNotificationTime(notificationQuietHoursEnd)) return NextResponse.json({ error: "Enter valid quiet-hour times." }, { status: 400 });
+    const settings = await db.membershipEventSettings.upsert({ where: { churchId: scope.church.id }, update: { eventTypes, categories: cleanList(input?.categories, defaults.categories), locations: cleanList(input?.locations, defaults.locations), timeZone, notificationQuietHoursEnabled, notificationQuietHoursStart, notificationQuietHoursEnd }, create: { churchId: scope.church.id, eventTypes, categories: cleanList(input?.categories, defaults.categories), locations: cleanList(input?.locations, defaults.locations), timeZone, notificationQuietHoursEnabled, notificationQuietHoursStart, notificationQuietHoursEnd } });
     return NextResponse.json({ settings });
   } catch { return NextResponse.json({ error: "Unable to save event settings." }, { status: 400 }); }
 }

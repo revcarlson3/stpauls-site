@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { sendMembershipEmail, sendSmsText } from "@/lib/membership-delivery";
 import { membershipMessageEligibility } from "@/lib/membership-privacy";
 import { htmlToText, sanitizeEmailHtml } from "@/lib/membership-messaging";
+import { isWithinQuietHours } from "@/lib/event-notification-schedule";
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
@@ -31,7 +32,11 @@ export async function processDueVolunteerNotifications(churchId?: string) {
     }
   });
   const churchIds = Array.from(new Set(due.map((notification) => notification.assignment.event.churchId)));
-  const templates = await db.membershipEventNotificationTemplate.findMany({ where: { churchId: { in: churchIds } } });
+  const [templates, churchSettings] = await Promise.all([
+    db.membershipEventNotificationTemplate.findMany({ where: { churchId: { in: churchIds } } }),
+    db.membershipEventSettings.findMany({ where: { churchId: { in: churchIds } }, select: { churchId: true, timeZone: true, notificationQuietHoursEnabled: true, notificationQuietHoursStart: true, notificationQuietHoursEnd: true } })
+  ]);
+  const settingsByChurch = new Map(churchSettings.map((settings) => [settings.churchId, settings]));
   let sent = 0;
   let skipped = 0;
   let failed = 0;
@@ -45,6 +50,8 @@ export async function processDueVolunteerNotifications(churchId?: string) {
       continue;
     }
     const event = notification.assignment.event;
+    const settings = settingsByChurch.get(event.churchId);
+    if (settings?.notificationQuietHoursEnabled && isWithinQuietHours(new Date(), settings.timeZone, settings.notificationQuietHoursStart, settings.notificationQuietHoursEnd)) continue;
     const churchTemplates = templates.filter((template) => template.churchId === event.churchId);
     const template = churchTemplates.find((candidate) => candidate.groupId === notification.assignment.group.id)
       ?? churchTemplates.find((candidate) => candidate.groupId === null);

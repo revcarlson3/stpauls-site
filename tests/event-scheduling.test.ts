@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildRecurringDates, selectRotationAssignments } from "@/lib/event-scheduling";
 import { eventReportPreset, eventReportSummary } from "@/lib/event-reporting";
 import { normalizeAttendanceEntries } from "@/lib/membership-attendance";
+import { isValidNotificationTime, isWithinQuietHours } from "@/lib/event-notification-schedule";
 
 describe("event scheduling reliability", () => {
   it("keeps recurring-series dates stable while applying a changed occurrence count", () => {
@@ -28,5 +29,12 @@ describe("event scheduling reliability", () => {
       { id: "event-1", attendanceCount: 3, _absenceCount: 1, visitorCount: 2, _volunteerAssignmentCount: 2 },
       { id: "event-2", attendanceCount: 1, _absenceCount: 0, visitorCount: 1, _volunteerAssignmentCount: 1 }
     ])).toEqual({ attendance: 4, absences: 1, visitors: 3, volunteerAssignments: 3 });
+  });
+
+  it("applies quiet hours in the configured local timezone", () => {
+    expect(isValidNotificationTime("20:00")).toBe(true);
+    expect(isValidNotificationTime("8:00")).toBe(false);
+    expect(isWithinQuietHours(new Date("2026-09-13T02:00:00.000Z"), "America/Chicago", "20:00", "08:00")).toBe(true);
+    expect(isWithinQuietHours(new Date("2026-09-13T16:00:00.000Z"), "America/Chicago", "20:00", "08:00")).toBe(false);
   });
 });

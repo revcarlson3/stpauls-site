@@ -1169,6 +1169,9 @@ model MembershipEventSettings {
   categories Json     @default("[]")
   locations  Json     @default("[\"Church campus\",\"Sanctuary\",\"Fellowship hall\",\"Off-site\"]")
   timeZone   String   @default("America/Chicago")
+  notificationQuietHoursEnabled Boolean @default(false)
+  notificationQuietHoursStart   String  @default("20:00")
+  notificationQuietHoursEnd     String  @default("08:00")
   updatedAt  DateTime @updatedAt
 }
 
