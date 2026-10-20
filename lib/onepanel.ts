@@ -225,6 +225,24 @@ function certificateStatus(body: unknown) {
   return data && typeof data === "object" && "status" in data ? String((data as { status: unknown }).status) : "";
 }
 
+function certificatePem(body: unknown): string | null {
+  if (Array.isArray(body)) {
+    for (const item of body) {
+      const pem = certificatePem(item);
+      if (pem !== null) return pem;
+    }
+    return null;
+  }
+  if (!body || typeof body !== "object") return null;
+  const record = body as Record<string, unknown>;
+  if (typeof record.pem === "string") return record.pem;
+  for (const value of Object.values(record)) {
+    const pem = certificatePem(value);
+    if (pem !== null) return pem;
+  }
+  return null;
+}
+
 function certificateMessage(body: unknown) {
   return responseMessage(body);
 }
@@ -286,7 +304,7 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
     provider: "dnsAccount",
     acmeAccountId: Number(config.acmeAccountId),
     dnsAccountId: Number(config.dnsAccountId),
-    keyType: "EC256",
+    keyType: "P256",
     autoRenew: true
   }, "certificate creation");
   const certificateId = numericId(created);
@@ -294,7 +312,16 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const certificate = await panelGet(config, `/websites/ssl/${certificateId}`);
     const status = certificateStatus(certificate);
-    if (status === "ready") break;
+    if (status === "ready") {
+      const pem = certificatePem(certificate);
+      if (pem && /-----BEGIN CERTIFICATE-----/.test(pem)) break;
+      if (pem !== null) {
+        throw new Error("1Panel marked the certificate ready but returned invalid PEM certificate data.");
+      }
+      if (attempt === 59) {
+        throw new Error("1Panel marked the certificate ready but did not return a valid PEM certificate.");
+      }
+    }
     if (status === "error" || status === "applyError") {
       const detail = certificateMessage(certificate);
       throw new Error(`1Panel Let’s Encrypt certificate issuance failed${detail ? `: ${detail}` : "."}`);

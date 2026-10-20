@@ -83,7 +83,7 @@ describe("1Panel API compatibility", () => {
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
       .mockResolvedValueOnce(response('{"data":{"id":99}}'))
-      .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
+      .mockResolvedValueOnce(response('{"data":{"status":"ready","pem":"-----BEGIN CERTIFICATE-----\\nvalid\\n-----END CERTIFICATE-----"}}'))
       .mockResolvedValueOnce(response("{}"));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -113,6 +113,7 @@ describe("1Panel API compatibility", () => {
       provider: "dnsAccount",
       acmeAccountId: 11,
       dnsAccountId: 12,
+      keyType: "P256",
       autoRenew: true
     });
     expect(fetchMock.mock.calls[9][0]).toBe("https://panel.example.test/api/v2/websites/ssl/99");
@@ -141,7 +142,7 @@ describe("1Panel API compatibility", () => {
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
       .mockResolvedValueOnce(response('{"data":{"sslId":"42"}}'))
-      .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
+      .mockResolvedValueOnce(response('{"data":{"status":"ready","pem":"-----BEGIN CERTIFICATE-----\\nvalid\\n-----END CERTIFICATE-----"}}'))
       .mockResolvedValueOnce(response("{}"));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -191,7 +192,7 @@ describe("1Panel API compatibility", () => {
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
       .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
       .mockResolvedValueOnce(response('{"data":{"id":99}}'))
-      .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
+      .mockResolvedValueOnce(response('{"data":{"status":"ready","pem":"-----BEGIN CERTIFICATE-----\\nvalid\\n-----END CERTIFICATE-----"}}'))
       .mockResolvedValueOnce(response("{}"));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -199,6 +200,33 @@ describe("1Panel API compatibility", () => {
     await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 99, websiteId: 42 });
     expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(fetchMock.mock.calls[0][0]).toBe("https://panel.example.test/api/v1/websites/list");
+  });
+
+  it("does not attach a ready certificate with invalid PEM data", async () => {
+    db.onePanelConfiguration.findUnique.mockResolvedValue({
+      baseUrl: "https://panel.example.test",
+      apiKeyEncrypted: "encrypted",
+      version: "1.10.34-lts",
+      websiteId: "7",
+      acmeAccountId: "11",
+      dnsAccountId: "12",
+      wildcardSslId: null,
+      platformSuffix: "mychurch.one"
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response('{"data":[{"id":42,"domains":["www.example.org"]}]}'))
+      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
+      .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
+      .mockResolvedValueOnce(response('{"data":{"items":[{"id":12}]}}'))
+      .mockResolvedValueOnce(response('{"data":{"id":99}}'))
+      .mockResolvedValueOnce(response('{"data":{"status":"ready","pem":"not-a-certificate"}}'));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { provisionCustomDomainTls } = await import("@/lib/onepanel");
+    await expect(provisionCustomDomainTls("www.example.org")).rejects.toThrow(
+      "returned invalid PEM certificate data"
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 
   it("rejects a Let's Encrypt URL account number that is not a local 1Panel account", async () => {
