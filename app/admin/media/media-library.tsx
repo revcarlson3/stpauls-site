@@ -31,6 +31,7 @@ type MediaAsset = {
 };
 
 type MediaFolder = { name: string; count: number };
+type UploadProgress = { completed: number; total: number; currentName: string; currentPercent: number };
 
 const acceptedFiles = "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime";
 const typeOptions: { value: MediaType; label: string }[] = [
@@ -64,6 +65,7 @@ export function MediaLibrary() {
   const [tagsText, setTagsText] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [generating, setGenerating] = useState(false);
   const [backfillingMetadata, setBackfillingMetadata] = useState(false);
   const [mergingFolders, setMergingFolders] = useState(false);
@@ -151,17 +153,18 @@ export function MediaLibrary() {
     const queue = Array.from(files).filter((file) => file.size > 0);
     if (!queue.length) return;
     setUploading(true);
+    setUploadProgress({ completed: 0, total: queue.length, currentName: queue[0].name, currentPercent: 0 });
     let uploaded = 0;
     let firstUploadedId: string | null = null;
     try {
       for (const file of queue) {
-        const formData = new FormData();
-        formData.set("asset", file);
-        const response = await fetch("/api/media/upload", { method: "POST", body: formData });
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok || !body.asset) throw new Error(body.error ?? `Unable to upload ${file.name}.`);
+        setUploadProgress({ completed: uploaded, total: queue.length, currentName: file.name, currentPercent: 0 });
+        const body = await uploadFileWithProgress(file, (currentPercent) => {
+          setUploadProgress({ completed: uploaded, total: queue.length, currentName: file.name, currentPercent });
+        });
         uploaded += 1;
         firstUploadedId = firstUploadedId ?? body.asset.id;
+        setUploadProgress({ completed: uploaded, total: queue.length, currentName: file.name, currentPercent: 100 });
       }
 
       setMessageVariant("success");
@@ -173,6 +176,7 @@ export function MediaLibrary() {
       setMessage(error instanceof Error ? error.message : "Unable to upload file.");
     } finally {
       setUploading(false);
+      setUploadProgress(null);
       setDragging(false);
     }
   }
@@ -420,6 +424,10 @@ export function MediaLibrary() {
                 </label>
               </div>
               <p className="mt-3 text-xs text-ink/50">PNG, JPG, WebP, GIF, MP4, WebM, and MOV up to 100 MB each.</p>
+              {uploadProgress && <div className="mt-4 grid gap-2" aria-live="polite">
+                <div className="flex items-center justify-between gap-3 text-xs font-semibold text-ink/65"><span className="min-w-0 truncate">Uploading {uploadProgress.currentName}</span><span className="shrink-0">{uploadProgress.completed} of {uploadProgress.total} complete · {uploadProgress.currentPercent}%</span></div>
+                <div className="h-2 overflow-hidden rounded-full bg-ink/10" role="progressbar" aria-label={`Uploading ${uploadProgress.currentName}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress.currentPercent}><div className="h-full rounded-full bg-coral transition-[width] duration-150" style={{ width: `${uploadProgress.currentPercent}%` }} /></div>
+              </div>}
             </Card>
 
             <Card className="p-6">
@@ -766,13 +774,49 @@ function ImageEditor({ asset, onClose, onSave }: { asset: MediaAsset; onClose: (
   );
 }
 
+function uploadFileWithProgress(file: File, onProgress: (percent: number) => void): Promise<{ asset: MediaAsset }> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", "/api/media/upload");
+    request.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    });
+    request.addEventListener("load", () => {
+      let body: { asset?: MediaAsset; error?: string } = {};
+      try {
+        body = JSON.parse(request.responseText) as typeof body;
+      } catch {
+        reject(new Error(`Unable to upload ${file.name}.`));
+        return;
+      }
+      if (request.status < 200 || request.status >= 300 || !body.asset) {
+        reject(new Error(body.error ?? `Unable to upload ${file.name}.`));
+        return;
+      }
+      resolve({ asset: body.asset });
+    });
+    request.addEventListener("error", () => reject(new Error(`Unable to upload ${file.name}.`)));
+    request.addEventListener("abort", () => reject(new Error(`Upload cancelled for ${file.name}.`)));
+    const formData = new FormData();
+    formData.set("asset", file);
+    request.send(formData);
+  });
+}
+
 function MediaThumbnail({ asset, className = "", fit = "cover" }: { asset: MediaAsset; className?: string; fit?: "cover" | "contain" }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return <div className={`flex items-center justify-center ${className}`}><div className="grid gap-1 text-center"><span className="text-2xl">📁</span><span className="px-3 text-xs font-semibold uppercase tracking-wide text-ink/55">File unavailable</span></div></div>;
+  }
   if (asset.mediaType === "image") {
     return (
       <div className={`relative ${className}`}>
-        <Image src={asset.url} alt={asset.altText ?? asset.title ?? asset.originalName} fill sizes="(min-width: 1280px) 20rem, (min-width: 640px) 50vw, 100vw" className={`object-${fit}`} unoptimized />
+        <Image src={asset.url} alt={asset.altText ?? asset.title ?? asset.originalName} fill sizes="(min-width: 1280px) 20rem, (min-width: 640px) 50vw, 100vw" className={`object-${fit}`} unoptimized onError={() => setFailed(true)} />
       </div>
     );
+  }
+  if (asset.mediaType === "video") {
+    return <div className={`relative ${className}`}><video src={asset.url} muted playsInline preload="metadata" className={`h-full w-full object-${fit}`} onError={() => setFailed(true)} /></div>;
   }
   return (
     <div className={`flex items-center justify-center ${className}`}>

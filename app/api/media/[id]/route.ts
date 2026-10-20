@@ -20,6 +20,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     return NextResponse.json(await deleteMediaAsset(params.id));
   } catch (error) {
     if (error instanceof Error && error.message === "Media asset not found.") return NextResponse.json({ error: error.message }, { status: 404 });
+    if (error instanceof Error && error.message.startsWith("Cannot delete linked")) return NextResponse.json({ error: error.message }, { status: 409 });
     return unauthorizedResponse(error);
   }
 }
