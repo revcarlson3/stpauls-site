@@ -66,16 +66,24 @@ export function AttendanceManager() {
     const controller = new AbortController();
     setLoadingMembers(true);
     void fetch(`/api/membership/attendance/events/${selected.id}/records?page=1&pageSize=100`, { signal: controller.signal }).then(async (response) => {
-      const value = await response.json();
-      if (!response.ok) throw new Error(value.error ?? "Unable to load attendance roster.");
-      const rows: MemberRow[] = value.members ?? [];
+      const firstValue = await response.json();
+      if (!response.ok) throw new Error(firstValue.error ?? "Unable to load attendance roster.");
+      const pageCount = Math.max(1, firstValue.pagination?.pageCount ?? 1);
+      const remainingPages = await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) =>
+        fetch(`/api/membership/attendance/events/${selected.id}/records?page=${index + 2}&pageSize=100`, { signal: controller.signal }).then(async (pageResponse) => {
+          const pageValue = await pageResponse.json();
+          if (!pageResponse.ok) throw new Error(pageValue.error ?? "Unable to load attendance roster.");
+          return pageValue;
+        })
+      ));
+      const rows: MemberRow[] = [firstValue, ...remainingPages].flatMap((value) => value.members ?? []);
       setMembers(rows);
-      setRosterSource(value.event?.rosterSource ?? null);
+      setRosterSource(firstValue.event?.rosterSource ?? null);
       const missingRecords = rows.filter((member) => !member.attendance).map((member) => ({ individualId: member.id, status: "ABSENT" }));
       setStatuses(Object.fromEntries(rows.map((member) => [member.id, member.attendance?.status ?? "ABSENT"])));
       setSelectedMembers({});
-      setVisitorCount(value.visitorCount ?? selected.visitorCount ?? 0);
-      setSummary({ ...(value.summary ?? {}), ABSENT: (value.summary?.ABSENT ?? 0) + missingRecords.length });
+      setVisitorCount(firstValue.visitorCount ?? selected.visitorCount ?? 0);
+      setSummary({ ...(firstValue.summary ?? {}), ABSENT: (firstValue.summary?.ABSENT ?? 0) + missingRecords.length });
       if (missingRecords.length && selected.status !== "CANCELLED") void saveStatuses(missingRecords, false);
     }).catch((reason) => { if (reason instanceof Error && reason.name !== "AbortError") setError(reason.message); }).finally(() => setLoadingMembers(false));
     return () => controller.abort();
@@ -100,9 +108,11 @@ export function AttendanceManager() {
     if (!event || event.status === "CANCELLED") return;
     setSubmitting(true); setError("");
     try {
-      const response = await fetch(`/api/membership/attendance/events/${event.id}/records`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ records: records.map((record) => ({ ...record, minutesParticipated: null, notes: null })) }) });
-      const value = await response.json();
-      if (!response.ok) throw new Error(value.error ?? "Unable to update attendance.");
+      for (let index = 0; index < records.length; index += 100) {
+        const response = await fetch(`/api/membership/attendance/events/${event.id}/records`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ records: records.slice(index, index + 100).map((record) => ({ ...record, minutesParticipated: null, notes: null })) }) });
+        const value = await response.json();
+        if (!response.ok) throw new Error(value.error ?? "Unable to update attendance.");
+      }
       if (announce) setMessage("Attendance updated.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to update attendance.");

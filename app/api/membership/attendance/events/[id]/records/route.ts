@@ -5,6 +5,7 @@ import { authorizeVolunteerScheduling } from "@/lib/volunteer-scheduling-auth";
 import { logAudit } from "@/lib/audit";
 import { MembershipAttendanceInputError, normalizeAttendanceEntries } from "@/lib/membership-attendance";
 import { requireTenantScope } from "@/lib/tenant";
+import { dynamicMemberIds } from "@/lib/membership-audiences";
 
 async function authorize() {
   return authorizeVolunteerScheduling();
@@ -33,6 +34,11 @@ export async function GET(request: Request, { params }: { params: { id: string }
       : event.attendanceAudienceType ? [] : event.volunteerGroups.map((link) => link.groupId);
     const manualListId = event.attendanceAudienceType === "MANUAL" ? event.attendanceAudienceId : null;
     const manualList = manualListId ? await db.membershipManualList.findUnique({ where: { id: manualListId }, select: { name: true } }) : null;
+    const dynamicListId = event.attendanceAudienceType === "DYNAMIC" ? event.attendanceAudienceId : null;
+    const dynamicList = dynamicListId
+      ? await db.membershipDynamicList.findFirst({ where: { id: dynamicListId, churchId: scope.church.id }, select: { criteria: true } })
+      : null;
+    const dynamicIds = dynamicList ? await dynamicMemberIds(dynamicList.criteria) : [];
     const audienceGroup = event.attendanceAudienceType === "VOLUNTEER" && event.attendanceAudienceId
       ? await db.membershipVolunteerGroup.findUnique({ where: { id: event.attendanceAudienceId }, select: { name: true } })
       : null;
@@ -46,9 +52,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
           : { type: "VOLUNTEER_GROUP", label: `Linked volunteer group${linkedGroupNames.length ? `: ${linkedGroupNames.join(", ")}` : ""}` };
     const rosterMembership = eventGroupIds.length
       ? [{ volunteerGroups: { some: { groupId: { in: eventGroupIds } } } }]
-      : manualListId ? [{ manualLists: { some: { listId: manualListId } } }] : [];
+      : manualListId
+        ? [{ manualLists: { some: { listId: manualListId } } }]
+        : dynamicListId
+          ? [{ id: { in: dynamicIds } }]
+          : [];
     const memberWhere = {
       AND: [
+        { churchId: scope.church.id },
         { OR: [...rosterMembership, { attendanceRecords: { some: { eventId: params.id } } }] },
         { status: { not: "REMOVED" as const } },
         ...(search ? [{ OR: [
