@@ -361,6 +361,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
     const overlay = publicOverlayStyle(block.props ?? {});
     const background = block.props?.backgroundHidden === true ? null : backgroundMediaLayers(block.props ?? {});
     const width = cssDimension(block.props?.widthValue, block.props?.widthUnit);
+    const height = cssDimension(block.props?.heightValue, block.props?.heightUnit);
     const blockStyle = block.props?.backgroundTransparent === true
       ? { backgroundColor: "transparent" }
       : typeof block.props?.backgroundColor === "string"
@@ -369,20 +370,28 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
     const style: CSSProperties = {
       ...blockStyle,
       ...responsiveStyle(block.props ?? {}),
-      ...(typeof block.props?.heightValue === "string" && typeof block.props?.heightUnit === "string" ? { height: `${block.props.heightValue}${block.props.heightUnit}` } : {}),
-      ...(width ? { width } : {}),
-      ...((block.props?.marginTop || block.props?.marginRight || block.props?.marginBottom || block.props?.marginLeft) ? { marginTop: typeof block.props.marginTop === "string" ? `${block.props.marginTop}px` : undefined, marginRight: typeof block.props.marginRight === "string" ? `${block.props.marginRight}px` : undefined, marginBottom: typeof block.props.marginBottom === "string" ? `${block.props.marginBottom}px` : undefined, marginLeft: typeof block.props.marginLeft === "string" ? `${block.props.marginLeft}px` : undefined } : {}),
+      ...(!["image", "map"].includes(block.type) && height ? { height } : {}),
+      ...(!["image", "map"].includes(block.type) && width ? { width } : {}),
+      ...(!["image", "map"].includes(block.type) && (block.props?.marginTop || block.props?.marginRight || block.props?.marginBottom || block.props?.marginLeft) ? { marginTop: typeof block.props.marginTop === "string" ? `${block.props.marginTop}px` : undefined, marginRight: typeof block.props.marginRight === "string" ? `${block.props.marginRight}px` : undefined, marginBottom: typeof block.props.marginBottom === "string" ? `${block.props.marginBottom}px` : undefined, marginLeft: typeof block.props.marginLeft === "string" ? `${block.props.marginLeft}px` : undefined } : {}),
       ...(typeof block.props?.borderRadius === "string" ? { borderRadius: `${block.props.borderRadius}px` } : {}),
       ...(block.props?.borderStyle && block.props.borderStyle !== "none" ? { borderStyle: block.props.borderStyle as CSSProperties["borderStyle"], borderWidth: `${typeof block.props.borderWidth === "string" ? block.props.borderWidth : "1"}px`, borderColor: typeof block.props.borderColor === "string" ? block.props.borderColor : undefined } : {}),
       boxSizing: "border-box",
       ...(block.props?.justify === "center" ? { marginLeft: "auto", marginRight: "auto" } : block.props?.justify === "right" ? { marginLeft: "auto" } : {})
     };
-    const imageStyle: CSSProperties = {
-      ...(typeof block.props?.heightValue === "string" && typeof block.props?.heightUnit === "string" ? { height: `${block.props.heightValue}${block.props.heightUnit}` } : {}),
+    const imageContainerStyle: CSSProperties = {
       ...(width ? { width } : {}),
-      ...(block.props?.marginTop || block.props?.marginRight || block.props?.marginBottom || block.props?.marginLeft ? { marginTop: typeof block.props.marginTop === "string" ? `${block.props.marginTop}px` : undefined, marginRight: typeof block.props.marginRight === "string" ? `${block.props.marginRight}px` : undefined, marginBottom: typeof block.props.marginBottom === "string" ? `${block.props.marginBottom}px` : undefined, marginLeft: typeof block.props.marginLeft === "string" ? `${block.props.marginLeft}px` : undefined } : {}),
+      ...(height ? { height } : {}),
+      ...(typeof block.props?.marginTop === "string" ? { marginTop: `${block.props.marginTop}px` } : {}),
+      ...(typeof block.props?.marginRight === "string" ? { marginRight: `${block.props.marginRight}px` } : {}),
+      ...(typeof block.props?.marginBottom === "string" ? { marginBottom: `${block.props.marginBottom}px` } : {}),
+      ...(typeof block.props?.marginLeft === "string" ? { marginLeft: `${block.props.marginLeft}px` } : {}),
       ...(typeof block.props?.borderRadius === "string" ? { borderRadius: `${block.props.borderRadius}px` } : {}),
       ...(block.props?.borderStyle && block.props.borderStyle !== "none" ? { borderStyle: block.props.borderStyle as CSSProperties["borderStyle"], borderWidth: `${typeof block.props.borderWidth === "string" ? block.props.borderWidth : "1"}px`, borderColor: typeof block.props.borderColor === "string" ? block.props.borderColor : undefined } : {})
+    };
+    const imageStyle: CSSProperties = {
+      ...(width ? { width: "100%" } : {}),
+      ...(height ? { height: "100%" } : {}),
+      ...(typeof block.props?.borderRadius === "string" ? { borderRadius: `${block.props.borderRadius}px` } : {})
     };
     const animation = typeof block.props?.animation === "string" && block.props.animation !== "none" ? `block-animation-${block.props.animation}` : "";
     if (block.type === "container" || block.type === "flex" || block.type === "grid") {
@@ -443,7 +452,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
       );
     }
     if (block.type === "image") {
-      return <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background}>{typeof block.props?.imageUrl === "string" && block.props.imageUrl ? <div className="relative mt-4 inline-block max-w-full overflow-hidden rounded-lg"><ImageDisplay src={block.props.imageUrl} alt={typeof block.props.imageAlt === "string" ? block.props.imageAlt : ""} imageStyle={imageStyle} objectFit={block.props.imageFit === "cover" ? "cover" : block.props.imageFit === "fill" ? "fill" : "contain"} hoverEffect={block.props.imageHoverEffect === "zoom" || block.props.imageHoverEffect === "lift" || block.props.imageHoverEffect === "grayscale" ? block.props.imageHoverEffect : "none"} hoverOverlay={block.props.imageHoverOverlay === true} hoverOverlayColor={typeof block.props.imageHoverOverlayColor === "string" ? block.props.imageHoverOverlayColor : "#17324d"} hoverOverlayOpacity={Number(block.props.imageHoverOverlayOpacity ?? 45) / 100} hoverText={typeof block.props.imageHoverText === "string" ? block.props.imageHoverText : ""} lightbox={block.props.imageLightbox === true} enterAnimation={block.props.imageEnterAnimation === "fade" || block.props.imageEnterAnimation === "slide-up" || block.props.imageEnterAnimation === "slide-left" || block.props.imageEnterAnimation === "zoom" ? block.props.imageEnterAnimation : "none"} exitAnimation={block.props.imageExitAnimation === "fade" || block.props.imageExitAnimation === "slide-down" || block.props.imageExitAnimation === "slide-right" || block.props.imageExitAnimation === "zoom-out" ? block.props.imageExitAnimation : "none"} animationTrigger={block.props.imageAnimationTrigger === "viewport" ? "viewport" : "load"} />{block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true && <div aria-hidden="true" className="responsive-overlay pointer-events-none absolute inset-0" style={{ ...overlay, opacity: overlayOpacity(block.props.overlayOpacity) }} />}</div> : <p className="mt-3 text-ink/60">Add an image URL in the element settings.</p>}</BlockSurface>;
+      return <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background}>{typeof block.props?.imageUrl === "string" && block.props.imageUrl ? <div className="relative mt-4 inline-block max-w-full overflow-hidden rounded-lg" style={imageContainerStyle}><ImageDisplay src={block.props.imageUrl} alt={typeof block.props.imageAlt === "string" ? block.props.imageAlt : ""} imageStyle={imageStyle} containerStyle={{ width: "100%", height: "100%" }} objectFit={block.props.imageFit === "cover" ? "cover" : block.props.imageFit === "fill" ? "fill" : "contain"} hoverEffect={block.props.imageHoverEffect === "zoom" || block.props.imageHoverEffect === "lift" || block.props.imageHoverEffect === "grayscale" ? block.props.imageHoverEffect : "none"} hoverOverlay={block.props.imageHoverOverlay === true} hoverOverlayColor={typeof block.props.imageHoverOverlayColor === "string" ? block.props.imageHoverOverlayColor : "#17324d"} hoverOverlayOpacity={Number(block.props.imageHoverOverlayOpacity ?? 45) / 100} hoverText={typeof block.props.imageHoverText === "string" ? block.props.imageHoverText : ""} lightbox={block.props.imageLightbox === true} enterAnimation={block.props.imageEnterAnimation === "fade" || block.props.imageEnterAnimation === "slide-up" || block.props.imageEnterAnimation === "slide-left" || block.props.imageEnterAnimation === "zoom" ? block.props.imageEnterAnimation : "none"} exitAnimation={block.props.imageExitAnimation === "fade" || block.props.imageExitAnimation === "slide-down" || block.props.imageExitAnimation === "slide-right" || block.props.imageExitAnimation === "zoom-out" ? block.props.imageExitAnimation : "none"} animationTrigger={block.props.imageAnimationTrigger === "viewport" ? "viewport" : "load"} />{block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true && <div aria-hidden="true" className="responsive-overlay pointer-events-none absolute inset-0" style={{ ...overlay, opacity: overlayOpacity(block.props.overlayOpacity) }} />}</div> : <p className="mt-3 text-ink/60">Add an image URL in the element settings.</p>}</BlockSurface>;
     }
     if (block.type === "map") {
       const address = typeof block.props?.mapAddress === "string" ? block.props.mapAddress : "";

@@ -8,6 +8,7 @@ type ImageDisplayProps = {
   src: string;
   alt: string;
   imageStyle?: CSSProperties;
+  containerStyle?: CSSProperties;
   objectFit?: "contain" | "cover" | "fill";
   hoverEffect?: "none" | "zoom" | "lift" | "grayscale";
   hoverOverlay?: boolean;
@@ -24,6 +25,7 @@ export function ImageDisplay({
   src,
   alt,
   imageStyle,
+  containerStyle,
   objectFit = "contain",
   hoverEffect = "none",
   hoverOverlay = false,
@@ -78,7 +80,7 @@ export function ImageDisplay({
 
   return (
     <>
-      <div ref={imageRef} className={`group relative block max-w-full overflow-hidden rounded-lg text-left image-animation-${inView ? enterAnimation : exitAnimation} image-animation-${inView ? "enter" : "exit"}`}>
+      <div ref={imageRef} className={`group relative block max-w-full overflow-hidden rounded-lg text-left image-animation-${inView ? enterAnimation : exitAnimation} image-animation-${inView ? "enter" : "exit"}`} style={containerStyle}>
         {canInteract ? <button type="button" ref={triggerRef} className="focus-ring block max-w-full cursor-zoom-in" onClick={() => setOpen(true)} aria-label={`Open ${alt || "image"} in lightbox`}>
           <img src={src} alt={alt} className={`block max-w-full transition duration-300 ease-out ${hoverEffect === "zoom" ? "group-hover:scale-105" : hoverEffect === "lift" ? "group-hover:-translate-y-1 group-hover:shadow-lg" : hoverEffect === "grayscale" ? "grayscale group-hover:grayscale-0" : ""}`} style={{ ...imageStyle, objectFit }} />
         </button> : <img src={src} alt={alt} className={`block max-w-full transition duration-300 ease-out ${hoverEffect === "zoom" ? "group-hover:scale-105" : hoverEffect === "lift" ? "group-hover:-translate-y-1 group-hover:shadow-lg" : hoverEffect === "grayscale" ? "grayscale group-hover:grayscale-0" : ""}`} style={{ ...imageStyle, objectFit }} />}

@@ -2,12 +2,15 @@ import { apiErrorResponse } from "@/lib/api-errors";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
-import { allowedMediaMimeTypes, inferMediaMimeType, parseMediaByteRange, readMediaFile, saveUploadedMediaFile } from "@/lib/media";
+import { allowedMediaMimeTypes, inferMediaMimeType, mediaAbsolutePath, parseMediaByteRange, saveUploadedMediaFile } from "@/lib/media";
 import { db } from "@/lib/db";
 import { headers as requestHeaders } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
 import { resolvePublicTenant } from "@/lib/platform-domain";
 import { tenantOwnsResource } from "@/lib/tenant";
+import { createReadStream } from "fs";
+import { stat } from "fs/promises";
+import { Readable } from "stream";
 
 export async function POST(request: Request) {
   try {
@@ -32,24 +35,34 @@ export async function GET(request: Request) {
   try {
     const requestedTenant = new URL(request.url).searchParams.get("tenant");
     const publicTenant = await resolvePublicTenant(requestHeaders().get("host"));
-    const user = await getCurrentUser();
+    const user = publicTenant ? null : await getCurrentUser();
     const churchId = publicTenant?.id ?? user?.churchId;
     if (!churchId || (requestedTenant && !tenantOwnsResource(requestedTenant, churchId))) return NextResponse.json({ error: "Image not found." }, { status: 404 });
     const asset = await db.mediaAsset.findFirst({ where: { storedFilename: filename, churchId }, select: { churchId: true, url: true } });
     if (!asset) return NextResponse.json({ error: "Image not found." }, { status: 404 });
-    const file = await readMediaFile(filename, churchId, asset.url.startsWith("/api/media/upload?file="));
-    const contentType = inferMediaMimeType(filename);
-    const range = parseMediaByteRange(request.headers.get("range"), file.byteLength);
-    if (range === null) {
-      return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${file.byteLength}`, "Accept-Ranges": "bytes" } });
+    const allowLegacy = asset.url.startsWith("/api/media/upload?file=");
+    let filePath = mediaAbsolutePath(filename, churchId);
+    let fileSize: number;
+    try {
+      fileSize = (await stat(filePath)).size;
+    } catch {
+      if (!allowLegacy) throw new Error("Image not found.");
+      filePath = mediaAbsolutePath(filename);
+      fileSize = (await stat(filePath)).size;
     }
-    const body = range ? new Uint8Array(file).slice(range.start, range.end + 1) : new Uint8Array(file);
+    const contentType = inferMediaMimeType(filename);
+    const range = parseMediaByteRange(request.headers.get("range"), fileSize);
+    if (range === null) {
+      return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${fileSize}`, "Accept-Ranges": "bytes" } });
+    }
+    const stream = createReadStream(filePath, range ? { start: range.start, end: range.end } : undefined);
+    const body = Readable.toWeb(stream) as ReadableStream;
     const headers = {
       "Accept-Ranges": "bytes",
       "Cache-Control": "public, max-age=31536000, immutable",
-      "Content-Length": String(body.byteLength),
+      "Content-Length": String(range ? range.end - range.start + 1 : fileSize),
       "Content-Type": contentType,
-      ...(range ? { "Content-Range": `bytes ${range.start}-${range.end}/${file.byteLength}` } : {})
+      ...(range ? { "Content-Range": `bytes ${range.start}-${range.end}/${fileSize}` } : {})
     };
     return new Response(body, { status: range ? 206 : 200, headers });
   } catch {
