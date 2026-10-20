@@ -74,6 +74,8 @@ describe("1Panel API compatibility", () => {
     });
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response("{}"))
+      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
+      .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
       .mockResolvedValueOnce(response('{"data":{"id":42}}'))
       .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
       .mockResolvedValueOnce(response("{}"));
@@ -82,23 +84,26 @@ describe("1Panel API compatibility", () => {
     const { provisionCustomDomainTls } = await import("@/lib/onepanel");
     await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 7 });
 
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
     expect(fetchMock.mock.calls[0][0]).toBe("https://panel.example.test/api/v2/websites/domains");
     expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({
       websiteID: 7,
       domains: "www.example.org"
     });
-    expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v2/websites/ssl");
-    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toMatchObject({
+    expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v2/websites/domains/7");
+    expect(fetchMock.mock.calls[2][0]).toBe("https://panel.example.test/api/v2/websites/acme/search");
+    expect(JSON.parse((fetchMock.mock.calls[2][1] as RequestInit).body as string)).toMatchObject({ page: 1, pageSize: 100 });
+    expect(fetchMock.mock.calls[3][0]).toBe("https://panel.example.test/api/v2/websites/ssl");
+    expect(JSON.parse((fetchMock.mock.calls[3][1] as RequestInit).body as string)).toMatchObject({
       primaryDomain: "www.example.org",
       provider: "http",
       acmeAccountId: 11,
       autoRenew: true,
       skipDNS: true
     });
-    expect(fetchMock.mock.calls[2][0]).toBe("https://panel.example.test/api/v2/websites/ssl/42");
-    expect((fetchMock.mock.calls[2][1] as RequestInit).method).toBe("GET");
-    expect(JSON.parse((fetchMock.mock.calls[3][1] as RequestInit).body as string)).toMatchObject({
+    expect(fetchMock.mock.calls[4][0]).toBe("https://panel.example.test/api/v2/websites/ssl/42");
+    expect((fetchMock.mock.calls[4][1] as RequestInit).method).toBe("GET");
+    expect(JSON.parse((fetchMock.mock.calls[5][1] as RequestInit).body as string)).toMatchObject({
       ids: [7],
       websiteSSLId: 42,
       type: "existed",
@@ -118,6 +123,8 @@ describe("1Panel API compatibility", () => {
     });
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response("{}"))
+      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
+      .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
       .mockResolvedValueOnce(response('{"data":{"sslId":"42"}}'))
       .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
       .mockResolvedValueOnce(response("{}"));
@@ -145,5 +152,28 @@ describe("1Panel API compatibility", () => {
       "1Panel domain binding failed (500): website domain creation failed"
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a Let's Encrypt URL account number that is not a local 1Panel account", async () => {
+    db.onePanelConfiguration.findUnique.mockResolvedValue({
+      baseUrl: "https://panel.example.test",
+      apiKeyEncrypted: "encrypted",
+      version: "1.10.34-lts",
+      websiteId: "7",
+      acmeAccountId: "3761153346",
+      wildcardSslId: null,
+      platformSuffix: "mychurch.one"
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response("{}"))
+      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
+      .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { provisionCustomDomainTls } = await import("@/lib/onepanel");
+    await expect(provisionCustomDomainTls("www.example.org")).rejects.toThrow(
+      "local 1Panel ACME account ID, not the account number from the Let's Encrypt URL"
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

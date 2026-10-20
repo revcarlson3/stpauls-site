@@ -85,7 +85,7 @@ export default function OnePanelPage() {
       return;
     }
     if (form.acmeAccountId && !/^\d+$/.test(form.acmeAccountId)) {
-      setError("Let's Encrypt account ID must be the numeric ID assigned by 1Panel, not an email address.");
+      setError("ACME account ID must be the local numeric record ID shown in 1Panel, not the account number from the Let's Encrypt URL or an email address.");
       return;
     }
     if (form.wildcardSslId && !/^\d+$/.test(form.wildcardSslId)) {

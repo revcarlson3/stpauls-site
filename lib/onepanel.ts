@@ -71,6 +71,27 @@ function numericId(body: unknown): number | null {
   return null;
 }
 
+function containsRecordId(body: unknown, expectedId: number): boolean {
+  if (Array.isArray(body)) return body.some((item) => containsRecordId(item, expectedId));
+  if (!body || typeof body !== "object") return false;
+  const record = body as Record<string, unknown>;
+  for (const key of ["id", "ID"]) {
+    if (numericId(record[key]) === expectedId) return true;
+  }
+  return Object.values(record).some((value) => containsRecordId(value, expectedId));
+}
+
+function containsDomain(body: unknown, hostname: string): boolean {
+  if (Array.isArray(body)) return body.some((item) => containsDomain(item, hostname));
+  if (!body || typeof body !== "object") return false;
+  const record = body as Record<string, unknown>;
+  for (const key of ["domain", "primaryDomain"]) {
+    if (typeof record[key] === "string" && record[key].trim().toLowerCase() === hostname) return true;
+  }
+  if (typeof record.domains === "string" && record.domains.split(/[,\n]/).some((domain) => domain.trim().toLowerCase() === hostname)) return true;
+  return Object.values(record).some((value) => containsDomain(value, hostname));
+}
+
 async function panelRequest<T>(
   config: NonNullable<Awaited<ReturnType<typeof configuration>>>,
   path: string,
@@ -154,6 +175,17 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (!/already exists|already added|duplicate/i.test(message)) throw error;
+  }
+  const boundDomains = await panelGet<unknown>(config, `/websites/domains/${Number(config.websiteId)}`);
+  if (!containsDomain(boundDomains, hostname)) {
+    throw new Error(`1Panel domain binding did not persist ${hostname} on website ${config.websiteId}.`);
+  }
+  const acmeAccounts = await panelRequest<unknown>(config, "/websites/acme/search", {
+    page: 1,
+    pageSize: 100
+  }, "ACME account lookup");
+  if (!containsRecordId(acmeAccounts, Number(config.acmeAccountId))) {
+    throw new Error(`1Panel ACME account ${config.acmeAccountId} was not found. Enter the local 1Panel ACME account ID, not the account number from the Let's Encrypt URL.`);
   }
   const created = await panelRequest<unknown>(config, "/websites/ssl", {
     primaryDomain: hostname,
