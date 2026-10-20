@@ -154,6 +154,31 @@ describe("1Panel API compatibility", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("continues with SSL when 1Panel reports an existing domain in Chinese", async () => {
+    db.onePanelConfiguration.findUnique.mockResolvedValue({
+      baseUrl: "https://panel.example.test",
+      apiKeyEncrypted: "encrypted",
+      version: "1.10.34-lts",
+      websiteId: "7",
+      acmeAccountId: "11",
+      wildcardSslId: null,
+      platformSuffix: "mychurch.one"
+    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(failureResponse('{"message":"域名已存在"}', 400))
+      .mockResolvedValueOnce(response('{"data":[{"domain":"www.example.org"}]}'))
+      .mockResolvedValueOnce(response('{"data":{"items":[{"id":11}]}}'))
+      .mockResolvedValueOnce(response('{"data":{"id":42}}'))
+      .mockResolvedValueOnce(response('{"data":{"status":"ready"}}'))
+      .mockResolvedValueOnce(response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { provisionCustomDomainTls } = await import("@/lib/onepanel");
+    await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 7 });
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v1/websites/domains/7");
+  });
+
   it("rejects a Let's Encrypt URL account number that is not a local 1Panel account", async () => {
     db.onePanelConfiguration.findUnique.mockResolvedValue({
       baseUrl: "https://panel.example.test",

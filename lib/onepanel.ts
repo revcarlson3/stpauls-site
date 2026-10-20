@@ -175,7 +175,7 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
     }, "domain binding");
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (!/already exists|already added|duplicate/i.test(message)) throw error;
+    if (!/already exists|already added|duplicate|record exists|domain.*exist|已存在|重复/i.test(message)) throw error;
   }
   const boundDomains = await panelGet<unknown>(config, `/websites/domains/${Number(config.websiteId)}`);
   if (!containsDomain(boundDomains, hostname)) {
