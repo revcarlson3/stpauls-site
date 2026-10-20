@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { PageRenderer } from "@/components/page-renderer";
+import { PageRenderer, structuralBlockClassName } from "@/components/page-renderer";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -30,5 +30,15 @@ describe("public page headline layout", () => {
     expect(markup).toContain("text-4xl");
     expect(markup).toContain("grid-auto-rows:max-content");
     expect(markup).toContain("align-content:start");
+  });
+
+  it("does not add live-only padding to a zero-padding full-width container", () => {
+    const className = structuralBlockClassName("container", "p-0", "text-left", "");
+
+    expect(className).toContain("site-layout-container");
+    expect(className).toContain("box-border");
+    expect(className).toContain("w-full");
+    expect(className).toContain("p-0");
+    expect(className).not.toContain("p-5");
   });
 });

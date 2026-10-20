@@ -37,6 +37,10 @@ function childBlocks(block: RenderBlock) {
   return Array.isArray(block.props?.children) ? block.props.children : [];
 }
 
+export function structuralBlockClassName(type: string, padding: string, alignment: string, animation: string) {
+  return `responsive-block ${type === "grid" ? "responsive-grid" : ""} site-layout-container relative box-border w-full overflow-hidden ${type === "grid" ? "grid gap-6" : ""} ${padding} ${alignment} ${animation}`;
+}
+
 function youtubeEmbedUrl(value: unknown, props: Record<string, unknown>) {
   if (typeof value !== "string" || !value) return null;
   let videoId = value.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([^?&/]+)/)?.[1];
@@ -390,7 +394,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
       const flexAlign = block.props?.flexAlign === "center" ? "center" : block.props?.flexAlign === "end" ? "flex-end" : block.props?.flexAlign === "start" ? "flex-start" : "stretch";
       const flexGap = typeof block.props?.flexGap === "string" && /^\d+$/.test(block.props.flexGap) ? `${block.props.flexGap}px` : "16px";
       return (
-        <section key={block.id} className={`responsive-block ${block.type === "grid" ? "responsive-grid" : ""} site-layout-container relative overflow-hidden ${block.type === "grid" ? "grid gap-6" : ""} ${padding} p-5 ${alignment} ${animation}`} style={structuralStyle}>
+        <section key={block.id} className={structuralBlockClassName(block.type, padding, alignment, animation)} style={structuralStyle}>
           {background}
           {block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true && <div aria-hidden="true" className="responsive-overlay pointer-events-none absolute inset-0 z-0" style={{ ...overlay, opacity: overlayOpacity(block.props.overlayOpacity) }} />}
           <div className={`relative z-10 h-full min-h-full ${block.type === "grid" ? "responsive-grid-content flex flex-col" : block.type === "flex" ? "responsive-flex-content flex" : "flex flex-col"} ${block.props?.verticalAlign === "center" ? "justify-center" : block.props?.verticalAlign === "bottom" ? "justify-end" : "justify-start"}`} style={block.type === "flex" ? { flexDirection, flexWrap, justifyContent: flexJustify, alignItems: flexAlign, gap: flexGap } : undefined}><PageRenderer blocks={childBlocks(block)} columns={block.type === "grid" ? columns : undefined} /></div>
