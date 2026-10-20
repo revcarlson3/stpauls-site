@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { requireGlobalAdmin } from "@/lib/global-admin";
 import { requirePermission } from "@/lib/auth";
-import { checkNamecheapDomainAvailability, createNamecheapRegistration, createNamecheapTransfer, getNamecheapTransferStatus } from "@/lib/namecheap";
+import { checkNamecheapDomainAvailability, createNamecheapRegistration, createNamecheapTransfer, getNamecheapTransferStatus, provisionRegisteredDomainDns } from "@/lib/namecheap";
 import { normalizeHostname } from "@/lib/global-admin-domains";
 import { onePanelPlatformTlsStatus, provisionCustomDomainTls } from "@/lib/onepanel";
 
@@ -221,7 +221,41 @@ export async function approveDomainAcquisition(input: { requestId: string; confi
     ? await createNamecheapRegistration({ hostname: request.hostname, years: input.years ?? 1, contacts: input.contacts!, nameservers: input.nameservers })
     : await createNamecheapTransfer({ hostname: request.hostname, eppCode: input.eppCode ?? "" });
   const externalId = "domainId" in result ? result.domainId : result.transferId;
-  const updated = await db.domainProviderRequest.update({ where: { id: request.id }, data: { status: request.operation === "REGISTRATION" ? "SUBMITTED" : "TRANSFER_SUBMITTED", externalId, externalStatus: "status" in result ? result.status : result.registered ? "REGISTERED" : "SUBMITTED", approvedBy: context.user.id, approvedAt: new Date() } });
+  let dnsStatus = "NOT_APPLICABLE";
+  if (request.operation === "REGISTRATION" && "registered" in result && result.registered) {
+    const existingDomain = await db.siteDomain.findUnique({ where: { hostname: request.hostname }, select: { id: true, churchId: true, verificationToken: true } });
+    if (existingDomain && existingDomain.churchId !== request.churchId) throw new Error("That hostname is already assigned to another site.");
+    const verificationToken = existingDomain?.verificationToken ?? crypto.randomBytes(24).toString("hex");
+    if (!existingDomain) {
+      await db.siteDomain.create({
+        data: {
+          churchId: request.churchId,
+          hostname: request.hostname,
+          kind: "CUSTOM_DOMAIN",
+          status: "VERIFYING",
+          verificationToken,
+          tlsStatus: "PENDING",
+          dnsGuidance: "DNS records were provisioned after registration. Verify the domain to begin SSL provisioning."
+        },
+        select: { id: true }
+      });
+    } else if (!existingDomain.verificationToken) {
+      await db.siteDomain.update({
+        where: { id: existingDomain.id },
+        data: { status: "VERIFYING", verifiedAt: null, verificationToken, tlsStatus: "PENDING", lastError: null, dnsGuidance: "DNS records were provisioned after registration. Verify the domain to begin SSL provisioning." }
+      });
+    }
+    try {
+      const provisioning = await provisionRegisteredDomainDns(request.hostname, verificationToken);
+      dnsStatus = provisioning.state;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Registered-domain DNS provisioning failed.";
+      await db.domainProviderRequest.update({ where: { id: request.id }, data: { status: "SUBMITTED", externalId, externalStatus: "REGISTERED_DNS_FAILED", lastError: message, approvedBy: context.user.id, approvedAt: new Date() } });
+      throw error;
+    }
+  }
+  const registrationStatus = "registered" in result && result.registered ? "REGISTERED" : "SUBMITTED";
+  const updated = await db.domainProviderRequest.update({ where: { id: request.id }, data: { status: request.operation === "REGISTRATION" ? "SUBMITTED" : "TRANSFER_SUBMITTED", externalId, externalStatus: request.operation === "REGISTRATION" ? `${registrationStatus}_${dnsStatus}` : "SUBMITTED", approvedBy: context.user.id, approvedAt: new Date() } });
   await logAudit({ activityType: request.operation === "REGISTRATION" ? "domain-acquisition-approved" : "domain-transfer-initiated", summary: `Approved ${request.operation.toLowerCase()} for ${request.hostname}.`, actorId: context.user.id, details: JSON.stringify({ requestId: request.id, externalId }) });
   return response(updated);
 }

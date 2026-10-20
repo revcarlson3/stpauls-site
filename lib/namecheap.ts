@@ -6,6 +6,27 @@ import { buildGlobalAuditDetails, requireGlobalAdmin } from "@/lib/global-admin"
 
 type NamecheapAttributes = Record<string, string>;
 
+export type NamecheapDnsRecord = {
+  host: string;
+  type: "A" | "AAAA" | "CNAME" | "TXT";
+  address: string;
+  ttl: number;
+};
+
+export function parseRegistrationDnsRecords(value: unknown): NamecheapDnsRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((record) => {
+    if (!record || typeof record !== "object") return [];
+    const item = record as Record<string, unknown>;
+    const host = typeof item.host === "string" ? item.host.trim() : "";
+    const type = typeof item.type === "string" ? item.type.toUpperCase() : "";
+    const address = typeof item.address === "string" ? item.address.trim() : "";
+    const ttl = typeof item.ttl === "number" && Number.isInteger(item.ttl) ? item.ttl : Number(item.ttl);
+    if (!host || !["A", "AAAA", "CNAME", "TXT"].includes(type) || !address || !Number.isInteger(ttl) || ttl < 60 || ttl > 86400) return [];
+    return [{ host, type: type as NamecheapDnsRecord["type"], address, ttl }];
+  });
+}
+
 function xmlAttributes(value: string): NamecheapAttributes {
   return Object.fromEntries(Array.from(value.matchAll(/([A-Za-z][A-Za-z0-9]*)="([^"]*)"/g)).map(([, key, item]) => [key, item]));
 }
@@ -84,6 +105,54 @@ export async function createNamecheapRegistration(input: { hostname: string; yea
   return { domain: attributes.Domain ?? input.hostname, domainId: attributes.DomainID ?? null, orderId: attributes.OrderID ?? null, transactionId: attributes.TransactionID ?? null, registered: attributes.Registered?.toLowerCase() === "true", chargedAmount: attributes.ChargedAmount ?? null };
 }
 
+export async function provisionRegisteredDomainDns(hostname: string, verificationToken?: string | null) {
+  const row = await db.namecheapConfiguration.findUnique({ where: { id: "platform" } });
+  const apiUser = row?.apiUserEncrypted ? decryptConfig(row.apiUserEncrypted) : process.env.NAMECHEAP_API_USER;
+  const apiKey = row?.apiKeyEncrypted ? decryptConfig(row.apiKeyEncrypted) : process.env.NAMECHEAP_API_KEY;
+  const username = row?.usernameEncrypted ? decryptConfig(row.usernameEncrypted) : process.env.NAMECHEAP_USERNAME || apiUser;
+  const clientIp = row?.clientIp || process.env.NAMECHEAP_CLIENT_IP;
+  const records = parseRegistrationDnsRecords(row?.registrationDnsRecords);
+  const verificationRecord = row?.autoVerificationRecord !== false && verificationToken
+    ? { host: "_mychurch-verification", type: "TXT" as const, address: verificationToken, ttl: 300 }
+    : null;
+  const desiredRecords = [...records, ...(verificationRecord ? [verificationRecord] : [])];
+  if (!desiredRecords.length) return { state: "SKIPPED" as const, records: [] };
+  if (!apiUser || !apiKey || !username || !clientIp) throw new Error("Namecheap API configuration is incomplete.");
+  const normalized = hostname.trim().toLowerCase().replace(/\.+$/, "");
+  const labels = normalized.split(".");
+  if (labels.length < 2) throw new Error("The registered domain is invalid.");
+  const sld = labels.at(-2);
+  const tld = labels.at(-1);
+  if (!sld || !tld) throw new Error("The registered domain is invalid.");
+  const baseParams = { ApiUser: apiUser, ApiKey: apiKey, UserName: username, ClientIP: clientIp, SLD: sld, TLD: tld };
+  const getHosts = async () => {
+    const params = new URLSearchParams({ ...baseParams, Command: "namecheap.domains.dns.getHosts" });
+    const response = await fetch(`https://api.namecheap.com/xml.response?${params}`);
+    const body = await response.text();
+    if (!response.ok || /Status="ERROR"/i.test(body) || /ErrCount="[^0]"/i.test(body)) throw new Error("Namecheap rejected DNS lookup. Check API permissions, client IP allowlist, and domain ownership.");
+    return Array.from(body.matchAll(/<host\b([^>]+)\/?>/gi)).map((match) => {
+      const attributes = xmlAttributes(match[1]);
+      return { host: attributes.Name || attributes.HostName, type: attributes.Type || attributes.RecordType, address: attributes.Address || attributes.Value, ttl: attributes.TTL || "1800", mxPref: attributes.MXPref };
+    }).filter((record) => record.host && record.type && record.address);
+  };
+  const currentRecords = await getHosts();
+  const keys = new Set(desiredRecords.map((record) => `${record.host.toLowerCase()}|${record.type}`));
+  const nextRecords = [...currentRecords.filter((record) => !keys.has(`${record.host.toLowerCase()}|${record.type.toUpperCase()}`)), ...desiredRecords];
+  const params = new URLSearchParams({ ...baseParams, Command: "namecheap.domains.dns.setHosts" });
+  nextRecords.forEach((record, index) => {
+    const number = String(index + 1);
+    params.set(`HostName${number}`, record.host);
+    params.set(`RecordType${number}`, record.type);
+    params.set(`Address${number}`, record.address);
+    params.set(`TTL${number}`, String(record.ttl));
+    if ("mxPref" in record && record.mxPref) params.set(`MXPref${number}`, String(record.mxPref));
+  });
+  const response = await fetch(`https://api.namecheap.com/xml.response?${params}`);
+  const body = await response.text();
+  if (!response.ok || /Status="ERROR"/i.test(body) || /ErrCount="[^0]"/i.test(body)) throw new Error("Namecheap rejected DNS provisioning. Check API permissions, client IP allowlist, DNS mode, and domain ownership.");
+  return { state: "PROVISIONED" as const, records: desiredRecords };
+}
+
 export async function createNamecheapTransfer(input: { hostname: string; eppCode: string }) {
   await requireGlobalAdmin({ sensitive: true });
   if (!input.eppCode.trim()) throw new Error("An EPP code is required.");
@@ -124,19 +193,29 @@ export async function listNamecheapTransfers(input: { listType?: string; searchT
 export async function namecheapStatus() {
   await requireGlobalAdmin();
   const row = await db.namecheapConfiguration.findUnique({ where: { id: "platform" } });
-  return { configured: Boolean(row?.apiKeyEncrypted || process.env.NAMECHEAP_API_KEY), domain: row?.domain || process.env.NAMECHEAP_DOMAIN || null, clientIpConfigured: Boolean(row?.clientIp || process.env.NAMECHEAP_CLIENT_IP) };
+  return {
+    configured: Boolean(row?.apiKeyEncrypted || process.env.NAMECHEAP_API_KEY),
+    domain: row?.domain || process.env.NAMECHEAP_DOMAIN || null,
+    clientIpConfigured: Boolean(row?.clientIp || process.env.NAMECHEAP_CLIENT_IP),
+    registrationDnsRecords: parseRegistrationDnsRecords(row?.registrationDnsRecords),
+    autoVerificationRecord: row?.autoVerificationRecord !== false
+  };
 }
 
 export async function saveNamecheapConfig(input: Record<string, unknown>) {
   const context = await requireGlobalAdmin({ sensitive: true });
   if (typeof input.domain !== "string" || !input.domain.trim()) throw new Error("Namecheap domain is required.");
+  const registrationDnsRecords = parseRegistrationDnsRecords(input.registrationDnsRecords);
+  if (Array.isArray(input.registrationDnsRecords) && registrationDnsRecords.length !== input.registrationDnsRecords.length) throw new Error("Every registration DNS record must have a valid host, type, value, and TTL between 60 and 86400 seconds.");
   const values = {
     id: "platform",
     apiUserEncrypted: typeof input.apiUser === "string" && input.apiUser ? encryptConfig(input.apiUser) : undefined,
     apiKeyEncrypted: typeof input.apiKey === "string" && input.apiKey ? encryptConfig(input.apiKey) : undefined,
     usernameEncrypted: typeof input.username === "string" && input.username ? encryptConfig(input.username) : undefined,
     clientIp: typeof input.clientIp === "string" ? input.clientIp.trim() : undefined,
-    domain: input.domain.trim().toLowerCase().replace(/\.+$/, "")
+    domain: input.domain.trim().toLowerCase().replace(/\.+$/, ""),
+    registrationDnsRecords,
+    autoVerificationRecord: input.autoVerificationRecord !== false
   };
   await db.namecheapConfiguration.upsert({ where: { id: "platform" }, create: values, update: values });
   await logAudit({ activityType: "global-admin-namecheap-configuration-updated", summary: "Updated Namecheap platform configuration.", actorId: context.user.id, details: buildGlobalAuditDetails({ scope: "platform", targetType: "namecheap-configuration", metadata: { domain: values.domain, secretsUpdated: Boolean(values.apiKeyEncrypted) } }) });

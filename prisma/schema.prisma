@@ -2094,14 +2094,16 @@ model SiteDomain {
 }
 
 model NamecheapConfiguration {
-  id                    String   @id @default("platform")
-  apiUserEncrypted      String?
-  apiKeyEncrypted       String?
-  usernameEncrypted     String?
-  clientIp              String?
-  domain                String?
-  updatedAt             DateTime @updatedAt
-  createdAt             DateTime @default(now())
+  id                       String   @id @default("platform")
+  apiUserEncrypted         String?
+  apiKeyEncrypted          String?
+  usernameEncrypted        String?
+  clientIp                 String?
+  domain                   String?
+  registrationDnsRecords   Json?
+  autoVerificationRecord   Boolean  @default(true)
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
 }
 
 model OnePanelConfiguration {
