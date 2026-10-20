@@ -99,6 +99,7 @@ describe("1Panel API compatibility", () => {
     expect(fetchMock.mock.calls[4][0]).toBe("https://panel.example.test/api/v2/websites");
     expect(JSON.parse((fetchMock.mock.calls[4][1] as RequestInit).body as string)).toMatchObject({
       type: "proxy",
+      appType: "installed",
       webSiteGroupID: 3,
       primaryDomain: "www.example.org",
       domains: [{ domain: "www.example.org", port: 80, ssl: false }],
@@ -185,6 +186,7 @@ describe("1Panel API compatibility", () => {
     });
     expect(JSON.parse((fetchMock.mock.calls[4][1] as RequestInit).body as string)).toMatchObject({
       type: "proxy",
+      appType: "installed",
       proxy: "http://127.0.0.1:3000"
     });
   });

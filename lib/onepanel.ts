@@ -292,6 +292,7 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
       webSiteGroupID: groupId,
       primaryDomain: hostname,
       domains: [{ domain: hostname, port: 80, ssl: false }],
+      appType: "installed",
       proxy: APPLICATION_PROXY
     }, "dedicated website creation");
     websiteId = numericId(createdWebsite);
