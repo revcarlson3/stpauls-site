@@ -71,7 +71,12 @@ function numericId(body: unknown): number | null {
   return null;
 }
 
-async function panelRequest<T>(config: NonNullable<Awaited<ReturnType<typeof configuration>>>, path: string, body: Record<string, unknown>) {
+async function panelRequest<T>(
+  config: NonNullable<Awaited<ReturnType<typeof configuration>>>,
+  path: string,
+  body: Record<string, unknown>,
+  operation = "request"
+) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signatures = /^1(?:\.|$)/.test(config.version ?? "")
     ? [legacyToken(config.apiKey, timestamp)]
@@ -97,7 +102,7 @@ async function panelRequest<T>(config: NonNullable<Awaited<ReturnType<typeof con
     if (response.ok) return parsed as T;
   }
   const detail = responseMessage(lastBody);
-  throw new Error(`1Panel request failed (${lastResponse?.status ?? "no response"})${detail ? `: ${detail}` : "."}`);
+  throw new Error(`1Panel ${operation} failed (${lastResponse?.status ?? "no response"})${detail ? `: ${detail}` : "."}`);
 }
 
 async function panelGet<T>(config: NonNullable<Awaited<ReturnType<typeof configuration>>>, path: string) {
@@ -143,10 +148,9 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
   if (!config.websiteId || !config.acmeAccountId) throw new Error("Configure the 1Panel website ID and Let’s Encrypt account ID before provisioning SSL.");
   try {
     await panelRequest(config, "/websites/domains", {
-      websiteId: Number(config.websiteId),
-      domain: hostname,
-      port: 80
-    });
+      websiteID: Number(config.websiteId),
+      domains: hostname
+    }, "domain binding");
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (!/already exists|already added|duplicate/i.test(message)) throw error;
@@ -160,7 +164,7 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
     keyType: "EC256",
     skipDNS: true,
     apply: true
-  });
+  }, "certificate creation");
   const certificateId = numericId(created);
   if (!certificateId) throw new Error("1Panel did not return a certificate ID.");
   for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -180,7 +184,7 @@ export async function provisionCustomDomainTls(hostname: string): Promise<Domain
     websiteSSLId: certificateId,
     type: "existed",
     httpConfig: "HTTPToHTTPS"
-  });
+  }, "certificate attachment");
   return { certificateId, websiteId: Number(config.websiteId) };
 }
 

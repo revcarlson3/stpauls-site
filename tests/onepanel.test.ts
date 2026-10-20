@@ -21,6 +21,10 @@ function response(body: string, contentType = "application/json") {
   return new Response(body, { status: 200, headers: { "content-type": contentType } });
 }
 
+function failureResponse(body: string, status = 500) {
+  return new Response(body, { status, headers: { "content-type": "application/json" } });
+}
+
 describe("1Panel API compatibility", () => {
   it("uses the v1 endpoint and legacy MD5 authentication for 1.x", async () => {
     db.onePanelConfiguration.findUnique.mockResolvedValue({ baseUrl: "https://panel.example.test/secure", apiKeyEncrypted: "encrypted", version: "1.10.34-lts" });
@@ -81,9 +85,8 @@ describe("1Panel API compatibility", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock.mock.calls[0][0]).toBe("https://panel.example.test/api/v2/websites/domains");
     expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({
-      websiteId: 7,
-      domain: "www.example.org",
-      port: 80
+      websiteID: 7,
+      domains: "www.example.org"
     });
     expect(fetchMock.mock.calls[1][0]).toBe("https://panel.example.test/api/v2/websites/ssl");
     expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toMatchObject({
@@ -122,5 +125,25 @@ describe("1Panel API compatibility", () => {
 
     const { provisionCustomDomainTls } = await import("@/lib/onepanel");
     await expect(provisionCustomDomainTls("www.example.org")).resolves.toEqual({ certificateId: 42, websiteId: 7 });
+  });
+
+  it("identifies a domain-binding failure before attempting certificate creation", async () => {
+    db.onePanelConfiguration.findUnique.mockResolvedValue({
+      baseUrl: "https://panel.example.test",
+      apiKeyEncrypted: "encrypted",
+      version: "1.10.34-lts",
+      websiteId: "7",
+      acmeAccountId: "11",
+      wildcardSslId: null,
+      platformSuffix: "mychurch.one"
+    });
+    const fetchMock = vi.fn().mockResolvedValue(failureResponse('{"message":"website domain creation failed"}'));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { provisionCustomDomainTls } = await import("@/lib/onepanel");
+    await expect(provisionCustomDomainTls("www.example.org")).rejects.toThrow(
+      "1Panel domain binding failed (500): website domain creation failed"
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
