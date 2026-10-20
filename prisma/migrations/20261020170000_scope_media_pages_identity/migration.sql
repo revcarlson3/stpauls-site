@@ -1,8 +1,8 @@
 -- Tenant isolation for public pages, media, and site identity.
-ALTER TABLE "Page" ADD COLUMN "churchId" TEXT;
-ALTER TABLE "MediaAsset" ADD COLUMN "churchId" TEXT;
+ALTER TABLE "Page" ADD COLUMN IF NOT EXISTS "churchId" TEXT;
+ALTER TABLE "MediaAsset" ADD COLUMN IF NOT EXISTS "churchId" TEXT;
 
-CREATE TABLE "SiteIdentity" (
+CREATE TABLE IF NOT EXISTS "SiteIdentity" (
     "id" TEXT NOT NULL,
     "churchId" TEXT NOT NULL,
     "siteName" TEXT NOT NULL DEFAULT 'St. Paul''s',
@@ -58,15 +58,25 @@ BEGIN
       COALESCE(s."siteLogoDarkUrl", ''), COALESCE(s."siteFaviconUrl", ''),
       COALESCE(s."siteShowTitle", true), COALESCE(s."siteShowTagline", true),
       COALESCE(s."siteShowLogo", false), CURRENT_TIMESTAMP
-    FROM "SecuritySettings" s WHERE s."id" = 1;
+    FROM "SecuritySettings" s WHERE s."id" = 1
+    ON CONFLICT ("churchId") DO NOTHING;
   END IF;
 END $$;
 
 ALTER TABLE "Page" ALTER COLUMN "churchId" SET NOT NULL;
 ALTER TABLE "MediaAsset" ALTER COLUMN "churchId" SET NOT NULL;
-CREATE INDEX "Page_churchId_status_idx" ON "Page"("churchId", "status");
-CREATE INDEX "MediaAsset_churchId_createdAt_idx" ON "MediaAsset"("churchId", "createdAt");
-CREATE UNIQUE INDEX "SiteIdentity_churchId_key" ON "SiteIdentity"("churchId");
-ALTER TABLE "Page" ADD CONSTRAINT "Page_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "MediaAsset" ADD CONSTRAINT "MediaAsset_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "SiteIdentity" ADD CONSTRAINT "SiteIdentity_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE INDEX IF NOT EXISTS "Page_churchId_status_idx" ON "Page"("churchId", "status");
+CREATE INDEX IF NOT EXISTS "MediaAsset_churchId_createdAt_idx" ON "MediaAsset"("churchId", "createdAt");
+CREATE UNIQUE INDEX IF NOT EXISTS "SiteIdentity_churchId_key" ON "SiteIdentity"("churchId");
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Page_churchId_fkey') THEN
+    ALTER TABLE "Page" ADD CONSTRAINT "Page_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'MediaAsset_churchId_fkey') THEN
+    ALTER TABLE "MediaAsset" ADD CONSTRAINT "MediaAsset_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SiteIdentity_churchId_fkey') THEN
+    ALTER TABLE "SiteIdentity" ADD CONSTRAINT "SiteIdentity_churchId_fkey" FOREIGN KEY ("churchId") REFERENCES "Church"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
