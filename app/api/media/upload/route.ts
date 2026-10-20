@@ -2,7 +2,7 @@ import { apiErrorResponse } from "@/lib/api-errors";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
-import { allowedMediaMimeTypes, inferMediaMimeType, readMediaFile, saveUploadedMediaFile } from "@/lib/media";
+import { allowedMediaMimeTypes, inferMediaMimeType, parseMediaByteRange, readMediaFile, saveUploadedMediaFile } from "@/lib/media";
 
 export async function POST(request: Request) {
   try {
@@ -27,7 +27,19 @@ export async function GET(request: Request) {
   try {
     const file = await readMediaFile(filename);
     const contentType = inferMediaMimeType(filename);
-    return new Response(new Uint8Array(file), { headers: { "Content-Type": contentType, "Cache-Control": "public, max-age=31536000, immutable" } });
+    const range = parseMediaByteRange(request.headers.get("range"), file.byteLength);
+    if (range === null) {
+      return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${file.byteLength}`, "Accept-Ranges": "bytes" } });
+    }
+    const body = range ? new Uint8Array(file).slice(range.start, range.end + 1) : new Uint8Array(file);
+    const headers = {
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "Content-Length": String(body.byteLength),
+      "Content-Type": contentType,
+      ...(range ? { "Content-Range": `bytes ${range.start}-${range.end}/${file.byteLength}` } : {})
+    };
+    return new Response(body, { status: range ? 206 : 200, headers });
   } catch {
     return NextResponse.json({ error: "Image not found." }, { status: 404 });
   }

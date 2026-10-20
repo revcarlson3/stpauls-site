@@ -55,6 +55,29 @@ export function inferMediaMimeType(filename: string) {
   return extensionMimeTypes.get(extension) ?? "application/octet-stream";
 }
 
+export function parseMediaByteRange(value: string | null, size: number) {
+  if (!value) return undefined;
+  if (!Number.isInteger(size) || size <= 0 || !value.startsWith("bytes=")) return null;
+  const range = value.slice("bytes=".length).split(",")[0]?.trim() ?? "";
+  const separator = range.indexOf("-");
+  if (separator < 0) return null;
+  const startValue = range.slice(0, separator).trim();
+  const endValue = range.slice(separator + 1).trim();
+  if (!startValue && !endValue) return null;
+
+  if (!startValue) {
+    const suffixLength = Number(endValue);
+    if (!Number.isInteger(suffixLength) || suffixLength <= 0) return null;
+    return { start: Math.max(0, size - suffixLength), end: size - 1 };
+  }
+
+  const start = Number(startValue);
+  if (!Number.isInteger(start) || start < 0 || start >= size) return null;
+  const requestedEnd = endValue ? Number(endValue) : size - 1;
+  if (!Number.isInteger(requestedEnd) || requestedEnd < start) return null;
+  return { start, end: Math.min(requestedEnd, size - 1) };
+}
+
 export function mediaTypeFromMimeType(mimeType: string): Exclude<MediaFilter, "all"> {
   if (mimeType.startsWith("image/")) return "image";
   if (mimeType.startsWith("video/")) return "video";
