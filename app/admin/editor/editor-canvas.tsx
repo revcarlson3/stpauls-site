@@ -414,13 +414,18 @@ function createBlock(type: BlockType): Block {
 
 const editorCollisionDetection: CollisionDetection = (args) => {
   const activeKind = args.active.data.current?.kind;
-  const nonInsertTargets = args.droppableContainers.filter((container) => container.data.current?.kind !== "insert");
+  const nonInsertionTargets = args.droppableContainers.filter((container) => !["insert", "layer-insert"].includes(String(container.data.current?.kind ?? "")));
+  if (activeKind === "layer") {
+    const layerInsertTargets = args.droppableContainers.filter((container) => container.data.current?.kind === "layer-insert");
+    const layerInsertHits = pointerWithin({ ...args, droppableContainers: layerInsertTargets });
+    if (layerInsertHits.length) return layerInsertHits;
+  }
   if (activeKind === "palette") {
     const insertTargets = args.droppableContainers.filter((container) => container.data.current?.kind === "insert");
     const insertHits = pointerWithin({ ...args, droppableContainers: insertTargets });
     if (insertHits.length) return insertHits;
   }
-  return closestCenter({ ...args, droppableContainers: nonInsertTargets });
+  return closestCenter({ ...args, droppableContainers: nonInsertionTargets });
 };
 
 function updateAtPath(blocks: Block[], path: number[], update: (block: Block) => Block): Block[] {
@@ -1018,6 +1023,12 @@ function SortableLayerRow({ block, path, selected, onClick }: { block: Block; pa
   return <button ref={setNodeRef} type="button" {...attributes} {...listeners} onClick={onClick} style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined }} className={`focus-ring flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-xs ${isDragging ? "bg-white shadow-xl ring-2 ring-coral/20" : selected ? "bg-coral/10 font-bold text-coral" : "text-ink hover:bg-mist"}`}><span className="cursor-grab text-ink/35" aria-hidden="true">⋮⋮</span><span className="min-w-0 flex-1 truncate">{block.title || blockDefinitions[block.type].label}</span><span className="shrink-0 text-[10px] uppercase text-ink/40">{blockDefinitions[block.type].label}</span></button>;
 }
 
+function LayerInsertZone({ parentPath, index, active, dragging }: { parentPath: number[]; index: number; active: boolean; dragging: boolean }) {
+  const id = `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${index}`;
+  const { setNodeRef } = useDroppable({ id, data: { kind: "layer-insert", parentPath, index } });
+  return <div ref={setNodeRef} aria-hidden="true" className={`relative h-1 transition-[height,margin] duration-150 ${dragging ? "h-3" : ""} ${active && dragging ? "my-1 rounded border-2 border-dashed border-coral bg-coral/10" : ""}`} />;
+}
+
 function BlockInsertZone({ parentPath, index, active, draggedType }: { parentPath: number[]; index: number; active: boolean; draggedType: BlockType | null }) {
   const id = `insert:${parentPath.length ? parentPath.join(".") : "root"}:${index}`;
   const { setNodeRef } = useDroppable({ id, data: { kind: "insert", parentPath, index } });
@@ -1552,10 +1563,24 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     commitBlocks((current) => reorderChildrenAtPath(current, sourceParent, from, to));
     setSelectedPath(targetPath);
   };
+  const moveLayerToInsertion = (parentPath: number[], index: number, sourcePath = draggedLayerPath) => {
+    if (!sourcePath || sourcePath.length === 0) return;
+    const sourceParent = sourcePath.slice(0, -1);
+    if (sourceParent.join(".") !== parentPath.join(".")) {
+      setMessage("Layers can be reordered within the same container.");
+      return;
+    }
+    const from = sourcePath[sourcePath.length - 1];
+    const to = from < index ? index - 1 : index;
+    if (from === to) return;
+    commitBlocks((current) => reorderChildrenAtPath(current, sourceParent, from, to));
+    setSelectedPath([...parentPath, to]);
+  };
   const renderLayer = (block: Block, path: number[]) => <div key={block.id} className="grid gap-1">
     <SortableLayerRow block={block} path={path} selected={selectedPath?.join(".") === path.join(".")} onClick={() => setSelectedPath(path)} />
-    {block.children?.length ? <SortableContext items={block.children.map((_, index) => `layer:${[...path, index].join(".")}`)} strategy={verticalListSortingStrategy}><div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">{block.children.map((child, index) => renderLayer(child, [...path, index]))}</div></SortableContext> : null}
+    {block.children?.length ? renderLayerCollection(block.children, path, true) : null}
   </div>;
+  const renderLayerCollection = (items: Block[], parentPath: number[], nested = false) => <SortableContext items={items.map((_, index) => `layer:${[...parentPath, index].join(".")}`)} strategy={verticalListSortingStrategy}><div className={`${nested ? "ml-4 border-l border-ink/10 pl-2" : ""} grid gap-1`}>{items.map((block, index) => <div key={block.id}><LayerInsertZone parentPath={parentPath} index={index} active={activeDropPath === `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${index}`} dragging={draggedLayerPath !== null} />{renderLayer(block, [...parentPath, index])}</div>)}<LayerInsertZone parentPath={parentPath} index={items.length} active={activeDropPath === `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${items.length}`} dragging={draggedLayerPath !== null} /></div></SortableContext>;
   const elementButton = (type: BlockType) => <PaletteElement key={type} type={type} onClick={() => addBlock(type)} />;
   const applyAutoLayout = () => {
     if (previewDevice === "desktop") return;
@@ -1564,7 +1589,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   };
   const handleDragOver = ({ over }: DragOverEvent) => {
     const overId = String(over?.id ?? "");
-    setActiveDropPath(overId.startsWith("drop:") ? overId.slice(5) : overId.startsWith("insert:") ? overId : null);
+    setActiveDropPath(overId.startsWith("drop:") ? overId.slice(5) : overId.startsWith("insert:") || overId.startsWith("layer-insert:") ? overId : null);
   };
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     const activeData = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined;
@@ -1573,6 +1598,8 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
       if (overData?.kind === "drop" && overData.path) dropChild(overData.path, activeData.type);
       else if (overData?.kind === "insert" && overData.parentPath && typeof overData.index === "number") dropAtInsertion(overData.parentPath, overData.index, activeData.type);
       else if (overData?.kind === "root") addBlock(activeData.type);
+    } else if (activeData?.kind === "layer" && overData?.kind === "layer-insert" && overData.parentPath && typeof overData.index === "number") {
+      moveLayerToInsertion(overData.parentPath, overData.index, activeData.path);
     } else if (activeData?.kind === "layer" && overData?.kind === "layer" && activeData.path && overData.path) {
       moveLayer(overData.path, activeData.path);
     }
@@ -1581,7 +1608,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     setActiveDropPath(null);
   };
 
-  return   <DndContext sensors={sensors} collisionDetection={editorCollisionDetection} onDragStart={({ active }) => { const data = active.data.current as { kind?: string; type?: BlockType } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
+  return   <DndContext sensors={sensors} collisionDetection={editorCollisionDetection} onDragStart={({ active }) => { const data = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); setDraggedLayerPath(data?.kind === "layer" ? data.path ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
     {message && <p role="status" aria-live="polite" className="lg:col-span-2 rounded-lg border border-emerald-600/20 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{message}</p>}
     {recoveryOffer && <div role="alert" className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/25 bg-amber-50 px-4 py-3 text-sm text-amber-950"><div><p className="font-bold">A newer local draft is available.</p><p className="mt-1 text-amber-950/75">Recovered from {new Date(recoveryOffer.savedAt).toLocaleString()}.</p></div><div className="flex gap-2"><button type="button" className="focus-ring rounded-lg bg-ink px-3 py-2 text-xs font-bold text-white hover:bg-ink/90" onClick={restoreRecovery}>Restore draft</button><button type="button" className="focus-ring rounded-lg border border-amber-900/25 px-3 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-100" onClick={discardRecovery}>Discard</button></div></div>}
     <div className="flex flex-wrap items-center gap-2 lg:col-span-2">
@@ -1602,7 +1629,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
         <div className="flex cursor-move items-center gap-3 border-b border-ink/10 bg-ink px-3 py-2 text-white" onPointerDown={(event) => { if (event.target instanceof HTMLElement && event.target.closest("button")) return; layersDragOffset.current = { x: event.clientX - layersPosition.x, y: event.clientY - layersPosition.y }; setLayersDragging(true); }}><span className="mr-auto text-xs font-bold uppercase tracking-wider">Layers</span><span className="text-[10px] text-white/60">Drag to move</span><button type="button" aria-label="Close layers panel" className="focus-ring rounded px-2 py-1 text-lg leading-none text-white/75 hover:bg-white/10 hover:text-white" onClick={() => setLayersOpen(false)}>×</button></div>
         <div className="grid min-h-0 gap-2 overflow-y-auto p-3">
           <p className="text-xs leading-5 text-ink/55">Select a layer to edit it. Drag a layer onto another layer in the same container to reorder it.</p>
-          {blocks.length ? <SortableContext items={blocks.map((_, index) => `layer:${index}`)} strategy={verticalListSortingStrategy}><div className="grid gap-1">{blocks.map((block, index) => renderLayer(block, [index]))}</div></SortableContext> : <p className="rounded-lg bg-mist/60 p-3 text-xs text-ink/55">No layers yet.</p>}
+          {blocks.length ? renderLayerCollection(blocks, []) : <p className="rounded-lg bg-mist/60 p-3 text-xs text-ink/55">No layers yet.</p>}
         </div>
       </div>}
       <button type="button" className="focus-ring ml-2 rounded-lg bg-coral px-4 py-2 text-xs font-bold text-white shadow-md shadow-coral/25 ring-2 ring-coral/15 hover:bg-[#d95f43] hover:shadow-lg" onClick={() => void saveDraft()}>Save</button>

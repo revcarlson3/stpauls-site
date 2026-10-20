@@ -68,6 +68,7 @@ jobs:
             --exclude 'node_modules' \
             --exclude '.next' \
             --exclude 'storage' \
+            --exclude 'public/uploads' \
             -e "ssh -p $DEPLOY_PORT -i $HOME/.ssh/beta_deploy_key" \
             ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
 
