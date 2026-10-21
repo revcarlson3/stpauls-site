@@ -79,4 +79,35 @@ describe("public page headline layout", () => {
     expect(markup).toContain("--desktop-width:75%");
     expect(markup).toContain("--desktop-height:240px");
   });
+
+  it("renders divider shapes and responsive spacer heights", async () => {
+    const markup = renderToStaticMarkup(await PageRenderer({
+      blocks: [
+        {
+          id: "divider-1",
+          type: "divider",
+          props: {
+            dividerColor: "#c85c42",
+            dividerThickness: "4",
+            dividerWidth: "60",
+            dividerAlignment: "right",
+            dividerShape: "wave",
+            responsive: { mobile: { dividerShape: "dotted", dividerWidth: "80" } },
+          },
+        },
+        {
+          id: "spacer-1",
+          type: "spacer",
+          props: { spacerHeight: "72", responsive: { mobile: { spacerHeight: "24" } } },
+        },
+      ],
+    }));
+
+    expect(markup).toContain("role=\"separator\"");
+    expect(markup).toContain("radial-gradient(ellipse");
+    expect(markup).toContain("width:60%");
+    expect(markup).toContain("responsive-content-has-mobile");
+    expect(markup).toContain("height:72px");
+    expect(markup).toContain("height:24px");
+  });
 });

@@ -46,4 +46,20 @@ describe("page editor site preview target", () => {
     expect(renderer).toContain('responsiveString(block.props ?? {}, "calendarDefaultView", device)');
     expect(calendar).toContain("defaultView = \"month\"");
   });
+
+  it("exposes responsive divider and spacer controls and persistence", () => {
+    const editor = fs.readFileSync(path.resolve(process.cwd(), "app/admin/editor/editor-canvas.tsx"), "utf8");
+    const blocks = fs.readFileSync(path.resolve(process.cwd(), "lib/blocks.ts"), "utf8");
+
+    expect(blocks).toContain('| "divider"');
+    expect(blocks).toContain('| "spacer"');
+    expect(editor).toContain('{ label: "Layout elements", types: [...structuralTypes, "divider", "spacer"] }');
+    expect(editor).toContain("dividerColor");
+    expect(editor).toContain("dividerShape");
+    expect(editor).toContain("spacerHeight");
+    expect(editor).toContain('type === "divider" ? "#17324d"');
+    expect(editor).toContain('type === "spacer" ? "48"');
+    expect(editor).toContain('block.type === "divider" &&');
+    expect(editor).toContain('block.type === "spacer" &&');
+  });
 });

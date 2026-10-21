@@ -336,6 +336,22 @@ function buttonGroup(config: ReturnType<typeof buttonsConfig>, headingId?: strin
   return <div id={headingId} className={`flex flex-wrap gap-3 ${layoutClass} ${alignmentClass}`}>{config.items.map((button) => <a key={button.id} href={button.href} target={button.target} rel={button.target === "_blank" ? "noreferrer" : undefined} className={`responsive-typography focus-ring inline-flex w-full items-center justify-center rounded-full text-center font-semibold transition hover:opacity-90 sm:w-auto ${button.variant === "secondary" ? "bg-[rgb(var(--color-ink))] text-white" : button.variant === "outline" ? "border-2 border-[rgb(var(--color-coral))] text-[rgb(var(--color-coral))]" : button.variant === "light" ? "bg-white text-[rgb(var(--color-ink))]" : "bg-[rgb(var(--color-coral))] text-white"} ${button.size === "sm" ? "px-4 py-2 text-sm" : button.size === "lg" ? "px-8 py-4 text-lg" : "px-5 py-3 text-base"}`}>{button.label}</a>)}</div>;
 }
 
+function dividerElement(props: { color?: string; thickness?: string; width?: string; alignment?: string; shape?: string }) {
+  const color = props.color || "#17324d";
+  const thickness = Math.max(1, Math.min(24, Number(props.thickness) || 2));
+  const width = Math.max(5, Math.min(100, Number(props.width) || 100));
+  const shape = props.shape || "solid";
+  const borderStyle = shape === "dashed" ? "dashed" : shape === "dotted" ? "dotted" : shape === "double" ? "double" : "solid";
+  const lineStyle: CSSProperties = shape === "gradient"
+    ? { height: `${thickness}px`, width: `${width}%`, background: `linear-gradient(90deg, transparent, ${color}, transparent)` }
+    : shape === "wave"
+      ? { height: `${Math.max(6, thickness * 3)}px`, width: `${width}%`, background: `radial-gradient(ellipse at center, ${color} 0 45%, transparent 48%) 0 50% / ${Math.max(12, thickness * 6)}px 100% repeat-x` }
+      : shape === "scallop"
+        ? { height: `${Math.max(6, thickness * 2)}px`, width: `${width}%`, background: `radial-gradient(circle at 50% 100%, ${color} 0 45%, transparent 48%) 0 0 / ${Math.max(12, thickness * 5)}px 100% repeat-x` }
+        : { width: `${width}%`, borderTop: `${thickness}px ${borderStyle} ${color}` };
+  return <div role="separator" className="flex w-full" style={{ justifyContent: props.alignment === "right" ? "flex-end" : props.alignment === "left" ? "flex-start" : "center" }}><div aria-hidden="true" style={lineStyle} /></div>;
+}
+
 function BlockSurface({ as, children, className = "", style, background, overlay, overlayOpacity: opacity }: { as: "section" | "aside" | "footer"; labelledBy: string; children: ReactNode; className?: string; style?: CSSProperties; background?: ReactNode; overlay?: CSSProperties; overlayOpacity?: number }) {
   const surfaceClass = `responsive-block relative overflow-hidden bg-transparent ${className}`;
   const content = <>{background}{overlay && <div aria-hidden="true" className="responsive-overlay pointer-events-none absolute inset-0 z-0" style={{ ...overlay, opacity }} />}<div className="relative z-10 flex min-h-full flex-col" style={{ justifyContent: "var(--desktop-vertical-align, flex-start)" }}>{children}</div></>;
@@ -426,6 +442,14 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
     }
     if (block.type === "table") {
       return <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}><TableBlock config={parseTableConfig(block.props?.content)} /></BlockSurface>;
+    }
+    if (block.type === "divider") {
+      const dividerProps = { color: typeof block.props?.dividerColor === "string" ? block.props.dividerColor : undefined, thickness: typeof block.props?.dividerThickness === "string" ? block.props.dividerThickness : undefined, width: typeof block.props?.dividerWidth === "string" ? block.props.dividerWidth : undefined, alignment: typeof block.props?.dividerAlignment === "string" ? block.props.dividerAlignment : undefined, shape: typeof block.props?.dividerShape === "string" ? block.props.dividerShape : undefined };
+      return <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}><div className={responsiveContentClass(block.props ?? {}, "dividerColor")}><div className="responsive-content-base">{dividerElement(dividerProps)}</div>{responsiveDevices.map((device) => { const settings = responsiveSettings(block.props ?? {}, device) ?? {}; return settings.dividerColor === undefined && settings.dividerThickness === undefined && settings.dividerWidth === undefined && settings.dividerAlignment === undefined && settings.dividerShape === undefined ? null : <div key={device} className={`responsive-content-variant responsive-content-${device}`}><div className="responsive-content-base">{dividerElement({ ...dividerProps, color: typeof settings.dividerColor === "string" ? settings.dividerColor : dividerProps.color, thickness: typeof settings.dividerThickness === "string" ? settings.dividerThickness : dividerProps.thickness, width: typeof settings.dividerWidth === "string" ? settings.dividerWidth : dividerProps.width, alignment: typeof settings.dividerAlignment === "string" ? settings.dividerAlignment : dividerProps.alignment, shape: typeof settings.dividerShape === "string" ? settings.dividerShape : dividerProps.shape })}</div></div>; })}</div></BlockSurface>;
+    }
+    if (block.type === "spacer") {
+      const spacerHeight = typeof block.props?.spacerHeight === "string" ? block.props.spacerHeight : "48";
+      return <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}><div className={responsiveContentClass(block.props ?? {}, "spacerHeight")}><div className="responsive-content-base" aria-hidden="true" style={{ height: `${Math.max(1, Math.min(1000, Number(spacerHeight) || 48))}px` }} />{responsiveDevices.map((device) => { const value = responsiveString(block.props ?? {}, "spacerHeight", device); return value === undefined ? null : <div key={device} className={`responsive-content-variant responsive-content-${device}`} aria-hidden="true" style={{ height: `${Math.max(1, Math.min(1000, Number(value) || 48))}px` }} />; })}</div></BlockSurface>;
     }
     if (block.type === "calendar") {
       const calendarView = block.props?.calendarDefaultView === "week" || block.props?.calendarDefaultView === "agenda" ? block.props.calendarDefaultView : "month";
