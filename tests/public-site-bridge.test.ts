@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
@@ -46,5 +48,15 @@ describe("public-site session bridge", () => {
     });
 
     await expect(createPublicSiteSessionToken(token, "church.mychurch.one")).resolves.toEqual(expect.any(String));
+  });
+
+  it("preserves the requested page path through the bridge redirect", () => {
+    const bridge = fs.readFileSync(path.resolve(process.cwd(), "app/api/auth/public-site-bridge/route.ts"), "utf8");
+    const authBridge = fs.readFileSync(path.resolve(process.cwd(), "app/(public)/auth/bridge/route.ts"), "utf8");
+
+    expect(bridge).toContain('bridgeUrl.searchParams.set("redirect", `${target.pathname}${target.search}`);');
+    expect(authBridge).toContain('const redirect = url.searchParams.get("redirect") ?? "/";');
+    expect(authBridge).toContain('new URL(redirect, `${protocol}://${host}`)');
+    expect(authBridge).toContain('!redirect.startsWith("//")');
   });
 });

@@ -38,5 +38,6 @@ export async function GET(request: Request) {
   });
   const bridgeUrl = new URL("/auth/bridge", `${target.protocol}//${domain.hostname}`);
   bridgeUrl.searchParams.set("token", bridgeToken);
+  bridgeUrl.searchParams.set("redirect", `${target.pathname}${target.search}`);
   return NextResponse.redirect(bridgeUrl);
 }

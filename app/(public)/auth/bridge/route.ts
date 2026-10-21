@@ -19,7 +19,11 @@ export async function GET(request: Request) {
   const protocol = forwardedProtocol === "http" || forwardedProtocol === "https"
     ? forwardedProtocol
     : new URL(request.url).protocol.replace(":", "");
-  const response = NextResponse.redirect(new URL("/", `${protocol}://${host}`));
+  const redirect = url.searchParams.get("redirect") ?? "/";
+  const destination = redirect.startsWith("/") && !redirect.startsWith("//")
+    ? new URL(redirect, `${protocol}://${host}`)
+    : new URL("/", `${protocol}://${host}`);
+  const response = NextResponse.redirect(destination);
   response.cookies.set({
     name: process.env.NODE_ENV === "production" ? "__Secure-next-auth.session-token" : "next-auth.session-token",
     value: sessionToken,
