@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import type { User } from "@/lib/auth";
 import { Container } from "@/components/ui";
 import { ResponsivePublicNav } from "@/components/responsive-public-nav";
@@ -8,6 +9,7 @@ import type { getSiteTheme } from "@/lib/theme";
 import type { getSiteLayout } from "@/lib/site-layout";
 import { NotificationBell } from "@/components/notification-bell";
 import { SiteHeaderFrame } from "@/components/site-header-frame";
+import { MenuLinks } from "@/components/menu-links";
 
 type SiteHeaderProps = {
   menuId?: string | null;
@@ -21,12 +23,21 @@ type SiteHeaderProps = {
 export async function SiteHeader({ menuId = null, menuLocationId = null, user, identity, theme, layout }: SiteHeaderProps) {
   const menu = await resolvePublicMenu(menuId, menuLocationId, "primary");
   const header = layout.header;
+  const preHeaderMenu = header.preHeader.enabled && header.preHeader.menuId
+    ? await resolvePublicMenu(header.preHeader.menuId, null, "primary")
+    : null;
   const logoUrl = theme.nav === "solid" ? (identity.logoDarkUrl || identity.logoUrl) : identity.logoUrl;
-  const heightClass = header.height === "compact" ? "min-h-16" : header.height === "tall" ? "min-h-28" : "min-h-20";
+  const headerHeight = header.height === "compact" ? "4rem" : header.height === "tall" ? "7rem" : "5rem";
 
   return (
     <SiteHeaderFrame sticky={header.sticky} stylistic={header.stylistic} style={{ backgroundColor: header.background, color: header.textColor }}>
-      <Container className={`site-header-container px-0 flex ${heightClass} items-center gap-6`}>
+      {header.preHeader.enabled && <div className="site-header-preheader border-b border-current/10">
+        <Container className="flex min-h-10 items-center justify-between gap-4 px-0 py-2 text-xs">
+          {header.preHeader.text && <p className="min-w-0 truncate">{header.preHeader.text}</p>}
+          {preHeaderMenu && <MenuLinks items={preHeaderMenu.items} className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1" />}
+        </Container>
+      </div>}
+      <Container className="site-header-container site-header-main flex items-center gap-6 px-0" style={{ "--site-header-min-height": headerHeight } as CSSProperties}>
         <div className="site-header-identity flex shrink-0 items-center gap-3">
           {identity.showLogo && logoUrl && <img src={logoUrl} alt="" className="h-10 w-auto object-contain" />}
           {(identity.showTitle || identity.showTagline) && <Link href="/" className="focus-ring">

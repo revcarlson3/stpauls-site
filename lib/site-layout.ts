@@ -4,15 +4,23 @@ import { defaultFooterLayout, defaultHeaderLayout, type FooterColumn, type Foote
 export { defaultFooterLayout, defaultHeaderLayout };
 export type { FooterLayout, HeaderLayout };
 
-function headerFrom(value: unknown): HeaderLayout {
+export function normalizeHeaderLayout(value: unknown): HeaderLayout {
   const input = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const preHeaderInput = input.preHeader && typeof input.preHeader === "object" && !Array.isArray(input.preHeader)
+    ? input.preHeader as Record<string, unknown>
+    : {};
   return {
     height: input.height === "compact" || input.height === "tall" ? input.height : defaultHeaderLayout.height,
     background: typeof input.background === "string" ? input.background : defaultHeaderLayout.background,
     textColor: typeof input.textColor === "string" ? input.textColor : defaultHeaderLayout.textColor,
     sticky: input.sticky === true,
     stylistic: input.stylistic === true,
-    menuId: typeof input.menuId === "string" && input.menuId ? input.menuId : null
+    menuId: typeof input.menuId === "string" && input.menuId ? input.menuId : null,
+    preHeader: {
+      enabled: preHeaderInput.enabled === true,
+      text: typeof preHeaderInput.text === "string" ? preHeaderInput.text : "",
+      menuId: typeof preHeaderInput.menuId === "string" && preHeaderInput.menuId ? preHeaderInput.menuId : null
+    }
   };
 }
 
@@ -40,7 +48,7 @@ export function normalizeFooterLayout(value: unknown): FooterLayout {
 
 export async function getSiteLayout() {
   const settings = await db.securitySettings.findUnique({ where: { id: 1 }, select: { headerConfig: true, footerConfig: true } });
-  return { header: headerFrom(settings?.headerConfig), footer: footerFrom(settings?.footerConfig) };
+  return { header: normalizeHeaderLayout(settings?.headerConfig), footer: footerFrom(settings?.footerConfig) };
 }
 
 export async function saveSiteLayout(header: HeaderLayout, footer: FooterLayout) {

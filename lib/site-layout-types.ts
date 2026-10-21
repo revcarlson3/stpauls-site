@@ -5,6 +5,11 @@ export type HeaderLayout = {
   sticky: boolean;
   stylistic: boolean;
   menuId: string | null;
+  preHeader: {
+    enabled: boolean;
+    text: string;
+    menuId: string | null;
+  };
 };
 
 export type FooterColumn = {
@@ -29,7 +34,12 @@ export const defaultHeaderLayout: HeaderLayout = {
   textColor: "#17324d",
   sticky: false,
   stylistic: false,
-  menuId: null
+  menuId: null,
+  preHeader: {
+    enabled: false,
+    text: "",
+    menuId: null
+  }
 };
 
 export const defaultFooterLayout: FooterLayout = {

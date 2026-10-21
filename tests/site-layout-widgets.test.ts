@@ -1,11 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { normalizeFooterLayout } from "@/lib/site-layout";
+import { defaultHeaderLayout } from "@/lib/site-layout-types";
+import { normalizeFooterLayout, normalizeHeaderLayout } from "@/lib/site-layout";
 import { orderMenuItems } from "@/lib/menu-input";
 import { isAllowedFaviconUrl } from "@/lib/site-identity-url";
 import { decodeTextEntities } from "@/lib/text-entities";
 import { parseWidgetInput } from "@/lib/widget-input";
 
 describe("footer layout compatibility", () => {
+  it("keeps legacy headers compatible while preserving pre-header settings", () => {
+    expect(normalizeHeaderLayout({ height: "tall", menuId: "main" })).toEqual({
+      ...defaultHeaderLayout,
+      height: "tall",
+      menuId: "main"
+    });
+    expect(normalizeHeaderLayout({
+      height: "standard",
+      preHeader: { enabled: true, text: "Call us", menuId: "utility" }
+    }).preHeader).toEqual({ enabled: true, text: "Call us", menuId: "utility" });
+  });
+
   it("decodes text entities in footer legal and credit text", () => {
     expect(decodeTextEntities("&copy; 2026 St. Paul's &amp; Friends")).toBe("© 2026 St. Paul's & Friends");
     expect(decodeTextEntities("&#169; &#xA9;")).toBe("© ©");
