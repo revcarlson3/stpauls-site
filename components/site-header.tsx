@@ -1,20 +1,25 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/auth";
+import type { User } from "@/lib/auth";
 import { Container } from "@/components/ui";
 import { ResponsivePublicNav } from "@/components/responsive-public-nav";
 import { resolvePublicMenu } from "@/lib/content";
-import { getSiteIdentity } from "@/lib/site-identity";
-import { getSiteTheme } from "@/lib/theme";
-import { getSiteLayout } from "@/lib/site-layout";
+import type { getSiteIdentity } from "@/lib/site-identity";
+import type { getSiteTheme } from "@/lib/theme";
+import type { getSiteLayout } from "@/lib/site-layout";
 import { NotificationBell } from "@/components/notification-bell";
 import { SiteHeaderFrame } from "@/components/site-header-frame";
 
-export async function SiteHeader({ menuId = null, menuLocationId = null }: { menuId?: string | null; menuLocationId?: string | null }) {
-  const user = await getCurrentUser();
+type SiteHeaderProps = {
+  menuId?: string | null;
+  menuLocationId?: string | null;
+  user: User | null;
+  identity: Awaited<ReturnType<typeof getSiteIdentity>>;
+  theme: Awaited<ReturnType<typeof getSiteTheme>>;
+  layout: Awaited<ReturnType<typeof getSiteLayout>>;
+};
+
+export async function SiteHeader({ menuId = null, menuLocationId = null, user, identity, theme, layout }: SiteHeaderProps) {
   const menu = await resolvePublicMenu(menuId, menuLocationId, "primary");
-  const identity = await getSiteIdentity();
-  const theme = await getSiteTheme();
-  const layout = await getSiteLayout();
   const header = layout.header;
   const logoUrl = theme.nav === "solid" ? (identity.logoDarkUrl || identity.logoUrl) : identity.logoUrl;
   const heightClass = header.height === "compact" ? "min-h-16" : header.height === "tall" ? "min-h-28" : "min-h-20";

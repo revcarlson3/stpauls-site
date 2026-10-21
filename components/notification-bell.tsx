@@ -41,7 +41,7 @@ export function NotificationBell() {
     setUsers(value.users ?? []);
     setCurrentGroupId(value.currentGroupId ?? null);
   }
-  useEffect(() => { setMounted(true); void load(); }, []);
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
     if (!open) return;
     const closeOnOutsideClick = (event: MouseEvent) => {

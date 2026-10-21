@@ -6,6 +6,7 @@ import { getSiteTheme } from "@/lib/theme";
 import { isPublicSiteEnabled } from "@/lib/modules";
 import { isMaintenanceModeEnabled } from "@/lib/modules";
 import { getSiteIdentity } from "@/lib/site-identity";
+import { getSiteLayout } from "@/lib/site-layout";
 import { MaintenancePage } from "@/components/maintenance-page";
 import AdminLayout from "@/app/admin/layout";
 import { AnnouncementTicker } from "@/components/announcement-ticker";
@@ -30,16 +31,17 @@ export default async function PublicLayout({ children }: Readonly<{ children: Re
     return <MaintenancePage publicSiteName={identity.name} />;
   }
   const theme = await getSiteTheme();
+  const [identity, layout] = await Promise.all([getSiteIdentity(tenant?.id), getSiteLayout()]);
   const integrated = theme.family === "bootstrap";
   return (
     <div className="flex min-h-screen flex-col">
       <PublicSitePreviewRefresh />
       {user?.canAccessAdmin && <AdminDrawer />}
       <AnnouncementTicker publicOnly />
-      {integrated ? <main className="site-public-frame site-public-frame-integrated site-section flex min-h-screen flex-col"><SiteHeader /><div className="flex-1">{children}</div><SiteFooter /></main> : <>
-        <SiteHeader />
+      {integrated ? <main className="site-public-frame site-public-frame-integrated site-section flex min-h-screen flex-col"><SiteHeader user={user} identity={identity} theme={theme} layout={layout} /><div className="flex-1">{children}</div><SiteFooter identity={identity} layout={layout} /></main> : <>
+        <SiteHeader user={user} identity={identity} theme={theme} layout={layout} />
         <main className="site-public-content site-section flex-1">{children}</main>
-        <SiteFooter />
+        <SiteFooter identity={identity} layout={layout} />
       </>}
     </div>
   );

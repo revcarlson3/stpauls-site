@@ -1,15 +1,14 @@
 import { Container } from "@/components/ui";
 import { listPublicWidgets, resolvePublicMenu, resolvePublicWidget } from "@/lib/content";
 import { PublicWidget } from "@/components/public-widget";
-import { getSiteIdentity } from "@/lib/site-identity";
-import { getSiteLayout } from "@/lib/site-layout";
+import type { getSiteIdentity as GetSiteIdentity } from "@/lib/site-identity";
+import type { getSiteLayout as GetSiteLayout } from "@/lib/site-layout";
 
 function safeRichText(value: unknown) {
   return typeof value === "string" ? value.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "").replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "") : "";
 }
 
-export async function SiteFooter() {
-  const [layout, identity] = await Promise.all([getSiteLayout(), getSiteIdentity()]);
+export async function SiteFooter({ layout, identity }: { layout: Awaited<ReturnType<typeof GetSiteLayout>>; identity: Awaited<ReturnType<typeof GetSiteIdentity>> }) {
   const [columns, footerWidgets] = await Promise.all([
     Promise.all(layout.footer.columns.map(async (column) => ({ column, widget: await resolvePublicWidget(column.widgetId) }))),
     listPublicWidgets("footer")

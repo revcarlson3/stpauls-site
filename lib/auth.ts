@@ -18,7 +18,7 @@ export type User = {
   permissions: Permission[];
 };
 
-export function getCurrentUser() {
+export async function getCurrentUser() {
   return getServerSession(authOptions).then((session) => {
     const role = session?.user?.role;
     if (!session?.user?.id || !isRole(role)) return null;
