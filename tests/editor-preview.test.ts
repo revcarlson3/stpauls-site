@@ -34,4 +34,16 @@ describe("page editor site preview target", () => {
     expect(display).toContain('from "motion/react"');
     expect(display).toContain("type: \"spring\"");
   });
+
+  it("wires responsive calendar default views into the published calendar", () => {
+    const editor = fs.readFileSync(path.resolve(process.cwd(), "app/admin/editor/editor-canvas.tsx"), "utf8");
+    const renderer = fs.readFileSync(path.resolve(process.cwd(), "components/page-renderer.tsx"), "utf8");
+    const calendar = fs.readFileSync(path.resolve(process.cwd(), "components/public-event-calendar.tsx"), "utf8");
+
+    expect(editor).toContain("calendarDefaultView");
+    expect(editor).toContain("Default view on {previewDevice}");
+    expect(renderer).toContain('<PublicEventCalendar defaultView={calendarView} />');
+    expect(renderer).toContain('responsiveString(block.props ?? {}, "calendarDefaultView", device)');
+    expect(calendar).toContain("defaultView = \"month\"");
+  });
 });

@@ -74,10 +74,10 @@ function EventTile({ event, compact = false }: { event: PublicEvent; compact?: b
   </div>;
 }
 
-export function PublicEventCalendar() {
+export function PublicEventCalendar({ defaultView = "month" }: { defaultView?: ViewMode }) {
   const today = useMemo(() => new Date(), []);
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), today.getDate()));
-  const [view, setView] = useState<ViewMode>("month");
+  const [view, setView] = useState<ViewMode>(defaultView);
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [error, setError] = useState("");
 
