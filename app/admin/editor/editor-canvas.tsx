@@ -1267,6 +1267,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   const dragCancelledRef = useRef(false);
   const serverUpdatedAtRef = useRef<string | null>(null);
   const autosaveControllerRef = useRef<AbortController | null>(null);
+  const autosavePromisesRef = useRef<Set<Promise<void>>>(new Set());
   const saveGenerationRef = useRef(0);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const { setNodeRef: setRootDropRef } = useDroppable({ id: "drop:root", data: { kind: "root" } });
@@ -1452,7 +1453,8 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   }
 
   async function saveDraft() {
-    autosaveControllerRef.current?.abort();
+    const pendingAutosaves = Array.from(autosavePromisesRef.current);
+    if (pendingAutosaves.length > 0) await Promise.all(pendingAutosaves);
     const saveGeneration = ++saveGenerationRef.current;
     setMessage("");
     if (passwordProtected && passwordChanged && accessPassword.length < 8) {
@@ -1499,22 +1501,36 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     const saveGeneration = ++saveGenerationRef.current;
     const controller = new AbortController();
     autosaveControllerRef.current = controller;
+    let resolveAutosave!: () => void;
+    let requestStarted = false;
+    const autosavePromise = new Promise<void>((resolve) => { resolveAutosave = resolve; });
+    autosavePromisesRef.current.add(autosavePromise);
     const timer = window.setTimeout(() => {
+      requestStarted = true;
       void fetch(`/api/pages/${pageId}`, { method: "PATCH", headers: { "Content-Type": "application/json", "x-page-save-mode": "autosave" }, body: JSON.stringify(input), signal: controller.signal })
         .then(async (response) => {
           const result = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(result.error ?? "Autosave failed.");
-          if (saveGeneration !== saveGenerationRef.current) return;
           if (typeof result.updatedAt === "string") serverUpdatedAtRef.current = result.updatedAt;
+          if (saveGeneration !== saveGenerationRef.current) return;
           window.localStorage.removeItem(recoveryKey);
           setAutosaveState("saved");
         })
-        .catch((error: Error) => { if (error.name !== "AbortError" && saveGeneration === saveGenerationRef.current) { setAutosaveState("error"); setMessage(error.message); } });
+        .catch((error: Error) => { if (error.name !== "AbortError" && saveGeneration === saveGenerationRef.current) { setAutosaveState("error"); setMessage(error.message); } })
+        .finally(() => {
+          resolveAutosave();
+          autosavePromisesRef.current.delete(autosavePromise);
+          if (autosaveControllerRef.current === controller) autosaveControllerRef.current = null;
+        });
     }, 900);
     return () => {
       window.clearTimeout(timer);
-      controller.abort();
-      if (autosaveControllerRef.current === controller) autosaveControllerRef.current = null;
+      if (!requestStarted) {
+        controller.abort();
+        resolveAutosave();
+        autosavePromisesRef.current.delete(autosavePromise);
+        if (autosaveControllerRef.current === controller) autosaveControllerRef.current = null;
+      }
     };
   }, [blocks, fullScreen, pageId, pageReady, pageThemeFamily, pageThemeWidth, pageTitle, publishAt, recoveryChecked, recoveryOffer, seoDescription, seoKeywords, seoTitle, showFooter, showHeader, slug]);
 
