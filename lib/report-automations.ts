@@ -166,6 +166,12 @@ export function nextSundayDateKey(now: Date, timeZone: string) {
   return localDate.toISOString().slice(0, 10);
 }
 
+export function selectAutomationScheduleEvents<T>(events: T[], selection: "ALL" | "MOST_RECENT" | "NEXT_SUNDAY", eventLimit: number) {
+  if (selection === "MOST_RECENT") return events.slice(0, 1);
+  if (selection === "NEXT_SUNDAY") return events;
+  return Number.isInteger(eventLimit) && eventLimit > 0 ? events.slice(0, eventLimit) : events;
+}
+
 async function buildEventReportRows(report: { reportType: string; criteria: unknown; sort?: unknown }, context: { now?: Date; timeZone?: string } = {}) {
   const criteria = report.criteria && typeof report.criteria === "object" ? report.criteria as Record<string, unknown> : {};
   const dateFrom = typeof criteria.dateFrom === "string" ? criteria.dateFrom : "";
@@ -180,9 +186,9 @@ async function buildEventReportRows(report: { reportType: string; criteria: unkn
     const date = nextSunday ? zonedDateKey(event.startsAt, timeZone) : event.startsAt.toISOString().slice(0, 10);
     return (!dateFrom || date >= dateFrom) && (!dateTo || date <= dateTo) && (!nextSunday || date === nextSunday);
   });
-  const scheduleEvents = criteria.eventSelection === "MOST_RECENT"
-    ? filteredEvents.slice(0, 1)
-    : report.reportType === "volunteer-schedule" && Number.isInteger(eventLimit) && eventLimit > 0 ? filteredEvents.slice(0, eventLimit) : filteredEvents;
+  const scheduleEvents = report.reportType === "volunteer-schedule"
+    ? selectAutomationScheduleEvents(filteredEvents, criteria.eventSelection === "MOST_RECENT" || criteria.eventSelection === "NEXT_SUNDAY" ? criteria.eventSelection : "ALL", eventLimit)
+    : filteredEvents;
   const rows: Array<Record<string, unknown>> = [];
   for (const event of scheduleEvents) {
     const presentIds = new Set(event.attendance.map((record) => record.individualId));

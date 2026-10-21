@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { closestUpcomingEvents, ensureVolunteerScheduleColumns, formatVolunteerAssignments } from "@/lib/event-reporting";
-import { canAutomateReportScope, isAutomationDue, isRequestSchedulerLockAvailable, nextScheduledAt, nextSundayDateKey, normalizeAutomation, renderReportEmail, shouldAttemptRequestScheduler } from "@/lib/report-automations";
+import { canAutomateReportScope, isAutomationDue, isRequestSchedulerLockAvailable, nextScheduledAt, nextSundayDateKey, normalizeAutomation, renderReportEmail, selectAutomationScheduleEvents, shouldAttemptRequestScheduler } from "@/lib/report-automations";
 
 describe("report automation definitions", () => {
   it("normalizes recipients, limits, and schedule values", () => {
@@ -18,6 +18,12 @@ describe("report automation definitions", () => {
   it("calculates the coming Sunday in the automation timezone", () => {
     expect(nextSundayDateKey(new Date("2026-10-21T15:17:00.000Z"), "America/Chicago")).toBe("2026-10-25");
     expect(nextSundayDateKey(new Date("2026-10-25T15:17:00.000Z"), "America/Chicago")).toBe("2026-10-25");
+  });
+
+  it("includes every event on the coming Sunday even when the saved report has a one-event limit", () => {
+    const events = [{ id: "divine-service" }, { id: "fellowship" }];
+    expect(selectAutomationScheduleEvents(events, "NEXT_SUNDAY", 1).map((event) => event.id)).toEqual(["divine-service", "fellowship"]);
+    expect(selectAutomationScheduleEvents(events, "MOST_RECENT", 1).map((event) => event.id)).toEqual(["divine-service"]);
   });
 
   it("limits volunteer reports to the closest future events", () => {
