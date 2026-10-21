@@ -336,7 +336,7 @@ function buttonGroup(config: ReturnType<typeof buttonsConfig>, headingId?: strin
 }
 
 function BlockSurface({ as, children, className = "", style, background, overlay, overlayOpacity: opacity }: { as: "section" | "aside" | "footer"; labelledBy: string; children: ReactNode; className?: string; style?: CSSProperties; background?: ReactNode; overlay?: CSSProperties; overlayOpacity?: number }) {
-  const surfaceClass = `responsive-block relative overflow-hidden bg-transparent p-6 ${className}`;
+  const surfaceClass = `responsive-block relative overflow-hidden bg-transparent ${className}`;
   const content = <>{background}{overlay && <div aria-hidden="true" className="responsive-overlay pointer-events-none absolute inset-0 z-0" style={{ ...overlay, opacity }} />}<div className="relative z-10 flex min-h-full flex-col" style={{ justifyContent: "var(--desktop-vertical-align, flex-start)" }}>{children}</div></>;
   if (as === "aside") return <aside className={surfaceClass} style={style}>{content}</aside>;
   if (as === "footer") return <footer className={surfaceClass} style={style}>{content}</footer>;
@@ -361,7 +361,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
     const surfaceType = block.type === "sidebar" ? "aside" : "section";
     const headingId = `block-heading-${block.id}`;
     const alignment = block.props?.alignment === "center" ? "text-center" : block.props?.alignment === "right" ? "text-right" : "text-left";
-    const padding = block.props?.padding === "none" ? "p-0" : block.props?.padding === "sm" ? "p-3" : block.props?.padding === "lg" ? "p-10" : "";
+    const padding = block.props?.padding === "none" ? "p-0" : block.props?.padding === "sm" ? "p-3" : block.props?.padding === "md" ? "p-5" : block.props?.padding === "lg" ? "p-10" : "p-0";
     const overlay = publicOverlayStyle(block.props ?? {});
     const background = block.props?.backgroundHidden === true ? null : backgroundMediaLayers(block.props ?? {});
     const width = cssDimension(block.props?.widthValue, block.props?.widthUnit);

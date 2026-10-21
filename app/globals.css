@@ -325,10 +325,10 @@ img[class*="w-[calc(100%+2rem)]"] {
 
 .responsive-block {
   display: var(--desktop-display, revert);
-  padding-top: var(--desktop-padding-top, var(--desktop-padding, 1.5rem));
-  padding-right: var(--desktop-padding-right, var(--desktop-padding, 1.5rem));
-  padding-bottom: var(--desktop-padding-bottom, var(--desktop-padding, 1.5rem));
-  padding-left: var(--desktop-padding-left, var(--desktop-padding, 1.5rem));
+  padding-top: var(--desktop-padding-top, var(--desktop-padding, 0));
+  padding-right: var(--desktop-padding-right, var(--desktop-padding, 0));
+  padding-bottom: var(--desktop-padding-bottom, var(--desktop-padding, 0));
+  padding-left: var(--desktop-padding-left, var(--desktop-padding, 0));
 }
 
 .responsive-image-container {

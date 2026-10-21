@@ -42,6 +42,14 @@ describe("public page headline layout", () => {
     expect(className).not.toContain("p-5");
   });
 
+  it("does not add implicit padding when a block has no padding setting", () => {
+    const className = structuralBlockClassName("container", "p-0", "text-left", "");
+    const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8").replace(/\r\n/g, "\n");
+
+    expect(className).toContain("p-0");
+    expect(css).toContain("padding-top: var(--desktop-padding-top, var(--desktop-padding, 0));");
+  });
+
   it("keeps image dimensions and margins on the live block wrapper", async () => {
     const markup = renderToStaticMarkup(await PageRenderer({
       blocks: [
