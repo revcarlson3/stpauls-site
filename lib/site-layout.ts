@@ -6,6 +6,7 @@ export type { FooterLayout, HeaderLayout };
 
 export function normalizeHeaderLayout(value: unknown): HeaderLayout {
   const input = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const menuIds = (value: unknown): string[] => Array.isArray(value) ? Array.from(new Set(value.filter((item): item is string => typeof item === "string" && item.length > 0))) : [];
   const preHeaderInput = input.preHeader && typeof input.preHeader === "object" && !Array.isArray(input.preHeader)
     ? input.preHeader as Record<string, unknown>
     : {};
@@ -16,6 +17,9 @@ export function normalizeHeaderLayout(value: unknown): HeaderLayout {
     sticky: input.sticky === true,
     stylistic: input.stylistic === true,
     menuId: typeof input.menuId === "string" && input.menuId ? input.menuId : null,
+    accountMenuIds: menuIds(input.accountMenuIds),
+    membershipMenuIds: menuIds(input.membershipMenuIds),
+    logoutMenuIds: menuIds(input.logoutMenuIds),
     preHeader: {
       enabled: preHeaderInput.enabled === true,
       background: typeof preHeaderInput.background === "string" ? preHeaderInput.background : defaultHeaderLayout.preHeader.background,

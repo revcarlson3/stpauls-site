@@ -20,4 +20,13 @@ describe("public navigation styling and interaction", () => {
     expect(source).not.toContain("onClick={() => setMembershipOpen");
     expect(source).toContain('href="/account/membership/documents"');
   });
+
+  it("supports independently assigning authenticated links to multiple menus", () => {
+    const source = fs.readFileSync(path.resolve(process.cwd(), "components/responsive-public-nav.tsx"), "utf8");
+    expect(source).toContain("accountMenuIds");
+    expect(source).toContain("membershipMenuIds");
+    expect(source).toContain("logoutMenuIds");
+    expect(source).toContain("configuredMenuIds.includes(menuId)");
+    expect(source).toContain("isMainNavigation");
+  });
 });

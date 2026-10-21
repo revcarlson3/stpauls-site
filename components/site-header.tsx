@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import type { User } from "@/lib/auth";
 import { Container } from "@/components/ui";
-import { ResponsivePublicNav } from "@/components/responsive-public-nav";
+import { AuthenticatedPublicNav, ResponsivePublicNav } from "@/components/responsive-public-nav";
 import { resolvePublicMenu } from "@/lib/content";
 import type { getSiteIdentity } from "@/lib/site-identity";
 import type { getSiteTheme } from "@/lib/theme";
@@ -27,6 +27,7 @@ export async function SiteHeader({ menuId = null, menuLocationId = null, user, i
   const preHeaderMenu = header.preHeader.enabled && header.preHeader.menuId
     ? await resolvePublicMenu(header.preHeader.menuId, null, "primary")
     : null;
+  const mainMenuId = menu?.id ?? null;
   const logoUrl = theme.nav === "solid" ? (identity.logoDarkUrl || identity.logoUrl) : identity.logoUrl;
   const headerHeight = header.height === "compact" ? "4rem" : header.height === "tall" ? "7rem" : "5rem";
   const preHeaderHeight = header.preHeader.height === "compact" ? "2.5rem" : header.preHeader.height === "tall" ? "6rem" : "4rem";
@@ -36,7 +37,7 @@ export async function SiteHeader({ menuId = null, menuLocationId = null, user, i
       {header.preHeader.enabled && <div className="site-header-preheader border-b border-current/10" style={{ backgroundColor: header.preHeader.background, "--site-preheader-min-height": preHeaderHeight } as CSSProperties}>
         <Container className="site-header-preheader-container flex items-center justify-between gap-4 px-0 py-2 text-xs">
           {header.preHeader.html && <div className="rich-text-content site-header-preheader-content min-w-0" dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(header.preHeader.html) }} />}
-          {preHeaderMenu && <MenuLinks items={preHeaderMenu.items} className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1" />}
+          {preHeaderMenu && <><MenuLinks items={preHeaderMenu.items} className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1" /><AuthenticatedPublicNav authenticated={Boolean(user)} menuId={preHeaderMenu.id} isMainNavigation={false} accountMenuIds={header.accountMenuIds} membershipMenuIds={header.membershipMenuIds} logoutMenuIds={header.logoutMenuIds} compact /></>}
         </Container>
       </div>}
       <Container className="site-header-container site-header-main flex items-center gap-6 px-0" style={{ "--site-header-min-height": headerHeight } as CSSProperties}>
@@ -48,7 +49,7 @@ export async function SiteHeader({ menuId = null, menuLocationId = null, user, i
           </Link>}
         </div>
         <div className="site-header-navigation min-w-0 flex-1">
-          <ResponsivePublicNav items={menu?.items ?? []} authenticated={Boolean(user)} />
+          <ResponsivePublicNav items={menu?.items ?? []} authenticated={Boolean(user)} menuId={mainMenuId} accountMenuIds={header.accountMenuIds} membershipMenuIds={header.membershipMenuIds} logoutMenuIds={header.logoutMenuIds} />
         </div>
         {user && <NotificationBell />}
       </Container>

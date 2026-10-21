@@ -5,6 +5,9 @@ export type HeaderLayout = {
   sticky: boolean;
   stylistic: boolean;
   menuId: string | null;
+  accountMenuIds: string[];
+  membershipMenuIds: string[];
+  logoutMenuIds: string[];
   preHeader: {
     enabled: boolean;
     background: string;
@@ -37,6 +40,9 @@ export const defaultHeaderLayout: HeaderLayout = {
   sticky: false,
   stylistic: false,
   menuId: null,
+  accountMenuIds: [],
+  membershipMenuIds: [],
+  logoutMenuIds: [],
   preHeader: {
     enabled: false,
     background: "#17324d",

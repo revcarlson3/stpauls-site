@@ -18,6 +18,11 @@ describe("footer layout compatibility", () => {
       height: "standard",
       preHeader: { enabled: true, background: "#123456", height: "tall", html: "<strong>Call us</strong>", menuId: "utility" }
     }).preHeader).toEqual({ enabled: true, background: "#123456", height: "tall", html: "<strong>Call us</strong>", menuId: "utility" });
+    expect(normalizeHeaderLayout({ accountMenuIds: ["menu-a", "menu-a"], membershipMenuIds: ["menu-b"], logoutMenuIds: [] })).toMatchObject({
+      accountMenuIds: ["menu-a"],
+      membershipMenuIds: ["menu-b"],
+      logoutMenuIds: []
+    });
   });
 
   it("normalizes legacy pre-header text and sanitizes unsafe HTML", () => {
