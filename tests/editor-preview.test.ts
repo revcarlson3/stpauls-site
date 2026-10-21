@@ -30,6 +30,8 @@ describe("page editor site preview target", () => {
     expect(renderer).toContain("linkUrl={typeof block.props.imageLinkUrl === \"string\" ? block.props.imageLinkUrl : \"\"}");
     expect(display).toContain("safeLinkUrl");
     expect(display).toContain('rel={linkTarget === "_blank" ? "noreferrer" : undefined}');
-    expect(display).toContain("{ threshold: 0.65 }");
+    expect(display).toContain("amount: 0.65");
+    expect(display).toContain('from "motion/react"');
+    expect(display).toContain("type: \"spring\"");
   });
 });
