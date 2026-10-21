@@ -22,7 +22,7 @@ export async function getCurrentUser() {
   return getServerSession(authOptions).then((session) => {
     const role = session?.user?.role;
     if (!session?.user?.id || !isRole(role)) return null;
-    return db.user.findUnique({ where: { id: session.user.id }, select: { isActive: true, role: true, isPlatformAdmin: true, groupId: true, group: { select: { permissions: { select: { permission: true } } } }, churchMemberships: { where: { church: { status: "ACTIVE" } }, orderBy: { createdAt: "asc" }, take: 1, select: { churchId: true, role: true } } } }).then(async (membership) => {
+    return db.user.findUnique({ where: { id: session.user.id }, select: { name: true, email: true, isActive: true, role: true, isPlatformAdmin: true, groupId: true, group: { select: { permissions: { select: { permission: true } } } }, churchMemberships: { where: { church: { status: "ACTIVE" } }, orderBy: { createdAt: "asc" }, take: 1, select: { churchId: true, role: true } } } }).then(async (membership) => {
       if (!membership?.isActive) return null;
       const churchId = membership.churchMemberships[0]?.churchId ?? null;
       if (!membership.groupId && churchId && (membership.role === "admin" || membership.role === "editor")) {
@@ -44,7 +44,7 @@ export async function getCurrentUser() {
       }
       return {
         id: session.user.id,
-        name: session.user.name ?? session.user.email ?? "User",
+        name: membership.name || membership.email || "User",
         role,
         churchId,
         churchRole: membership.churchMemberships[0]?.role ?? null,

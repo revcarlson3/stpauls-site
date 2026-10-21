@@ -9,6 +9,24 @@ function addresses(value: string) {
   return value.split(/[;,]/).map((item) => item.trim()).filter((item) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item));
 }
 
+function prayerRequestApprovalUrl(request: Request) {
+  const configuredUrl = process.env.NEXTAUTH_URL?.trim();
+  let url: URL;
+  if (configuredUrl) {
+    try {
+      url = new URL(configuredUrl);
+    } catch {
+      url = new URL(request.url);
+    }
+  } else {
+    url = new URL(request.url);
+  }
+  url.pathname = "/admin/membership/prayer-requests";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
 export async function GET() {
   const requests = await db.prayerRequest.findMany({
     where: { status: "APPROVED", expiresAt: { gt: new Date() } },
@@ -35,7 +53,7 @@ export async function POST(request: Request) {
     const admins = await db.user.findMany({ where: { isActive: true, role: { in: ["admin", "editor"] } }, select: { email: true } });
     adminRecipients = admins.map((admin) => admin.email).filter(Boolean);
   }
-  const link = new URL("/admin/membership/prayer-requests", request.url).toString();
+  const link = prayerRequestApprovalUrl(request);
   if (adminRecipients.length) {
     await Promise.allSettled(adminRecipients.map((recipient) => sendMembershipEmail({ recipient, subject: "Prayer request awaiting approval", bodyText: `${user.name} submitted a prayer request awaiting approval.\n\n${text}\n\nReview securely: ${link}`, bodyHtml: `<p><strong>${user.name}</strong> submitted a prayer request awaiting approval.</p><blockquote>${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</blockquote><p><a href="${link}">Review prayer requests</a></p>`, attachments: [] })));
   }
