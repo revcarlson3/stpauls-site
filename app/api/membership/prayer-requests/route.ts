@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser, requirePermission } from "@/lib/auth";
 import { getPrayerRequestSettings } from "@/lib/app-config";
 import { sendMembershipEmail } from "@/lib/membership-delivery";
+import { sanitizeRichTextHtml } from "@/lib/safe-html";
 
 function addresses(value: string) {
   return value.split(/[;,]/).map((item) => item.trim()).filter((item) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item));
@@ -27,14 +28,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Please provide a request of 500 characters or fewer and valid notification choices." }, { status: 400 });
   }
   const expiresAt = new Date(Date.now() + durationDays * 86400000);
-  const created = await db.prayerRequest.create({ data: { submitterId: user.id, submitterName: user.name, request: text, expiresAt, includeInSundayPrayers: input.includeInSundayPrayers, requestPastoralContact: input.requestPastoralContact } });
+  const created = await db.prayerRequest.create({ data: { submitterId: user.id, submitterName: user.name, request: text, adminFormatted: false, expiresAt, includeInSundayPrayers: input.includeInSundayPrayers, requestPastoralContact: input.requestPastoralContact } });
   const configured = await getPrayerRequestSettings();
   let adminRecipients = addresses(configured.adminEmail);
   if (!adminRecipients.length) {
     const admins = await db.user.findMany({ where: { isActive: true, role: { in: ["admin", "editor"] } }, select: { email: true } });
     adminRecipients = admins.map((admin) => admin.email).filter(Boolean);
   }
-  const link = `${process.env.NEXTAUTH_URL ?? ""}/admin/membership/prayer-requests`;
+  const link = new URL("/admin/membership/prayer-requests", request.url).toString();
   if (adminRecipients.length) {
     await Promise.allSettled(adminRecipients.map((recipient) => sendMembershipEmail({ recipient, subject: "Prayer request awaiting approval", bodyText: `${user.name} submitted a prayer request awaiting approval.\n\n${text}\n\nReview securely: ${link}`, bodyHtml: `<p><strong>${user.name}</strong> submitted a prayer request awaiting approval.</p><blockquote>${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</blockquote><p><a href="${link}">Review prayer requests</a></p>`, attachments: [] })));
   }
@@ -52,7 +53,7 @@ export async function PATCH(request: Request) {
       if (!text || text.length > 500 || Number.isNaN(expiresAt.getTime()) || typeof input.includeInSundayPrayers !== "boolean" || typeof input.requestPastoralContact !== "boolean") {
         return NextResponse.json({ error: "Enter a request of 500 characters or fewer, a valid expiration date, and both notification choices." }, { status: 400 });
       }
-      const item = await db.prayerRequest.update({ where: { id: input.id }, data: { request: text, expiresAt, includeInSundayPrayers: input.includeInSundayPrayers, requestPastoralContact: input.requestPastoralContact, expirationNotifiedAt: null } });
+      const item = await db.prayerRequest.update({ where: { id: input.id }, data: { request: sanitizeRichTextHtml(text), adminFormatted: true, expiresAt, includeInSundayPrayers: input.includeInSundayPrayers, requestPastoralContact: input.requestPastoralContact, expirationNotifiedAt: null } });
       return NextResponse.json({ request: item });
     }
     if (!["APPROVED", "DECLINED"].includes(input.status)) return NextResponse.json({ error: "Invalid review." }, { status: 400 });

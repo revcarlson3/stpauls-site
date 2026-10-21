@@ -1,0 +1,2 @@
+ALTER TABLE "PrayerRequest"
+ADD COLUMN IF NOT EXISTS "adminFormatted" BOOLEAN NOT NULL DEFAULT false;

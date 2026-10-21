@@ -860,7 +860,8 @@ model PrayerRequest {
   expiresAt              DateTime
   includeInSundayPrayers Boolean             @default(false)
   requestPastoralContact Boolean             @default(false)
-  status                 PrayerRequestStatus @default(PENDING)
+  adminFormatted           Boolean             @default(false)
+  status                   PrayerRequestStatus @default(PENDING)
   reviewedAt             DateTime?
   reviewedById           String?
   reviewedBy             User?               @relation("PrayerRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
