@@ -45,6 +45,8 @@ describe("page editor site preview target", () => {
     expect(renderer).toContain('<PublicEventCalendar defaultView={calendarView} />');
     expect(renderer).toContain('responsiveString(block.props ?? {}, "calendarDefaultView", device)');
     expect(calendar).toContain("defaultView = \"month\"");
+    expect(calendar).toContain("open ? \"z-40\" : \"z-0\"");
+    expect(renderer).toContain("calendar-block-surface");
   });
 
   it("exposes responsive divider and spacer controls and persistence", () => {

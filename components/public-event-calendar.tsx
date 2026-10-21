@@ -58,7 +58,7 @@ function eventDescription(value: string | null) {
 
 function EventTile({ event, compact = false }: { event: PublicEvent; compact?: boolean }) {
   const [open, setOpen] = useState(false);
-  return <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={(focusEvent) => { if (!focusEvent.currentTarget.contains(focusEvent.relatedTarget)) setOpen(false); }}>
+  return <div className={`relative ${open ? "z-40" : "z-0"}`} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={(focusEvent) => { if (!focusEvent.currentTarget.contains(focusEvent.relatedTarget)) setOpen(false); }}>
     <button type="button" aria-expanded={open} className={`focus-ring w-full truncate rounded-lg bg-teal/10 px-2 py-1 text-left text-xs font-semibold text-teal-950 hover:bg-teal/20 ${compact ? "py-1" : "p-2"}`}>
       <span className={`flex min-w-0 items-center gap-1 ${compact ? "text-[10px]" : ""}`}><span className="shrink-0 font-medium text-teal-900/70">{event.allDay ? "All day" : timeFormatter.format(new Date(event.startsAt))}</span><span className="truncate">{event.title}</span></span>
     </button>

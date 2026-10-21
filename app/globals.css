@@ -682,6 +682,12 @@ body[data-theme-radius="soft"] {
   gap: 0;
 }
 
+.calendar-block-surface,
+.site-layout-container:has(.calendar-block-surface) {
+  overflow: visible !important;
+  z-index: 20;
+}
+
 .site-section {
   padding-block: var(--site-section-space);
 }
