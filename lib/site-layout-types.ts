@@ -8,10 +8,13 @@ export type HeaderLayout = {
   accountMenuIds: string[];
   membershipMenuIds: string[];
   logoutMenuIds: string[];
+  notificationMenuIds: string[];
   preHeader: {
     enabled: boolean;
     background: string;
     height: "compact" | "standard" | "tall";
+    fontSize: "small" | "standard" | "large";
+    alignment: "left" | "center" | "right";
     html: string;
     menuId: string | null;
   };
@@ -43,10 +46,13 @@ export const defaultHeaderLayout: HeaderLayout = {
   accountMenuIds: [],
   membershipMenuIds: [],
   logoutMenuIds: [],
+  notificationMenuIds: [],
   preHeader: {
     enabled: false,
     background: "#17324d",
     height: "compact",
+    fontSize: "standard",
+    alignment: "right",
     html: "",
     menuId: null
   }

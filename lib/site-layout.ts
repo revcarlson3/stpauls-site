@@ -20,10 +20,13 @@ export function normalizeHeaderLayout(value: unknown): HeaderLayout {
     accountMenuIds: menuIds(input.accountMenuIds),
     membershipMenuIds: menuIds(input.membershipMenuIds),
     logoutMenuIds: menuIds(input.logoutMenuIds),
+    notificationMenuIds: menuIds(input.notificationMenuIds),
     preHeader: {
       enabled: preHeaderInput.enabled === true,
       background: typeof preHeaderInput.background === "string" ? preHeaderInput.background : defaultHeaderLayout.preHeader.background,
       height: preHeaderInput.height === "standard" || preHeaderInput.height === "tall" ? preHeaderInput.height : defaultHeaderLayout.preHeader.height,
+      fontSize: preHeaderInput.fontSize === "small" || preHeaderInput.fontSize === "large" ? preHeaderInput.fontSize : defaultHeaderLayout.preHeader.fontSize,
+      alignment: preHeaderInput.alignment === "left" || preHeaderInput.alignment === "center" ? preHeaderInput.alignment : defaultHeaderLayout.preHeader.alignment,
       html: typeof preHeaderInput.html === "string"
         ? preHeaderInput.html
         : typeof preHeaderInput.text === "string" ? preHeaderInput.text : "",

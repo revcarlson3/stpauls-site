@@ -17,11 +17,15 @@ describe("footer layout compatibility", () => {
     expect(normalizeHeaderLayout({
       height: "standard",
       preHeader: { enabled: true, background: "#123456", height: "tall", html: "<strong>Call us</strong>", menuId: "utility" }
-    }).preHeader).toEqual({ enabled: true, background: "#123456", height: "tall", html: "<strong>Call us</strong>", menuId: "utility" });
+    }).preHeader).toEqual({ enabled: true, background: "#123456", height: "tall", fontSize: "standard", alignment: "right", html: "<strong>Call us</strong>", menuId: "utility" });
     expect(normalizeHeaderLayout({ accountMenuIds: ["menu-a", "menu-a"], membershipMenuIds: ["menu-b"], logoutMenuIds: [] })).toMatchObject({
       accountMenuIds: ["menu-a"],
       membershipMenuIds: ["menu-b"],
       logoutMenuIds: []
+    });
+    expect(normalizeHeaderLayout({ notificationMenuIds: ["menu-c"], preHeader: { enabled: true, alignment: "center", fontSize: "large" } })).toMatchObject({
+      notificationMenuIds: ["menu-c"],
+      preHeader: { alignment: "center", fontSize: "large" }
     });
   });
 

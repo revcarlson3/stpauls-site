@@ -26,6 +26,7 @@ describe("public navigation styling and interaction", () => {
     expect(source).toContain("accountMenuIds");
     expect(source).toContain("membershipMenuIds");
     expect(source).toContain("logoutMenuIds");
+    expect(source).toContain("notificationMenuIds");
     expect(source).toContain("configuredMenuIds.includes(menuId)");
     expect(source).toContain("isMainNavigation");
   });
