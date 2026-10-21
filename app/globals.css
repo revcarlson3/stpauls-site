@@ -1077,6 +1077,12 @@ body:has(.page-chrome-hide-footer) > div > footer {
   margin-top: 0;
 }
 
+.rich-text-editor img,
+.rich-text-editor video {
+  max-width: 100%;
+  cursor: pointer;
+}
+
 .rich-text-editor h1,
 .rich-text-editor h2,
 .rich-text-editor h3,

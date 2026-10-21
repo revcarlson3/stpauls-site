@@ -642,10 +642,17 @@ function hydrateBlock(value: { id: string; type: BlockType; props: Record<string
 
 export function RichTextField({ value, onChange, style, toolbarExtras }: { value: string; onChange: (value: string) => void; style?: CSSProperties; toolbarExtras?: (insertHtml: (html: string) => void) => ReactNode }) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const editorSurfaceRef = useRef<HTMLDivElement>(null);
   const htmlRef = useRef<HTMLTextAreaElement>(null);
   const selectionRef = useRef<Range | null>(null);
+  const mediaClipboardRef = useRef<string>("");
+  const resizeRef = useRef<{ media: HTMLImageElement | HTMLVideoElement; startX: number; startWidth: number } | null>(null);
   const [htmlView, setHtmlView] = useState(false);
   const [tableMenu, setTableMenu] = useState<{ x: number; y: number; table: HTMLTableElement } | null>(null);
+  const [mediaMenu, setMediaMenu] = useState<{ x: number; y: number; media: HTMLImageElement | HTMLVideoElement } | null>(null);
+  const [hoveredMedia, setHoveredMedia] = useState<HTMLImageElement | HTMLVideoElement | null>(null);
+  const [selectedMedia, setSelectedMedia] = useState<HTMLImageElement | HTMLVideoElement | null>(null);
+  const [mediaOverlay, setMediaOverlay] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   useLayoutEffect(() => {
     if (htmlView) {
       if (htmlRef.current) {
@@ -681,10 +688,101 @@ export function RichTextField({ value, onChange, style, toolbarExtras }: { value
     const closeTableMenu = (event: globalThis.MouseEvent) => {
       if (event.target instanceof HTMLElement && event.target.closest("[data-table-menu]")) return;
       setTableMenu(null);
+      if (!(event.target instanceof HTMLElement) || !event.target.closest("[data-media-menu]")) setMediaMenu(null);
     };
     document.addEventListener("mousedown", closeTableMenu);
     return () => document.removeEventListener("mousedown", closeTableMenu);
   }, []);
+  const mediaElement = (target: EventTarget | null) => target instanceof HTMLImageElement || target instanceof HTMLVideoElement ? target : null;
+  const updateMediaOverlay = (media: HTMLImageElement | HTMLVideoElement | null) => {
+    if (!media || !editorSurfaceRef.current) {
+      setMediaOverlay(null);
+      return;
+    }
+    const mediaBounds = media.getBoundingClientRect();
+    const surfaceBounds = editorSurfaceRef.current.getBoundingClientRect();
+    setMediaOverlay({ left: mediaBounds.left - surfaceBounds.left, top: mediaBounds.top - surfaceBounds.top, width: mediaBounds.width, height: mediaBounds.height });
+  };
+  const selectMedia = (media: HTMLImageElement | HTMLVideoElement | null) => {
+    setSelectedMedia(media);
+    updateMediaOverlay(media);
+  };
+  const applyMediaAlignment = (media: HTMLImageElement | HTMLVideoElement, alignment: "left" | "center" | "right") => {
+    media.style.maxWidth = "100%";
+    media.style.height = "auto";
+    media.style.float = alignment === "left" || alignment === "right" ? alignment : "none";
+    media.style.display = alignment === "left" || alignment === "right" ? "inline" : "block";
+    media.style.margin = alignment === "left" ? "0 1rem 0.5rem 0" : alignment === "right" ? "0 0 0.5rem 1rem" : "0 auto";
+  };
+  const updateMedia = () => {
+    if (editorRef.current) onChange(editorRef.current.innerHTML);
+    updateMediaOverlay(selectedMedia);
+  };
+  const copyMedia = () => {
+    if (!mediaMenu) return;
+    mediaClipboardRef.current = mediaMenu.media.outerHTML;
+    if (navigator.clipboard?.writeText) void navigator.clipboard.writeText(mediaClipboardRef.current).catch(() => undefined);
+    setSelectedMedia(mediaMenu.media);
+    setMediaMenu(null);
+  };
+  const pasteMedia = () => {
+    if (!mediaClipboardRef.current || !editorRef.current) return;
+    if (selectedMedia && editorRef.current.contains(selectedMedia)) {
+      selectedMedia.insertAdjacentHTML("afterend", mediaClipboardRef.current);
+    } else {
+      insertHtml(mediaClipboardRef.current);
+    }
+    onChange(editorRef.current.innerHTML);
+    setMediaMenu(null);
+  };
+  const deleteMedia = () => {
+    if (!mediaMenu) return;
+    mediaMenu.media.remove();
+    setSelectedMedia(null);
+    setMediaOverlay(null);
+    onChange(editorRef.current?.innerHTML ?? "");
+    setMediaMenu(null);
+  };
+  const beginMediaResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    const media = mediaElement(event.target);
+    if (!media || !editorRef.current) return;
+    const bounds = media.getBoundingClientRect();
+    selectMedia(media);
+    if (event.clientX < bounds.right - 18) return;
+    const editorWidth = editorRef.current.getBoundingClientRect().width;
+    resizeRef.current = { media, startX: event.clientX, startWidth: Math.min(100, Math.max(10, (bounds.width / editorWidth) * 100)) };
+    event.preventDefault();
+  };
+  useEffect(() => {
+    const resizeMedia = (event: PointerEvent) => {
+      const resize = resizeRef.current;
+      if (!resize || !editorRef.current) return;
+      const editorWidth = editorRef.current.getBoundingClientRect().width;
+      const nextWidth = resize.startWidth + ((event.clientX - resize.startX) / editorWidth) * 100;
+      const width = Math.min(100, Math.max(10, Math.round(nextWidth)));
+      resize.media.style.width = `${width}%`;
+      resize.media.style.maxWidth = "100%";
+      resize.media.style.height = "auto";
+      updateMediaOverlay(resize.media);
+      onChange(editorRef.current.innerHTML);
+    };
+    const finishMediaResize = () => { resizeRef.current = null; };
+    window.addEventListener("pointermove", resizeMedia);
+    window.addEventListener("pointerup", finishMediaResize);
+    return () => {
+      window.removeEventListener("pointermove", resizeMedia);
+      window.removeEventListener("pointerup", finishMediaResize);
+    };
+  }, [onChange]);
+  useEffect(() => {
+    const update = () => updateMediaOverlay(selectedMedia ?? hoveredMedia);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [hoveredMedia, selectedMedia]);
   const apply = (command: string, commandValue?: string) => {
     restoreSelection();
     document.execCommand(command, false, commandValue);
@@ -766,8 +864,9 @@ export function RichTextField({ value, onChange, style, toolbarExtras }: { value
       {toolbarExtras?.(insertHtml)}
       <button type="button" aria-label={htmlView ? "Switch to visual editor" : "View HTML source"} title={htmlView ? "Switch to visual editor" : "View HTML source"} className="focus-ring inline-flex h-7 min-w-7 items-center justify-center rounded px-2 text-xs font-semibold hover:bg-mist" aria-pressed={htmlView} onClick={() => setHtmlView((current) => !current)}><ToolbarIcon name="html" /></button>
     </div>
-    {htmlView ? <textarea ref={htmlRef} aria-label="HTML source" className="min-h-72 w-full resize-none overflow-hidden px-3 py-2 font-mono text-xs leading-5 text-ink outline-none" style={style} value={value} onChange={(event) => onChange(event.target.value)} /> : <div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-label="Text content" className="rich-text-editor min-h-72 px-3 py-2 text-sm leading-6 text-ink/70 outline-none" style={style} onInput={(event) => onChange(event.currentTarget.innerHTML)} onMouseUp={saveSelection} onKeyUp={saveSelection} onContextMenu={(event) => { const table = (event.target as HTMLElement).closest("table"); if (!table) return; event.preventDefault(); event.stopPropagation(); setTableMenu({ x: event.clientX, y: event.clientY, table }); }} />}
+    {htmlView ? <textarea ref={htmlRef} aria-label="HTML source" className="min-h-72 w-full resize-none overflow-hidden px-3 py-2 font-mono text-xs leading-5 text-ink outline-none" style={style} value={value} onChange={(event) => onChange(event.target.value)} /> : <div ref={editorSurfaceRef} className="relative"><div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-label="Text content" className="rich-text-editor min-h-72 px-3 py-2 text-sm leading-6 text-ink/70 outline-none" style={style} onInput={(event) => onChange(event.currentTarget.innerHTML)} onMouseUp={saveSelection} onKeyUp={saveSelection} onPointerMove={(event) => { const media = mediaElement(event.target); setHoveredMedia(media); if (media) updateMediaOverlay(media); }} onPointerLeave={() => { setHoveredMedia(null); updateMediaOverlay(selectedMedia); }} onPointerDown={beginMediaResize} onClick={(event) => { const media = mediaElement(event.target); if (media) selectMedia(media); }} onContextMenu={(event) => { const media = mediaElement(event.target); if (media) { event.preventDefault(); event.stopPropagation(); selectMedia(media); setMediaMenu({ x: event.clientX, y: event.clientY, media }); return; } const table = (event.target as HTMLElement).closest("table"); if (!table) return; event.preventDefault(); event.stopPropagation(); setTableMenu({ x: event.clientX, y: event.clientY, table }); }} />{mediaOverlay && (selectedMedia || hoveredMedia) && <div aria-hidden="true" className="pointer-events-none absolute rounded border border-coral/70" style={{ left: mediaOverlay.left, top: mediaOverlay.top, width: mediaOverlay.width, height: mediaOverlay.height }}><span className="absolute -bottom-1.5 -right-1.5 h-3 w-3 rounded-sm border border-white bg-coral shadow" /></div>}</div>}
     {tableMenu && <div data-table-menu role="menu" aria-label="Table options" className="fixed z-50 grid min-w-44 gap-1 rounded-lg border border-ink/15 bg-white p-1 text-xs shadow-lg" style={{ left: tableMenu.x, top: tableMenu.y }} onMouseDown={(event) => event.stopPropagation()}><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={addTableRow}>Add row</button><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={addTableColumn}>Add column</button><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={toggleTableBorders}>{tableMenu.table.dataset.editorBorders === "hidden" ? "Show reference borders" : "Hide reference borders"}</button><button type="button" className="rounded px-3 py-2 text-left text-coral hover:bg-mist" onClick={deleteTable}>Delete table</button></div>}
+    {mediaMenu && <div data-media-menu role="menu" aria-label="Media options" className="fixed z-50 grid min-w-48 gap-1 rounded-lg border border-ink/15 bg-white p-1 text-xs shadow-lg" style={{ left: mediaMenu.x, top: mediaMenu.y }} onMouseDown={(event) => event.stopPropagation()}><span className="px-3 py-2 font-semibold text-ink/60">{mediaMenu.media instanceof HTMLVideoElement ? "Video options" : "Image options"}</span><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={() => { applyMediaAlignment(mediaMenu.media, "left"); updateMedia(); setMediaMenu(null); }}>Align left</button><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={() => { applyMediaAlignment(mediaMenu.media, "center"); updateMedia(); setMediaMenu(null); }}>Center</button><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={() => { applyMediaAlignment(mediaMenu.media, "right"); updateMedia(); setMediaMenu(null); }}>Align right</button><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={copyMedia}>Copy media</button><button type="button" disabled={!mediaClipboardRef.current} className="rounded px-3 py-2 text-left hover:bg-mist disabled:cursor-not-allowed disabled:opacity-40" onClick={pasteMedia}>Paste duplicate</button><button type="button" className="rounded px-3 py-2 text-left text-coral hover:bg-mist" onClick={deleteMedia}>Delete media</button></div>}
   </div>;
 }
 
