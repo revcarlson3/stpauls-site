@@ -31,14 +31,14 @@ export async function SiteHeader({ menuId = null, menuLocationId = null, user, i
   const headerHeight = header.height === "compact" ? "4rem" : header.height === "tall" ? "7rem" : "5rem";
   const preHeaderHeight = header.preHeader.height === "compact" ? "2.5rem" : header.preHeader.height === "tall" ? "6rem" : "4rem";
   const preHeaderFontSize = header.preHeader.fontSize === "small" ? "text-sm" : header.preHeader.fontSize === "large" ? "text-lg" : "text-base";
-  const preHeaderAlignment = header.preHeader.alignment === "left" ? "justify-start" : header.preHeader.alignment === "center" ? "justify-center" : "justify-end";
+  const preHeaderMenuAlignment = header.preHeader.alignment === "left" ? "justify-start" : header.preHeader.alignment === "center" ? "justify-center" : "justify-end";
 
   return (
     <SiteHeaderFrame sticky={header.sticky} stylistic={header.stylistic} style={{ backgroundColor: header.background, color: header.textColor }}>
       {header.preHeader.enabled && <div className="site-header-preheader border-b border-current/10" style={{ backgroundColor: header.preHeader.background, "--site-preheader-min-height": preHeaderHeight } as CSSProperties}>
-        <Container className={`site-header-preheader-container flex items-center gap-4 px-0 py-2 ${preHeaderFontSize} ${preHeaderAlignment}`}>
-          {header.preHeader.html && <div className="rich-text-content site-header-preheader-content min-w-0" dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(header.preHeader.html) }} />}
-          {preHeaderMenu && <><MenuLinks items={preHeaderMenu.items} className="flex flex-wrap items-center gap-x-4 gap-y-1" /><AuthenticatedPublicNav authenticated={Boolean(user)} menuId={preHeaderMenu.id} isMainNavigation={false} accountMenuIds={header.accountMenuIds} membershipMenuIds={header.membershipMenuIds} logoutMenuIds={header.logoutMenuIds} notificationMenuIds={header.notificationMenuIds} compact /></>}
+        <Container className={`site-header-preheader-container flex items-center gap-4 px-0 py-2 ${preHeaderFontSize}`}>
+          {header.preHeader.html && <div className="rich-text-content site-header-preheader-content min-w-0 flex-1" dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(header.preHeader.html) }} />}
+          {preHeaderMenu && <div className={`flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 ${preHeaderMenuAlignment}`}><MenuLinks items={preHeaderMenu.items} className="flex flex-wrap items-center gap-x-4 gap-y-1" /><AuthenticatedPublicNav authenticated={Boolean(user)} menuId={preHeaderMenu.id} isMainNavigation={false} accountMenuIds={header.accountMenuIds} membershipMenuIds={header.membershipMenuIds} logoutMenuIds={header.logoutMenuIds} notificationMenuIds={header.notificationMenuIds} compact /></div>}
         </Container>
       </div>}
       <Container className="site-header-container site-header-main flex items-center gap-6 px-0" style={{ "--site-header-min-height": headerHeight } as CSSProperties}>

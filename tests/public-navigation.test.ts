@@ -30,4 +30,11 @@ describe("public navigation styling and interaction", () => {
     expect(source).toContain("configuredMenuIds.includes(menuId)");
     expect(source).toContain("isMainNavigation");
   });
+
+  it("keeps pre-header text separate from secondary-menu alignment", () => {
+    const source = fs.readFileSync(path.resolve(process.cwd(), "components/site-header.tsx"), "utf8");
+    expect(source).toContain("site-header-preheader-content min-w-0 flex-1");
+    expect(source).toContain("preHeaderMenuAlignment");
+    expect(source).toContain("flex min-w-0 flex-1 flex-wrap items-center");
+  });
 });
