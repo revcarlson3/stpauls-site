@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
-import type { MenuItemInput } from "@/lib/menu-input";
+import { orderPagesByMenus, type MenuItemInput } from "@/lib/menu-input";
 import { requirePermission, type User } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 
@@ -39,7 +39,9 @@ function blocksValue(blocks: PageBlock[]): JsonValue[] {
 
 export async function listPages() {
   const user = await requirePermission("EDIT_PAGES");
-  return db.page.findMany({ where: user.churchId ? { churchId: user.churchId } : undefined, orderBy: [{ isHome: "desc" }, { title: "asc" }] });
+  const pages = await db.page.findMany({ where: user.churchId ? { churchId: user.churchId } : undefined });
+  const menus = await db.menu.findMany({ select: { id: true, items: { select: { id: true, label: true, href: true, parentId: true, position: true } } }, orderBy: { name: "asc" } });
+  return orderPagesByMenus(pages, menus).map(({ page, depth }) => ({ ...page, menuDepth: depth }));
 }
 
 export async function listPageOptions() {

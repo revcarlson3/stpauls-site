@@ -10,6 +10,9 @@ export type MenuItemInput = {
 
 type MenuTreeItem = { id?: string; tempId?: string; parentId?: string | null; position: number };
 
+type PageMenuLink = { id: string; title: string; slug: string; menuId: string | null; isHome: boolean };
+type PageMenu = { id: string; items: (MenuTreeItem & { href: string })[] };
+
 export function orderMenuItems<T extends MenuTreeItem>(items: T[]) {
   const byKey = new Map(items.flatMap((item) => {
     const key = item.id ?? item.tempId;
@@ -22,6 +25,7 @@ export function orderMenuItems<T extends MenuTreeItem>(items: T[]) {
     group.push(item);
     children.set(item.parentId, group);
   }
+
   children.forEach((group) => group.sort((left, right) => left.position - right.position));
 
   const ordered: { item: T; depth: number }[] = [];
@@ -39,6 +43,32 @@ export function orderMenuItems<T extends MenuTreeItem>(items: T[]) {
     .sort((left, right) => left.position - right.position);
   for (const item of roots) visit(item, 0);
   for (const item of items) visit(item, 0);
+  return ordered;
+}
+
+export function orderPagesByMenus<T extends PageMenuLink>(pages: T[], menus: PageMenu[]) {
+  const pageByPath = new Map(pages.flatMap((page) => {
+    const paths = [page.isHome ? "/" : `/${page.slug}`.replace(/\/+$/, "") || "/"];
+    if (page.isHome) paths.push(`/${page.slug}`.replace(/\/+$/, "") || "/");
+    return paths.map((path) => [path, page] as const);
+  }));
+  const ordered: { page: T; depth: number }[] = [];
+  const seen = new Set<string>();
+  for (const menu of menus) {
+    for (const { item, depth } of orderMenuItems(menu.items)) {
+      const href = item.href.split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/";
+      const page = pageByPath.get(href);
+      if (page && page.menuId === menu.id && !seen.has(page.id)) {
+        seen.add(page.id);
+        ordered.push({ page, depth });
+      }
+    }
+  }
+  pages.filter((page) => !seen.has(page.id) && page.menuId).sort((left, right) => left.title.localeCompare(right.title)).forEach((page) => {
+    seen.add(page.id);
+    ordered.push({ page, depth: 0 });
+  });
+  pages.filter((page) => !seen.has(page.id)).sort((left, right) => left.title.localeCompare(right.title)).forEach((page) => ordered.push({ page, depth: 0 }));
   return ordered;
 }
 

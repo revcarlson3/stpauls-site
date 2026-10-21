@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultHeaderLayout } from "@/lib/site-layout-types";
 import { normalizeFooterLayout, normalizeHeaderLayout } from "@/lib/site-layout";
-import { orderMenuItems } from "@/lib/menu-input";
+import { orderMenuItems, orderPagesByMenus } from "@/lib/menu-input";
 import { isAllowedFaviconUrl } from "@/lib/site-identity-url";
 import { decodeTextEntities } from "@/lib/text-entities";
 import { parseWidgetInput } from "@/lib/widget-input";
@@ -23,6 +23,29 @@ describe("footer layout compatibility", () => {
       membershipMenuIds: ["menu-b"],
       logoutMenuIds: []
     });
+  });
+
+  it("orders pages by menu hierarchy and puts unlinked pages last", () => {
+    const ordered = orderPagesByMenus(
+      [
+        { id: "orphan", title: "Orphan", slug: "orphan", menuId: null, isHome: false },
+        { id: "child", title: "Child", slug: "child", menuId: "main", isHome: false },
+        { id: "parent", title: "Parent", slug: "parent", menuId: "main", isHome: false }
+      ],
+      [{
+        id: "main",
+        items: [
+          { id: "parent-item", parentId: null, position: 0, href: "/parent" },
+          { id: "child-item", parentId: "parent-item", position: 1, href: "/child" }
+        ]
+      }]
+    );
+
+    expect(ordered.map(({ page, depth }) => [page.id, depth])).toEqual([
+      ["parent", 0],
+      ["child", 1],
+      ["orphan", 0]
+    ]);
   });
 
   it("normalizes legacy pre-header text and sanitizes unsafe HTML", () => {
