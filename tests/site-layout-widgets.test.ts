@@ -73,6 +73,29 @@ describe("footer layout compatibility", () => {
     ]);
   });
 
+  it("keeps parent-only menu pages with their submenu branch", () => {
+    const ordered = orderPagesByMenus(
+      [
+        { id: "beliefs", title: "Beliefs", slug: "beliefs", menuId: null, isHome: false },
+        { id: "confession", title: "Confession of Faith", slug: "confession-of-faith", menuId: null, isHome: false },
+        { id: "home", title: "Home", slug: "home", menuId: null, isHome: true }
+      ],
+      [{
+        id: "about",
+        items: [
+          { id: "beliefs-item", label: "Beliefs", parentId: null, position: 0, href: "" },
+          { id: "confession-item", label: "Confession of Faith", parentId: "beliefs-item", position: 1, href: "/confession-of-faith" }
+        ]
+      }]
+    );
+
+    expect(ordered.map(({ page, depth }) => [page.id, depth])).toEqual([
+      ["beliefs", 0],
+      ["confession", 1],
+      ["home", 0]
+    ]);
+  });
+
   it("normalizes legacy pre-header text and sanitizes unsafe HTML", () => {
     expect(normalizeHeaderLayout({
       preHeader: { enabled: true, text: "Call us", menuId: "utility" }

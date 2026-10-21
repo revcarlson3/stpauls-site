@@ -11,7 +11,11 @@ export type MenuItemInput = {
 type MenuTreeItem = { id?: string; tempId?: string; parentId?: string | null; position: number };
 
 type PageMenuLink = { id: string; title: string; slug: string; menuId: string | null; isHome: boolean };
-type PageMenu = { id: string; items: (MenuTreeItem & { href: string })[] };
+type PageMenu = { id: string; items: (MenuTreeItem & { href: string; label?: string })[] };
+
+function normalizedMenuLabel(value: string) {
+  return value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+}
 
 export function orderMenuItems<T extends MenuTreeItem>(items: T[]) {
   const byKey = new Map(items.flatMap((item) => {
@@ -52,12 +56,17 @@ export function orderPagesByMenus<T extends PageMenuLink>(pages: T[], menus: Pag
     if (page.isHome) paths.push(`/${page.slug}`.replace(/\/+$/, "") || "/");
     return paths.map((path) => [path, page] as const);
   }));
+  const pageByTitle = new Map(pages.map((page) => [normalizedMenuLabel(page.title), page] as const));
+  const pageBySlug = new Map(pages.map((page) => [page.slug.replace(/^\/+|\/+$/g, "").toLocaleLowerCase(), page] as const));
   const ordered: { page: T; depth: number; inMenu: boolean }[] = [];
   const seen = new Set<string>();
   for (const menu of menus) {
     for (const { item, depth } of orderMenuItems(menu.items)) {
-      const href = item.href.split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/";
-      const page = pageByPath.get(href);
+      const rawHref = item.href.split(/[?#]/, 1)[0].trim();
+      const href = rawHref ? rawHref.replace(/\/+$/, "") || "/" : null;
+      const page = (href ? pageByPath.get(href) : undefined)
+        ?? pageByTitle.get(normalizedMenuLabel(item.label ?? ""))
+        ?? ((item.label ?? "").trim() ? pageBySlug.get((item.label ?? "").trim().replace(/^\/+|\/+$/g, "").toLocaleLowerCase()) : undefined);
       if (page && !seen.has(page.id)) {
         seen.add(page.id);
         ordered.push({ page, depth, inMenu: true });
