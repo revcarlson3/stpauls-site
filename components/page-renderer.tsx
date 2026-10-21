@@ -4,6 +4,7 @@ import { blockDefinitions, parseTableConfig } from "@/lib/blocks";
 import { listPublicWidgets, resolvePublicMenu, resolvePublicWidget } from "@/lib/content";
 import { MenuLinks } from "@/components/menu-links";
 import { TableBlock } from "@/components/table-block";
+import { LazyBackgroundVideo } from "@/components/lazy-background-video";
 import { Carousel, type CarouselSlide } from "@/components/carousel";
 import { ImageDisplay } from "@/components/image-display";
 import { FormRenderer } from "@/components/form-renderer";
@@ -191,14 +192,14 @@ function backgroundMediaLayers(props: Record<string, unknown>) {
   const baseUrl = typeof props.backgroundUrl === "string" ? props.backgroundUrl : "";
   return <>
     {props.backgroundType === "image" && baseUrl && <div aria-hidden="true" className="responsive-background-base responsive-background-image pointer-events-none absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url("${baseUrl}")` }} />}
-    {props.backgroundType === "video" && baseUrl && <video className="responsive-background-base responsive-background-video pointer-events-none absolute inset-0 z-0 h-full w-full object-cover" src={baseUrl} controls={props.videoControls === true} autoPlay loop={props.videoLoop === true} muted playsInline />}
+    {props.backgroundType === "video" && baseUrl && <LazyBackgroundVideo className="responsive-background-base responsive-background-video pointer-events-none absolute inset-0 z-0 h-full w-full object-cover" src={baseUrl} controls={props.videoControls === true} />}
     {responsiveDevices.map((device) => {
       const item = responsiveSettings(props, device);
       const url = typeof item?.backgroundUrl === "string" ? item.backgroundUrl : "";
       if (!url || (item?.backgroundType !== "image" && item?.backgroundType !== "video")) return null;
       return item.backgroundType === "image"
         ? <div key={`${device}-background`} aria-hidden="true" className={`responsive-background-variant responsive-background-${device} pointer-events-none absolute inset-0 z-0 bg-cover bg-center`} style={{ backgroundImage: `url("${url}")` }} />
-        : <video key={`${device}-background`} className={`responsive-background-variant responsive-background-${device} pointer-events-none absolute inset-0 z-0 h-full w-full object-cover`} src={url} autoPlay muted loop playsInline />;
+        : <LazyBackgroundVideo key={`${device}-background`} className={`responsive-background-variant responsive-background-${device} pointer-events-none absolute inset-0 z-0 h-full w-full object-cover`} src={url} mediaQuery={device === "tablet" ? "(min-width: 768px) and (max-width: 1023px)" : "(max-width: 767px)"} />;
     })}
   </>;
 }
@@ -448,7 +449,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
       const mediaType = block.props?.mediaType === "video" ? "video" : "image";
       return (
         <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`hero-block !border-0 !shadow-none ${padding} ${alignment} ${animation}`} style={{ ...style, border: 0, boxShadow: "none", outline: "none" }} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}>
-          {mediaUrl && (mediaType === "video" ? <video className="absolute inset-0 h-full w-full object-cover" src={mediaUrl} autoPlay muted loop playsInline /> : <img src={mediaUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />)}
+          {mediaUrl && (mediaType === "video" ? <LazyBackgroundVideo className="absolute inset-0 h-full w-full object-cover" src={mediaUrl} /> : <img src={mediaUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />)}
           <div id={headingId} className="relative z-10">
             {responsiveText({ props: block.props ?? {}, name: "content", fallback: "<p>Add hero text in the element editor.</p>", className: "responsive-typography rich-text-content mt-3 text-ink/70" })}
             {menu && (["buttons", "small-buttons", "large-buttons"].includes(String(block.props?.menuStyle)) ? <nav aria-label={`${label} actions`} className="mt-5"><div className="flex flex-wrap gap-3">{menu.items.filter((item) => !item.parentId).map((item) => <Link key={item.id} href={item.href} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noreferrer" : undefined} className={`focus-ring inline-flex rounded-full bg-[rgb(var(--color-coral))] font-semibold text-white shadow-sm transition hover:opacity-90 ${block.props?.menuStyle === "large-buttons" ? "px-10 py-6 text-lg" : "px-5 py-3 text-sm"}`}>{item.label}</Link>)}</div></nav> : <nav aria-label={`${label} navigation`} className="mt-5 rounded-lg bg-sand/60 p-4 text-sm font-semibold"><MenuLinks items={menu.items} /></nav>)}

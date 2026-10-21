@@ -42,6 +42,15 @@ export async function listPages() {
   return db.page.findMany({ where: user.churchId ? { churchId: user.churchId } : undefined, orderBy: [{ isHome: "desc" }, { title: "asc" }] });
 }
 
+export async function listPageOptions() {
+  const user = await requirePermission("EDIT_PAGES");
+  return db.page.findMany({
+    where: user.churchId ? { churchId: user.churchId } : undefined,
+    orderBy: [{ isHome: "desc" }, { title: "asc" }],
+    select: { id: true, title: true, slug: true }
+  });
+}
+
 export async function listWidgets() {
   await requirePermission("EDIT_PAGES");
   return db.widget.findMany({ orderBy: [{ area: "asc" }, { position: "asc" }, { name: "asc" }] });

@@ -20,7 +20,7 @@ export default function WidgetsPage() {
   const [message, setMessage] = useState("");
 
   async function load() {
-    const [widgetResponse, menuResponse, pageResponse] = await Promise.all([fetch("/api/widgets"), fetch("/api/menus/options"), fetch("/api/pages")]);
+    const [widgetResponse, menuResponse, pageResponse] = await Promise.all([fetch("/api/widgets"), fetch("/api/menus/options"), fetch("/api/widgets/page-options")]);
     if (widgetResponse.ok) setWidgets(await widgetResponse.json());
     if (menuResponse.ok) setMenus(await menuResponse.json());
     if (pageResponse.ok) setPages((await pageResponse.json()).map((page: Page) => ({ id: page.id, title: page.title, slug: page.slug })));

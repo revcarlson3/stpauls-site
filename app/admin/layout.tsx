@@ -27,6 +27,7 @@ export default function AdminLayout({ children, restrictPublicContent = false }:
   const [membershipMenuOpen, setMembershipMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const membershipButtonRef = useRef<HTMLButtonElement>(null);
+  const adminContextLoadedRef = useRef(false);
   const isEditor = pathname === "/admin/editor" || pathname.startsWith("/admin/editor/");
   const [editorChromeVisible, setEditorChromeVisible] = useState(true);
   const publicSiteBridgeUrl = publicSiteUrl ? `/api/auth/public-site-bridge?target=${encodeURIComponent(publicSiteUrl)}` : null;
@@ -61,7 +62,8 @@ export default function AdminLayout({ children, restrictPublicContent = false }:
   }, [membershipMenuOpen]);
 
   useEffect(() => {
-    if (pathname === "/admin/login") return;
+    if (pathname === "/admin/login" || adminContextLoadedRef.current) return;
+    adminContextLoadedRef.current = true;
     void fetch("/api/account").then(async (response) => {
       if (!response.ok) return;
       const value = await response.json();
