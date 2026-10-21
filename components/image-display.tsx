@@ -16,8 +16,10 @@ type ImageDisplayProps = {
   hoverOverlayOpacity?: number;
   hoverText?: string;
   lightbox?: boolean;
-  enterAnimation?: "none" | "fade" | "slide-up" | "slide-left" | "zoom";
-  exitAnimation?: "none" | "fade" | "slide-down" | "slide-right" | "zoom-out";
+  linkUrl?: string;
+  linkTarget?: "_self" | "_blank";
+  enterAnimation?: "none" | "fade" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "zoom" | "zoom-out" | "bounce" | "flip" | "rotate" | "blur" | "elastic" | "shake";
+  exitAnimation?: "none" | "fade" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "zoom" | "zoom-out" | "bounce" | "flip" | "rotate" | "blur" | "elastic" | "shake";
   animationTrigger?: "load" | "viewport";
 };
 
@@ -33,6 +35,8 @@ export function ImageDisplay({
   hoverOverlayOpacity = 0.45,
   hoverText = "",
   lightbox = false,
+  linkUrl = "",
+  linkTarget = "_self",
   enterAnimation = "none",
   exitAnimation = "none",
   animationTrigger = "load",
@@ -43,7 +47,8 @@ export function ImageDisplay({
   const imageRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const canInteract = lightbox;
+  const safeLinkUrl = linkUrl.trim() && (/^https?:\/\//i.test(linkUrl.trim()) || (linkUrl.trim().startsWith("/") && !linkUrl.trim().startsWith("//"))) ? linkUrl.trim() : "";
+  const canInteract = lightbox && !safeLinkUrl;
   const close = useCallback(() => {
     setOpen(false);
     window.requestAnimationFrame(() => triggerRef.current?.focus());
@@ -81,7 +86,9 @@ export function ImageDisplay({
   return (
     <>
       <div ref={imageRef} className={`group relative block max-w-full overflow-hidden rounded-lg text-left image-animation-${inView ? enterAnimation : exitAnimation} image-animation-${inView ? "enter" : "exit"}`} style={containerStyle}>
-        {canInteract ? <button type="button" ref={triggerRef} className="focus-ring block max-w-full cursor-zoom-in" onClick={() => setOpen(true)} aria-label={`Open ${alt || "image"} in lightbox`}>
+        {safeLinkUrl ? <a href={safeLinkUrl} target={linkTarget} rel={linkTarget === "_blank" ? "noreferrer" : undefined} className="block max-w-full">
+          <img src={src} alt={alt} className={`block max-w-full transition duration-300 ease-out ${hoverEffect === "zoom" ? "group-hover:scale-105" : hoverEffect === "lift" ? "group-hover:-translate-y-1 group-hover:shadow-lg" : hoverEffect === "grayscale" ? "grayscale group-hover:grayscale-0" : ""}`} style={{ ...imageStyle, objectFit }} />
+        </a> : canInteract ? <button type="button" ref={triggerRef} className="focus-ring block max-w-full cursor-zoom-in" onClick={() => setOpen(true)} aria-label={`Open ${alt || "image"} in lightbox`}>
           <img src={src} alt={alt} className={`block max-w-full transition duration-300 ease-out ${hoverEffect === "zoom" ? "group-hover:scale-105" : hoverEffect === "lift" ? "group-hover:-translate-y-1 group-hover:shadow-lg" : hoverEffect === "grayscale" ? "grayscale group-hover:grayscale-0" : ""}`} style={{ ...imageStyle, objectFit }} />
         </button> : <img src={src} alt={alt} className={`block max-w-full transition duration-300 ease-out ${hoverEffect === "zoom" ? "group-hover:scale-105" : hoverEffect === "lift" ? "group-hover:-translate-y-1 group-hover:shadow-lg" : hoverEffect === "grayscale" ? "grayscale group-hover:grayscale-0" : ""}`} style={{ ...imageStyle, objectFit }} />}
         {hoverOverlay && <span aria-hidden={!hoverText} className="pointer-events-none absolute inset-0 flex items-center justify-center p-4 text-center font-semibold text-white opacity-0 transition duration-300 group-hover:opacity-100" style={{ backgroundColor: hoverOverlayColor, opacity: undefined }}>

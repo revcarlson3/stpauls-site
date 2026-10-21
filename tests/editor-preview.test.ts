@@ -18,4 +18,17 @@ describe("page editor site preview target", () => {
 
     expect(editor).toContain("measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}");
   });
+
+  it("persists image links and exposes expanded image animations", () => {
+    const editor = fs.readFileSync(path.resolve(process.cwd(), "app/admin/editor/editor-canvas.tsx"), "utf8");
+    const renderer = fs.readFileSync(path.resolve(process.cwd(), "components/page-renderer.tsx"), "utf8");
+    const display = fs.readFileSync(path.resolve(process.cwd(), "components/image-display.tsx"), "utf8");
+
+    expect(editor).toContain("imageLinkUrl");
+    expect(editor).toContain('placeholder="/about or https://example.com"');
+    expect(editor).toContain('value="bounce">Bounce</option>');
+    expect(renderer).toContain("linkUrl={typeof block.props.imageLinkUrl === \"string\" ? block.props.imageLinkUrl : \"\"}");
+    expect(display).toContain("safeLinkUrl");
+    expect(display).toContain('rel={linkTarget === "_blank" ? "noreferrer" : undefined}');
+  });
 });
