@@ -11,11 +11,12 @@ describe("page editor save concurrency", () => {
     expect(source).toContain("if (typeof result.updatedAt === \"string\") serverUpdatedAtRef.current = result.updatedAt;");
   });
 
-  it("does not abort an autosave after its request has started", () => {
+  it("runs autosaves on a one-minute interval instead of after each edit", () => {
     const source = fs.readFileSync(path.resolve(process.cwd(), "app/admin/editor/editor-canvas.tsx"), "utf8");
 
-    expect(source).toContain("if (!requestStarted) {");
-    expect(source).toContain("controller.abort();");
-    expect(source).toContain("requestStarted = true;");
+    expect(source).toContain("window.setInterval(() => {");
+    expect(source).toContain("}, 60_000);");
+    expect(source).toContain("if (!editorDirtyRef.current || !input) return;");
+    expect(source).not.toContain("}, 900);");
   });
 });

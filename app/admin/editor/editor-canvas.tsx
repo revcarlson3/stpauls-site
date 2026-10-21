@@ -1268,6 +1268,10 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   const serverUpdatedAtRef = useRef<string | null>(null);
   const autosaveControllerRef = useRef<AbortController | null>(null);
   const autosavePromisesRef = useRef<Set<Promise<void>>>(new Set());
+  const autosaveInputRef = useRef<PageInput | null>(null);
+  const editorInitializedRef = useRef(false);
+  const editorDirtyRef = useRef(false);
+  const draftVersionRef = useRef(0);
   const saveGenerationRef = useRef(0);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const { setNodeRef: setRootDropRef } = useDroppable({ id: "drop:root", data: { kind: "root" } });
@@ -1456,6 +1460,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     const pendingAutosaves = Array.from(autosavePromisesRef.current);
     if (pendingAutosaves.length > 0) await Promise.all(pendingAutosaves);
     const saveGeneration = ++saveGenerationRef.current;
+    const saveDraftVersion = draftVersionRef.current;
     setMessage("");
     if (passwordProtected && passwordChanged && accessPassword.length < 8) {
       setMessage("Page passwords must be at least 8 characters.");
@@ -1476,6 +1481,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     setPasswordProtected(body.passwordProtected === true);
     setPasswordChanged(false);
     setAccessPassword("");
+    if (saveDraftVersion === draftVersionRef.current) editorDirtyRef.current = false;
     window.localStorage.removeItem(`page-editor-recovery:${pageId ?? "new"}`);
     setRecoveryOffer(null);
     setMessage(pageId ? "Saved successfully." : "Page created successfully.");
@@ -1486,6 +1492,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   useEffect(() => {
     if (!pageReady || !recoveryChecked || recoveryOffer) return;
     const input: PageInput = { title: pageTitle, slug, seoTitle: seoTitle || null, seoDescription: seoDescription || null, seoKeywords: seoKeywords || null, publishAt: publishAt ? new Date(publishAt).toISOString() : null, pageThemeFamily: pageThemeFamily || null, pageThemeWidth: pageThemeWidth || null, showHeader, showFooter, fullScreen, blocks: blocks.map(serialize), ...(serverUpdatedAtRef.current ? { expectedUpdatedAt: serverUpdatedAtRef.current } : {}) };
+    autosaveInputRef.current = input;
     const recoveryKey = `page-editor-recovery:${pageId ?? "new"}`;
     try {
       window.localStorage.setItem(recoveryKey, JSON.stringify({ input, savedAt: new Date().toISOString() }));
@@ -1497,23 +1504,40 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
       setAutosaveState("saved");
       return;
     }
-    setAutosaveState("saving");
-    const saveGeneration = ++saveGenerationRef.current;
-    const controller = new AbortController();
-    autosaveControllerRef.current = controller;
-    let resolveAutosave!: () => void;
-    let requestStarted = false;
-    const autosavePromise = new Promise<void>((resolve) => { resolveAutosave = resolve; });
-    autosavePromisesRef.current.add(autosavePromise);
-    const timer = window.setTimeout(() => {
-      requestStarted = true;
+    if (!editorInitializedRef.current) {
+      editorInitializedRef.current = true;
+      setAutosaveState("saved");
+      return;
+    }
+    editorDirtyRef.current = true;
+    draftVersionRef.current += 1;
+    setAutosaveState("idle");
+  }, [blocks, fullScreen, pageId, pageReady, pageThemeFamily, pageThemeWidth, pageTitle, publishAt, recoveryChecked, recoveryOffer, seoDescription, seoKeywords, seoTitle, showFooter, showHeader, slug]);
+
+  useEffect(() => {
+    if (!pageId || !pageReady || !recoveryChecked || recoveryOffer) return;
+    const interval = window.setInterval(() => {
+      const input = autosaveInputRef.current;
+      if (!editorDirtyRef.current || !input) return;
+      const saveGeneration = ++saveGenerationRef.current;
+      const draftVersion = draftVersionRef.current;
+      const recoveryKey = `page-editor-recovery:${pageId}`;
+      const controller = new AbortController();
+      autosaveControllerRef.current = controller;
+      let resolveAutosave!: () => void;
+      const autosavePromise = new Promise<void>((resolve) => { resolveAutosave = resolve; });
+      autosavePromisesRef.current.add(autosavePromise);
+      setAutosaveState("saving");
       void fetch(`/api/pages/${pageId}`, { method: "PATCH", headers: { "Content-Type": "application/json", "x-page-save-mode": "autosave" }, body: JSON.stringify(input), signal: controller.signal })
         .then(async (response) => {
           const result = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(result.error ?? "Autosave failed.");
           if (typeof result.updatedAt === "string") serverUpdatedAtRef.current = result.updatedAt;
           if (saveGeneration !== saveGenerationRef.current) return;
-          window.localStorage.removeItem(recoveryKey);
+          if (draftVersion === draftVersionRef.current) {
+            editorDirtyRef.current = false;
+            window.localStorage.removeItem(recoveryKey);
+          }
           setAutosaveState("saved");
         })
         .catch((error: Error) => { if (error.name !== "AbortError" && saveGeneration === saveGenerationRef.current) { setAutosaveState("error"); setMessage(error.message); } })
@@ -1522,25 +1546,19 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
           autosavePromisesRef.current.delete(autosavePromise);
           if (autosaveControllerRef.current === controller) autosaveControllerRef.current = null;
         });
-    }, 900);
-    return () => {
-      window.clearTimeout(timer);
-      if (!requestStarted) {
-        controller.abort();
-        resolveAutosave();
-        autosavePromisesRef.current.delete(autosavePromise);
-        if (autosaveControllerRef.current === controller) autosaveControllerRef.current = null;
-      }
-    };
-  }, [blocks, fullScreen, pageId, pageReady, pageThemeFamily, pageThemeWidth, pageTitle, publishAt, recoveryChecked, recoveryOffer, seoDescription, seoKeywords, seoTitle, showFooter, showHeader, slug]);
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [pageId, pageReady, recoveryChecked, recoveryOffer]);
 
   function restoreRecovery() {
     if (!recoveryOffer) return;
     const input = recoveryOffer.input;
     setPageTitle(input.title); setSlug(input.slug); setSeoTitle(input.seoTitle ?? ""); setSeoDescription(input.seoDescription ?? ""); setSeoKeywords(input.seoKeywords ?? ""); setPublishAt(input.publishAt ? new Date(input.publishAt).toISOString().slice(0, 16) : ""); setPageThemeFamily(input.pageThemeFamily ?? ""); setPageThemeWidth(input.pageThemeWidth ?? ""); setShowHeader(input.showHeader !== false); setShowFooter(input.showFooter !== false); setFullScreen(input.fullScreen === true);
     setBlocks(input.blocks.flatMap((block) => { const hydrated = hydrateBlock(block); return hydrated ? [hydrated] : []; }));
+    editorDirtyRef.current = true;
+    draftVersionRef.current += 1;
     setRecoveryOffer(null);
-    setMessage("Recovered your newer local draft. Saving it now.");
+    setMessage("Recovered your newer local draft. It will autosave within one minute.");
   }
 
   function discardRecovery() {
