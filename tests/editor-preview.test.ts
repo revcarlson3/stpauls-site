@@ -12,4 +12,10 @@ describe("page editor site preview target", () => {
     expect(layout).toContain('const publicSiteTarget = publicSiteUrl ? `${publicSiteUrl.replace(/\\/$/, "")}${publicSitePagePath ?? ""}` : null;');
     expect(editor).toContain('new CustomEvent("page-editor-saved"');
   });
+
+  it("continuously measures dynamic insertion zones while dragging", () => {
+    const editor = fs.readFileSync(path.resolve(process.cwd(), "app/admin/editor/editor-canvas.tsx"), "utf8");
+
+    expect(editor).toContain("measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}");
+  });
 });

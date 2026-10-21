@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { notifyPublicSitePreviewSaved } from "@/lib/public-site-preview";
-import { closestCenter, DndContext, pointerWithin, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent, type DragOverEvent } from "@dnd-kit/core";
+import { closestCenter, DndContext, MeasuringStrategy, pointerWithin, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent, type DragOverEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Button, Card } from "@/components/ui";
@@ -1757,7 +1757,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     setActiveDropPath(null);
   };
 
-  return   <DndContext sensors={sensors} collisionDetection={editorCollisionDetection} onDragStart={({ active }) => { dragCancelledRef.current = false; const data = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); setDraggedLayerPath(data?.kind === "layer" ? data.path ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { dragCancelledRef.current = false; setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
+  return   <DndContext sensors={sensors} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }} collisionDetection={editorCollisionDetection} onDragStart={({ active }) => { dragCancelledRef.current = false; const data = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); setDraggedLayerPath(data?.kind === "layer" ? data.path ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { dragCancelledRef.current = false; setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
     {message && <p role="status" aria-live="polite" className="lg:col-span-2 rounded-lg border border-emerald-600/20 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{message}</p>}
     {recoveryOffer && <div role="alert" className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/25 bg-amber-50 px-4 py-3 text-sm text-amber-950"><div><p className="font-bold">A newer local draft is available.</p><p className="mt-1 text-amber-950/75">Recovered from {new Date(recoveryOffer.savedAt).toLocaleString()}.</p></div><div className="flex gap-2"><button type="button" className="focus-ring rounded-lg bg-ink px-3 py-2 text-xs font-bold text-white hover:bg-ink/90" onClick={restoreRecovery}>Restore draft</button><button type="button" className="focus-ring rounded-lg border border-amber-900/25 px-3 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-100" onClick={discardRecovery}>Discard</button></div></div>}
     <div className="flex flex-wrap items-center gap-2 lg:col-span-2">
