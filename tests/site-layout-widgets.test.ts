@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { normalizeFooterLayout } from "@/lib/site-layout";
+import { decodeTextEntities } from "@/lib/text-entities";
 import { parseWidgetInput } from "@/lib/widget-input";
 
 describe("footer layout compatibility", () => {
+  it("decodes text entities in footer legal and credit text", () => {
+    expect(decodeTextEntities("&copy; 2026 St. Paul's &amp; Friends")).toBe("© 2026 St. Paul's & Friends");
+    expect(decodeTextEntities("&#169; &#xA9;")).toBe("© ©");
+    expect(decodeTextEntities("&unknown;")).toBe("&unknown;");
+  });
+
   it("defaults legacy columns to left alignment without dividers", () => {
     const footer = normalizeFooterLayout({
       background: "#123456",
