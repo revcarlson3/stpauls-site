@@ -7,7 +7,9 @@ export type HeaderLayout = {
   menuId: string | null;
   preHeader: {
     enabled: boolean;
-    text: string;
+    background: string;
+    height: "compact" | "standard" | "tall";
+    html: string;
     menuId: string | null;
   };
 };
@@ -37,7 +39,9 @@ export const defaultHeaderLayout: HeaderLayout = {
   menuId: null,
   preHeader: {
     enabled: false,
-    text: "",
+    background: "#17324d",
+    height: "compact",
+    html: "",
     menuId: null
   }
 };

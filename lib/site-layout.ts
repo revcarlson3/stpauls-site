@@ -18,7 +18,11 @@ export function normalizeHeaderLayout(value: unknown): HeaderLayout {
     menuId: typeof input.menuId === "string" && input.menuId ? input.menuId : null,
     preHeader: {
       enabled: preHeaderInput.enabled === true,
-      text: typeof preHeaderInput.text === "string" ? preHeaderInput.text : "",
+      background: typeof preHeaderInput.background === "string" ? preHeaderInput.background : defaultHeaderLayout.preHeader.background,
+      height: preHeaderInput.height === "standard" || preHeaderInput.height === "tall" ? preHeaderInput.height : defaultHeaderLayout.preHeader.height,
+      html: typeof preHeaderInput.html === "string"
+        ? preHeaderInput.html
+        : typeof preHeaderInput.text === "string" ? preHeaderInput.text : "",
       menuId: typeof preHeaderInput.menuId === "string" && preHeaderInput.menuId ? preHeaderInput.menuId : null
     }
   };

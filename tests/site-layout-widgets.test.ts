@@ -5,6 +5,7 @@ import { orderMenuItems } from "@/lib/menu-input";
 import { isAllowedFaviconUrl } from "@/lib/site-identity-url";
 import { decodeTextEntities } from "@/lib/text-entities";
 import { parseWidgetInput } from "@/lib/widget-input";
+import { sanitizeRichTextHtml } from "@/lib/safe-html";
 
 describe("footer layout compatibility", () => {
   it("keeps legacy headers compatible while preserving pre-header settings", () => {
@@ -15,8 +16,15 @@ describe("footer layout compatibility", () => {
     });
     expect(normalizeHeaderLayout({
       height: "standard",
+      preHeader: { enabled: true, background: "#123456", height: "tall", html: "<strong>Call us</strong>", menuId: "utility" }
+    }).preHeader).toEqual({ enabled: true, background: "#123456", height: "tall", html: "<strong>Call us</strong>", menuId: "utility" });
+  });
+
+  it("normalizes legacy pre-header text and sanitizes unsafe HTML", () => {
+    expect(normalizeHeaderLayout({
       preHeader: { enabled: true, text: "Call us", menuId: "utility" }
-    }).preHeader).toEqual({ enabled: true, text: "Call us", menuId: "utility" });
+    }).preHeader.html).toBe("Call us");
+    expect(sanitizeRichTextHtml('<strong>Call</strong><script>alert(1)</script><a href="javascript:alert(1)">us</a>')).toBe("<strong>Call</strong><a>us</a>");
   });
 
   it("decodes text entities in footer legal and credit text", () => {

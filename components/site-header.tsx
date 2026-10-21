@@ -10,6 +10,7 @@ import type { getSiteLayout } from "@/lib/site-layout";
 import { NotificationBell } from "@/components/notification-bell";
 import { SiteHeaderFrame } from "@/components/site-header-frame";
 import { MenuLinks } from "@/components/menu-links";
+import { sanitizeRichTextHtml } from "@/lib/safe-html";
 
 type SiteHeaderProps = {
   menuId?: string | null;
@@ -28,12 +29,13 @@ export async function SiteHeader({ menuId = null, menuLocationId = null, user, i
     : null;
   const logoUrl = theme.nav === "solid" ? (identity.logoDarkUrl || identity.logoUrl) : identity.logoUrl;
   const headerHeight = header.height === "compact" ? "4rem" : header.height === "tall" ? "7rem" : "5rem";
+  const preHeaderHeight = header.preHeader.height === "compact" ? "2.5rem" : header.preHeader.height === "tall" ? "6rem" : "4rem";
 
   return (
     <SiteHeaderFrame sticky={header.sticky} stylistic={header.stylistic} style={{ backgroundColor: header.background, color: header.textColor }}>
-      {header.preHeader.enabled && <div className="site-header-preheader border-b border-current/10">
-        <Container className="flex min-h-10 items-center justify-between gap-4 px-0 py-2 text-xs">
-          {header.preHeader.text && <p className="min-w-0 truncate">{header.preHeader.text}</p>}
+      {header.preHeader.enabled && <div className="site-header-preheader border-b border-current/10" style={{ backgroundColor: header.preHeader.background, "--site-preheader-min-height": preHeaderHeight } as CSSProperties}>
+        <Container className="site-header-preheader-container flex items-center justify-between gap-4 px-0 py-2 text-xs">
+          {header.preHeader.html && <div className="rich-text-content site-header-preheader-content min-w-0" dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(header.preHeader.html) }} />}
           {preHeaderMenu && <MenuLinks items={preHeaderMenu.items} className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1" />}
         </Container>
       </div>}
