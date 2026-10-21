@@ -7,6 +7,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { siteIdentityAssetUrl } from "@/lib/site-identity";
 import { requireCurrentChurch } from "@/lib/tenant";
+import { isAllowedFaviconUrl } from "@/lib/site-identity-url";
 
 export async function GET() {
   try {
@@ -21,12 +22,12 @@ export async function GET() {
 export async function PATCH(request: Request) {
   const input = await request.json();
   if (input && typeof input.siteFaviconUrl === "string" && input.siteUrl === undefined) {
-    if (input.siteFaviconUrl && !input.siteFaviconUrl.startsWith("/api/media/upload?file=") && !input.siteFaviconUrl.startsWith("/uploads/site-identity/")) {
-      return NextResponse.json({ error: "Invalid favicon asset." }, { status: 400 });
-    }
     try {
       await requirePermission("MANAGE_SETTINGS");
       const { church } = await requireCurrentChurch();
+      if (!isAllowedFaviconUrl(input.siteFaviconUrl, church.id)) {
+        return NextResponse.json({ error: "Invalid favicon asset." }, { status: 400 });
+      }
       await db.siteIdentity.upsert({ where: { churchId: church.id }, update: { siteFaviconUrl: input.siteFaviconUrl }, create: { churchId: church.id, siteFaviconUrl: input.siteFaviconUrl } });
       return NextResponse.json({ saved: true });
     } catch (error) {
