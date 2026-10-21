@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { sendMembershipEmail, type EmailAttachment } from "@/lib/membership-delivery";
 import crypto from "node:crypto";
 import PDFDocument from "pdfkit";
-import { EVENT_TYPE_LABELS } from "@/lib/event-reporting";
+import { EVENT_TYPE_LABELS, ensureVolunteerScheduleColumns, formatVolunteerAssignments } from "@/lib/event-reporting";
 import { dynamicMemberIds } from "@/lib/membership-audiences";
 import { formatReportDate } from "@/lib/report-date-format";
 import { buildMembershipReportRows } from "@/lib/scheduled-reporting";
@@ -217,9 +217,9 @@ async function buildEventReportRows(report: { reportType: string; criteria: unkn
     }
     if (report.reportType === "volunteers") for (const assignment of event.rotationAssignments) rows.push({ ...base, id: assignment.id, volunteerGroup: assignment.group.name, volunteerName: `${assignment.individual.lastName || ""}, ${assignment.individual.firstName}`.trim(), assignmentSource: assignment.source });
     if (report.reportType === "volunteer-schedule") {
-      const scheduleRow: Record<string, unknown> = { ...base, eventDate: formatReportDate(event.startsAt, timeZone) };
+      const scheduleRow: Record<string, unknown> = { ...base, eventDate: formatReportDate(event.startsAt, timeZone), volunteers: formatVolunteerAssignments(event.rotationAssignments) };
       for (const group of selectedGroups) scheduleRow[`group:${group.id}`] = event.rotationAssignments.filter((assignment) => assignment.groupId === group.id).map((assignment) => `${assignment.individual.firstName} ${assignment.individual.lastName || ""}`.trim()).join(", ");
-      rows.push(scheduleRow);
+      if (event.rotationAssignments.length) rows.push(scheduleRow);
     }
   }
   const filtered = rows.filter((row) => matchesSavedCriteria(row, criteria));
@@ -394,13 +394,14 @@ export async function deliverRun(runId: string, recipientOverride?: string) {
   try {
     const report = run.automation.report;
     const columns = Array.isArray(report.columns) ? report.columns as Array<{ key: string; label: string }> : [];
+    const renderedColumns = report.reportType === "volunteer-schedule" ? ensureVolunteerScheduleColumns(columns) : columns;
     const savedCriteria = report.criteria && typeof report.criteria === "object" ? report.criteria as Record<string, unknown> : {};
     const filteredRows: Array<Record<string, unknown>> = report.scope === "EVENT"
       ? await buildEventReportRows({ reportType: report.reportType, criteria: { ...savedCriteria, ...((run.automation.criteria && typeof run.automation.criteria === "object") ? run.automation.criteria : {}) }, sort: report.sort }, { now: run.scheduledFor ?? new Date(), timeZone: run.automation.timezone })
       : await buildMembershipReportRows({ ...report, criteria: { ...savedCriteria, ...((run.automation.criteria && typeof run.automation.criteria === "object") ? run.automation.criteria : {}) } });
     const rendered = run.automation.format === "PDF"
-      ? { bodyText: `${report.name}\n\n${filteredRows.length} row(s) are included in the attached report.`, bodyHtml: `<h2>${report.name}</h2><p>${filteredRows.length} row(s) are included in the attached report.</p>`, attachments: [await renderPdfAttachment(report.name, columns, filteredRows)] }
-      : renderReportEmail({ title: report.name, columns, rows: filteredRows, format: run.automation.format === "HTML" ? "HTML" : "CSV" });
+      ? { bodyText: `${report.name}\n\n${filteredRows.length} row(s) are included in the attached report.`, bodyHtml: `<h2>${report.name}</h2><p>${filteredRows.length} row(s) are included in the attached report.</p>`, attachments: [await renderPdfAttachment(report.name, renderedColumns, filteredRows)] }
+      : renderReportEmail({ title: report.name, columns: renderedColumns, rows: filteredRows, format: run.automation.format === "HTML" ? "HTML" : "CSV" });
     const recipients = recipientOverride ? [recipientOverride] : Array.isArray(run.automation.recipients) ? run.automation.recipients.filter((item): item is string => typeof item === "string") : [];
     for (const recipient of recipients) await sendMembershipEmail({ recipient, subject: run.automation.subject || report.name, bodyHtml: rendered.bodyHtml, bodyText: rendered.bodyText, attachments: rendered.attachments });
     await db.reportAutomationRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED", completedAt: new Date(), rowCount: filteredRows.length, attachment: rendered.attachments[0] ?? null, error: null } });

@@ -11,6 +11,22 @@ export const EVENT_TYPE_LABELS: Record<string, string> = { WORSHIP: "Worship", C
 export type EventReportType = (typeof EVENT_REPORT_TYPES)[number]["value"];
 export type EventReportColumn = { key: string; label: string };
 export type EventReportSummaryRow = { _eventId?: unknown; id?: unknown; attendanceCount?: unknown; _absenceCount?: unknown; attendanceStatus?: unknown; visitorCount?: unknown; _volunteerAssignmentCount?: unknown };
+export const VOLUNTEER_SCHEDULE_COLUMN: EventReportColumn = { key: "volunteers", label: "Volunteers" };
+
+export function ensureVolunteerScheduleColumns(columns: EventReportColumn[]) {
+  return columns.some((column) => column.key === VOLUNTEER_SCHEDULE_COLUMN.key) ? columns : [...columns, VOLUNTEER_SCHEDULE_COLUMN];
+}
+
+export function formatVolunteerAssignments(assignments: Array<{ group: { name: string }; individual: { firstName: string; lastName: string | null } }>) {
+  const grouped = new Map<string, string[]>();
+  for (const assignment of assignments) {
+    const name = `${assignment.individual.firstName} ${assignment.individual.lastName || ""}`.trim();
+    const names = grouped.get(assignment.group.name) ?? [];
+    names.push(name);
+    grouped.set(assignment.group.name, names);
+  }
+  return Array.from(grouped, ([group, names]) => `${group}: ${names.join(", ")}`).join("; ");
+}
 
 export function closestUpcomingEvents<T extends { startsAt: Date }>(events: T[], limit: number, now = new Date()) {
   if (!Number.isInteger(limit) || limit <= 0) return events;

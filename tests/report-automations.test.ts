@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { closestUpcomingEvents } from "@/lib/event-reporting";
+import { closestUpcomingEvents, ensureVolunteerScheduleColumns, formatVolunteerAssignments } from "@/lib/event-reporting";
 import { canAutomateReportScope, isAutomationDue, isRequestSchedulerLockAvailable, nextScheduledAt, nextSundayDateKey, normalizeAutomation, renderReportEmail, shouldAttemptRequestScheduler } from "@/lib/report-automations";
 
 describe("report automation definitions", () => {
@@ -28,6 +28,17 @@ describe("report automation definitions", () => {
       { id: "coming", startsAt: new Date("2026-10-25T15:00:00.000Z") }
     ];
     expect(closestUpcomingEvents(events, 1, now).map((event) => event.id)).toEqual(["coming"]);
+  });
+
+  it("includes all assigned volunteer names in schedule rows", () => {
+    expect(formatVolunteerAssignments([
+      { group: { name: "Ushers" }, individual: { firstName: "Jane", lastName: "Doe" } },
+      { group: { name: "Readers" }, individual: { firstName: "John", lastName: null } }
+    ])).toBe("Ushers: Jane Doe; Readers: John");
+    expect(ensureVolunteerScheduleColumns([{ key: "eventDate", label: "Event date" }])).toEqual([
+      { key: "eventDate", label: "Event date" },
+      { key: "volunteers", label: "Volunteers" }
+    ]);
   });
 
   it("only considers scheduled automations eligible at their configured time", () => {
