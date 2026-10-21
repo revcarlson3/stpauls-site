@@ -1080,6 +1080,7 @@ body:has(.page-chrome-hide-footer) > div > footer {
 .rich-text-editor img,
 .rich-text-editor video {
   max-width: 100%;
+  height: auto;
   cursor: pointer;
 }
 
@@ -1146,6 +1147,13 @@ body:has(.page-chrome-hide-footer) > div > footer {
 .rich-text-content td,
 .rich-text-content th {
   padding: 0.5rem 0.75rem;
+}
+
+.rich-text-content img,
+.rich-text-content video {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 @keyframes block-fade-in {
