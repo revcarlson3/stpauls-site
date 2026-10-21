@@ -45,14 +45,13 @@ export function AdminNavigation({ permissions, publicWebsiteModuleEnabled, subsc
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/users">Edit Users</Link>
         </div>
       </details>}
-      {subscriptionActive && can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/site-settings") || pathname.startsWith("/admin/site-identity") || pathname.startsWith("/admin/report-automations")} className="group">
+      {subscriptionActive && can("MANAGE_SETTINGS") && <details open={pathname.startsWith("/admin/site-settings") || pathname.startsWith("/admin/site-identity")} className="group">
         <summary className="focus-ring flex cursor-pointer list-none items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist"><AdminNavIcon name="settings" />Site Settings <span className="ml-auto text-ink/50 group-open:rotate-180">⌄</span></summary>
         <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2">
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-identity">Site Identity</Link>
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings">General Settings</Link>
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/messaging">Messaging</Link>
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/site-settings/announcements">Announcements</Link>
-          <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/report-automations">Report Automations</Link>
         </div>
       </details>}
       {!subscriptionActive && <Link onClick={onNavigate} className="focus-ring flex items-center gap-3 rounded-lg px-4 py-3 font-semibold hover:bg-mist" href="/admin/billing"><AdminNavIcon name="settings" />Billing</Link>}
@@ -63,7 +62,7 @@ export function AdminNavigation({ permissions, publicWebsiteModuleEnabled, subsc
           <Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/domains">Domains</Link>
         </div>
       </details>}
-      {subscriptionActive && <><p className="mt-4 border-t border-ink/10 px-4 pt-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Modules</p><ModuleNavigation onNavigate={onNavigate} /></>}
+      {subscriptionActive && <><p className="mt-4 border-t border-ink/10 px-4 pt-4 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Modules</p><ModuleNavigation onNavigate={onNavigate} />{can("ACCESS_ADMIN") && <div className="ml-4 grid gap-1 border-l border-ink/10 pl-2"><Link onClick={onNavigate} className="focus-ring rounded-lg px-3 py-2 text-sm hover:bg-mist" href="/admin/report-automations">Report Automations</Link></div>}</>}
       <AdminLogout onLogout={onNavigate} />
     </nav>
   );
