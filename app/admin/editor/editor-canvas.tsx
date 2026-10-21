@@ -1485,6 +1485,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     window.localStorage.removeItem(`page-editor-recovery:${pageId ?? "new"}`);
     setRecoveryOffer(null);
     setMessage(pageId ? "Saved successfully." : "Page created successfully.");
+    if (pageId) window.dispatchEvent(new CustomEvent("page-editor-saved", { detail: { pageId, slug, isHome: body.isHome === true } }));
     notifyPublicSitePreviewSaved();
     if (!pageId && body.id) router.replace(`/admin/editor/${body.id}`);
   }

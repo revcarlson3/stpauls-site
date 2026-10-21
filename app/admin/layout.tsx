@@ -14,6 +14,7 @@ import { openPublicSitePreview } from "@/lib/public-site-preview";
 export default function AdminLayout({ children, restrictPublicContent = false }: Readonly<{ children: React.ReactNode; restrictPublicContent?: boolean }>) {
   const pathname = usePathname();
   const [publicSiteUrl, setPublicSiteUrl] = useState<string | null>(null);
+  const [publicSitePagePath, setPublicSitePagePath] = useState<string | null>(null);
   const [publicWebsiteModuleEnabled, setPublicWebsiteModuleEnabled] = useState(false);
   const [membershipLinked, setMembershipLinked] = useState(false);
   const [onlineGivingEnabled, setOnlineGivingEnabled] = useState(false);
@@ -30,7 +31,9 @@ export default function AdminLayout({ children, restrictPublicContent = false }:
   const adminContextLoadedRef = useRef(false);
   const isEditor = pathname === "/admin/editor" || pathname.startsWith("/admin/editor/");
   const [editorChromeVisible, setEditorChromeVisible] = useState(true);
-  const publicSiteBridgeUrl = publicSiteUrl ? `/api/auth/public-site-bridge?target=${encodeURIComponent(publicSiteUrl)}` : null;
+  const editorPageMatch = /^\/admin\/editor\/([^/]+)$/.exec(pathname);
+  const publicSiteTarget = publicSiteUrl ? `${publicSiteUrl.replace(/\/$/, "")}${publicSitePagePath ?? ""}` : null;
+  const publicSiteBridgeUrl = publicSiteTarget ? `/api/auth/public-site-bridge?target=${encodeURIComponent(publicSiteTarget)}` : null;
   const subscriptionExemptPath = pathname.startsWith("/account") || pathname.startsWith("/admin/billing");
   useEffect(() => setMounted(true), []);
   useEffect(() => {
@@ -99,6 +102,34 @@ export default function AdminLayout({ children, restrictPublicContent = false }:
       setViewAsGroupId(value.activeGroupId ?? "");
     }).catch(() => undefined);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!editorPageMatch) {
+      setPublicSitePagePath(null);
+      return;
+    }
+    let active = true;
+    setPublicSitePagePath(null);
+    void fetch(`/api/pages/${encodeURIComponent(editorPageMatch[1])}`)
+      .then(async (response) => response.ok ? await response.json() as { slug?: string; isHome?: boolean } : null)
+      .then((page) => {
+        if (!active || !page?.slug) return;
+        setPublicSitePagePath(page.isHome ? "/" : `/${encodeURIComponent(page.slug)}`);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [editorPageMatch?.[1]]);
+
+  useEffect(() => {
+    if (!editorPageMatch) return;
+    const handlePageSaved = (event: Event) => {
+      const detail = (event as CustomEvent<{ pageId?: string; slug?: string; isHome?: boolean }>).detail;
+      if (detail?.pageId !== editorPageMatch[1] || !detail.slug) return;
+      setPublicSitePagePath(detail.isHome ? "/" : `/${encodeURIComponent(detail.slug)}`);
+    };
+    window.addEventListener("page-editor-saved", handlePageSaved);
+    return () => window.removeEventListener("page-editor-saved", handlePageSaved);
+  }, [editorPageMatch?.[1]]);
 
   async function changeViewAs(groupId: string) {
     const response = await fetch("/api/view-as", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId }) });
