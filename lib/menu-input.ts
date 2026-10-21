@@ -52,23 +52,23 @@ export function orderPagesByMenus<T extends PageMenuLink>(pages: T[], menus: Pag
     if (page.isHome) paths.push(`/${page.slug}`.replace(/\/+$/, "") || "/");
     return paths.map((path) => [path, page] as const);
   }));
-  const ordered: { page: T; depth: number }[] = [];
+  const ordered: { page: T; depth: number; inMenu: boolean }[] = [];
   const seen = new Set<string>();
   for (const menu of menus) {
     for (const { item, depth } of orderMenuItems(menu.items)) {
       const href = item.href.split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/";
       const page = pageByPath.get(href);
-      if (page && page.menuId === menu.id && !seen.has(page.id)) {
+      if (page && !seen.has(page.id)) {
         seen.add(page.id);
-        ordered.push({ page, depth });
+        ordered.push({ page, depth, inMenu: true });
       }
     }
   }
   pages.filter((page) => !seen.has(page.id) && page.menuId).sort((left, right) => left.title.localeCompare(right.title)).forEach((page) => {
     seen.add(page.id);
-    ordered.push({ page, depth: 0 });
+    ordered.push({ page, depth: 0, inMenu: false });
   });
-  pages.filter((page) => !seen.has(page.id)).sort((left, right) => left.title.localeCompare(right.title)).forEach((page) => ordered.push({ page, depth: 0 }));
+  pages.filter((page) => !seen.has(page.id)).sort((left, right) => left.title.localeCompare(right.title)).forEach((page) => ordered.push({ page, depth: 0, inMenu: false }));
   return ordered;
 }
 

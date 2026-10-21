@@ -45,10 +45,31 @@ describe("footer layout compatibility", () => {
       }]
     );
 
-    expect(ordered.map(({ page, depth }) => [page.id, depth])).toEqual([
-      ["parent", 0],
-      ["child", 1],
-      ["orphan", 0]
+    expect(ordered.map(({ page, depth, inMenu }) => [page.id, depth, inMenu])).toEqual([
+      ["parent", 0, true],
+      ["child", 1, true],
+      ["orphan", 0, false]
+    ]);
+  });
+
+  it("uses menu links as the source of truth even when legacy page menu IDs are empty", () => {
+    const ordered = orderPagesByMenus(
+      [
+        { id: "z-page", title: "Z page", slug: "z-page", menuId: null, isHome: false },
+        { id: "a-page", title: "A page", slug: "a-page", menuId: null, isHome: false }
+      ],
+      [{
+        id: "primary",
+        items: [
+          { id: "z-item", parentId: null, position: 0, href: "/z-page" },
+          { id: "a-item", parentId: null, position: 1, href: "/a-page" }
+        ]
+      }]
+    );
+
+    expect(ordered.map(({ page, inMenu }) => [page.id, inMenu])).toEqual([
+      ["z-page", true],
+      ["a-page", true]
     ]);
   });
 

@@ -41,7 +41,7 @@ export async function listPages() {
   const user = await requirePermission("EDIT_PAGES");
   const pages = await db.page.findMany({ where: user.churchId ? { churchId: user.churchId } : undefined });
   const menus = await db.menu.findMany({ select: { id: true, items: { select: { id: true, label: true, href: true, parentId: true, position: true } } }, orderBy: { name: "asc" } });
-  return orderPagesByMenus(pages, menus).map(({ page, depth }) => ({ ...page, menuDepth: depth }));
+  return orderPagesByMenus(pages, menus).map(({ page, depth, inMenu }) => ({ ...page, menuDepth: depth, menuLinked: inMenu }));
 }
 
 export async function listPageOptions() {
