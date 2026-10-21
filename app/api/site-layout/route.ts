@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSiteLayout, saveSiteLayout, type FooterLayout, type HeaderLayout } from "@/lib/site-layout";
+import { getSiteLayout, normalizeFooterLayout, saveSiteLayout, type HeaderLayout } from "@/lib/site-layout";
 import { requirePermission } from "@/lib/auth";
 
 export async function GET() {
@@ -16,11 +16,11 @@ export async function PATCH(request: Request) {
   const input = await request.json();
   const header = input?.header;
   const footer = input?.footer;
-  if (!header || !footer || !["compact", "standard", "tall"].includes(header.height) || typeof header.background !== "string" || typeof header.textColor !== "string" || typeof header.sticky !== "boolean" || typeof header.stylistic !== "boolean" || (header.menuId !== null && typeof header.menuId !== "string") || !["simple", "columns", "centered"].includes(footer.style) || typeof footer.background !== "string" || typeof footer.textColor !== "string" || typeof footer.copyright !== "string" || typeof footer.credit !== "string" || !Array.isArray(footer.columns) || footer.columns.length < 2 || footer.columns.length > 5) {
+  if (!header || !footer || !["compact", "standard", "tall"].includes(header.height) || typeof header.background !== "string" || typeof header.textColor !== "string" || typeof header.sticky !== "boolean" || typeof header.stylistic !== "boolean" || (header.menuId !== null && typeof header.menuId !== "string") || !["simple", "columns", "centered"].includes(footer.style) || typeof footer.background !== "string" || typeof footer.textColor !== "string" || typeof footer.copyright !== "string" || typeof footer.credit !== "string" || !Array.isArray(footer.columns) || footer.columns.length < 2 || footer.columns.length > 5 || footer.columns.some((column: unknown) => !column || typeof column !== "object" || Array.isArray(column) || typeof (column as { heading?: unknown }).heading !== "string" || ((column as { widgetId?: unknown }).widgetId !== null && typeof (column as { widgetId?: unknown }).widgetId !== "string") || ("alignment" in column && !["left", "center", "right"].includes((column as { alignment?: unknown }).alignment as string)))) {
     return NextResponse.json({ error: "Invalid site layout." }, { status: 400 });
   }
   try {
-    await saveSiteLayout(header as HeaderLayout, footer as FooterLayout);
+    await saveSiteLayout(header as HeaderLayout, normalizeFooterLayout(footer));
     return NextResponse.json({ saved: true });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Unauthorized:")) return NextResponse.json({ error: "Authentication required." }, { status: 401 });

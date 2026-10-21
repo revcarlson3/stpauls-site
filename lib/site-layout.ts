@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
-import { defaultFooterLayout, defaultHeaderLayout, type FooterLayout, type HeaderLayout } from "@/lib/site-layout-types";
+import { defaultFooterLayout, defaultHeaderLayout, type FooterColumn, type FooterLayout, type HeaderLayout } from "@/lib/site-layout-types";
 export { defaultFooterLayout, defaultHeaderLayout };
 export type { FooterLayout, HeaderLayout };
 
@@ -20,7 +20,8 @@ function footerFrom(value: unknown): FooterLayout {
   const input = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
   const columns = Array.isArray(input.columns) ? input.columns.filter((column): column is Record<string, unknown> => Boolean(column) && typeof column === "object" && !Array.isArray(column)).slice(0, 5).map((column) => ({
     heading: typeof column.heading === "string" ? column.heading : "",
-    widgetId: typeof column.widgetId === "string" && column.widgetId ? column.widgetId : null
+    widgetId: typeof column.widgetId === "string" && column.widgetId ? column.widgetId : null,
+    alignment: (column.alignment === "center" || column.alignment === "right" ? column.alignment : "left") as FooterColumn["alignment"]
   })) : defaultFooterLayout.columns;
   return {
     background: typeof input.background === "string" ? input.background : defaultFooterLayout.background,
@@ -28,8 +29,13 @@ function footerFrom(value: unknown): FooterLayout {
     style: input.style === "simple" || input.style === "centered" ? input.style : defaultFooterLayout.style,
     copyright: typeof input.copyright === "string" ? input.copyright : defaultFooterLayout.copyright,
     credit: typeof input.credit === "string" ? input.credit : defaultFooterLayout.credit,
-    columns: columns.length ? columns : defaultFooterLayout.columns
+    columns: columns.length ? columns : defaultFooterLayout.columns,
+    columnDividers: input.columnDividers === true
   };
+}
+
+export function normalizeFooterLayout(value: unknown): FooterLayout {
+  return footerFrom(value);
 }
 
 export async function getSiteLayout() {

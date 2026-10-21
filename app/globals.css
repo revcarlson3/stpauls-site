@@ -627,6 +627,20 @@ body[data-theme-radius="soft"] {
   transition: opacity 180ms ease, background-color 180ms ease;
 }
 
+.footer-column-dividers > section + section {
+  border-left: 1px solid currentColor;
+  padding-left: 2rem;
+}
+
+@media (max-width: 639px) {
+  .footer-column-dividers > section + section {
+    border-left: 0;
+    border-top: 1px solid currentColor;
+    padding-left: 0;
+    padding-top: 2rem;
+  }
+}
+
 .site-header.is-stylistic.is-scrolling-up {
   opacity: 0.9;
 }

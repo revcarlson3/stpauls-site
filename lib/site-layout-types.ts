@@ -10,6 +10,7 @@ export type HeaderLayout = {
 export type FooterColumn = {
   heading: string;
   widgetId: string | null;
+  alignment: "left" | "center" | "right";
 };
 
 export type FooterLayout = {
@@ -19,6 +20,7 @@ export type FooterLayout = {
   copyright: string;
   credit: string;
   columns: FooterColumn[];
+  columnDividers: boolean;
 };
 
 export const defaultHeaderLayout: HeaderLayout = {
@@ -36,9 +38,10 @@ export const defaultFooterLayout: FooterLayout = {
   style: "columns",
   copyright: "",
   credit: "",
+  columnDividers: false,
   columns: [
-    { heading: "", widgetId: null },
-    { heading: "", widgetId: null },
-    { heading: "", widgetId: null }
+    { heading: "", widgetId: null, alignment: "left" },
+    { heading: "", widgetId: null, alignment: "left" },
+    { heading: "", widgetId: null, alignment: "left" }
   ]
 };
