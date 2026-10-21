@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { EVENT_REPORT_COLUMNS, EVENT_TYPE_LABELS, eventReportSummary } from "@/lib/event-reporting";
+import { EVENT_REPORT_COLUMNS, EVENT_TYPE_LABELS, closestUpcomingEvents, eventReportSummary } from "@/lib/event-reporting";
 import { formatReportDate } from "@/lib/report-date-format";
 import { dynamicMemberIds } from "@/lib/membership-audiences";
 import { authorizeReportExecution, authorizeReportModule } from "@/lib/reporting";
@@ -69,8 +69,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
           return (!scheduleCriteria.dateFrom || eventDate >= String(scheduleCriteria.dateFrom)) &&
             (!scheduleCriteria.dateTo || eventDate <= String(scheduleCriteria.dateTo));
         });
+    const eventLimit = Number(scheduleCriteria.eventLimit);
     const scheduleEvents = type === "volunteer-schedule"
-      ? dateFilteredEvents.slice(0, Number.isInteger(Number(scheduleCriteria.eventLimit)) && Number(scheduleCriteria.eventLimit) > 0 ? Number(scheduleCriteria.eventLimit) : undefined)
+      ? closestUpcomingEvents(dateFilteredEvents, eventLimit)
       : dateFilteredEvents;
     for (const event of scheduleEvents) {
       const attendanceCount = event.attendance.filter((record) => record.status === "PRESENT").length;

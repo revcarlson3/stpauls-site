@@ -19,7 +19,7 @@ export type AutomationDefinition = {
   scheduleKind: "MANUAL" | "HOURLY" | "DAILY" | "WEEKLY";
   schedule: { hour?: number; minute?: number; dayOfWeek?: number };
   recipients: string[];
-  criteria: { eventSelection?: "ALL" | "MOST_RECENT" };
+  criteria: { eventSelection?: "ALL" | "MOST_RECENT" | "NEXT_SUNDAY" };
   subject: string;
   format: "CSV" | "HTML" | "PDF";
   inAppEnabled: boolean;
@@ -56,10 +56,10 @@ export function normalizeAutomation(input: unknown): AutomationDefinition {
   };
 }
 
-function scheduleCriteriaSelection(value: unknown): "ALL" | "MOST_RECENT" {
+function scheduleCriteriaSelection(value: unknown): "ALL" | "MOST_RECENT" | "NEXT_SUNDAY" {
   if (!value || typeof value !== "object") return "ALL";
   const selection = (value as Record<string, unknown>).eventSelection;
-  return selection === "MOST_RECENT" ? "MOST_RECENT" : "ALL";
+  return selection === "MOST_RECENT" || selection === "NEXT_SUNDAY" ? selection : "ALL";
 }
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number) {
@@ -153,17 +153,32 @@ function matchesSavedCriteria(row: Record<string, unknown>, criteria: unknown) {
   return value.match === "any" ? results.some(Boolean) : results.every(Boolean);
 }
 
-async function buildEventReportRows(report: { reportType: string; criteria: unknown; sort?: unknown }) {
+function zonedDateKey(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+export function nextSundayDateKey(now: Date, timeZone: string) {
+  const local = zonedParts(now, timeZone);
+  const localDate = new Date(Date.UTC(local.year, local.month - 1, local.day));
+  localDate.setUTCDate(localDate.getUTCDate() + (7 - localDate.getUTCDay()) % 7);
+  return localDate.toISOString().slice(0, 10);
+}
+
+async function buildEventReportRows(report: { reportType: string; criteria: unknown; sort?: unknown }, context: { now?: Date; timeZone?: string } = {}) {
   const criteria = report.criteria && typeof report.criteria === "object" ? report.criteria as Record<string, unknown> : {};
   const dateFrom = typeof criteria.dateFrom === "string" ? criteria.dateFrom : "";
   const dateTo = typeof criteria.dateTo === "string" ? criteria.dateTo : "";
+  const timeZone = context.timeZone ?? "America/Chicago";
+  const nextSunday = criteria.eventSelection === "NEXT_SUNDAY" ? nextSundayDateKey(context.now ?? new Date(), timeZone) : "";
   const eventLimit = Number(criteria.eventLimit);
   const selectedGroupIds = report.reportType === "volunteer-schedule" && Array.isArray(criteria.volunteerGroupIds) ? criteria.volunteerGroupIds.filter((value): value is string => typeof value === "string") : [];
   const selectedGroups = selectedGroupIds.length ? await db.membershipVolunteerGroup.findMany({ where: { id: { in: selectedGroupIds } }, select: { id: true } }) : [];
   const events = await db.membershipEvent.findMany({ orderBy: { startsAt: "desc" }, take: 10000, include: { attendance: { include: { individual: true } }, rotationAssignments: { include: { individual: true, group: true } }, volunteerGroups: { select: { groupId: true } } } });
   const filteredEvents = events.filter((event) => {
-    const date = event.startsAt.toISOString().slice(0, 10);
-    return (!dateFrom || date >= dateFrom) && (!dateTo || date <= dateTo);
+    const date = nextSunday ? zonedDateKey(event.startsAt, timeZone) : event.startsAt.toISOString().slice(0, 10);
+    return (!dateFrom || date >= dateFrom) && (!dateTo || date <= dateTo) && (!nextSunday || date === nextSunday);
   });
   const scheduleEvents = criteria.eventSelection === "MOST_RECENT"
     ? filteredEvents.slice(0, 1)
@@ -381,7 +396,7 @@ export async function deliverRun(runId: string, recipientOverride?: string) {
     const columns = Array.isArray(report.columns) ? report.columns as Array<{ key: string; label: string }> : [];
     const savedCriteria = report.criteria && typeof report.criteria === "object" ? report.criteria as Record<string, unknown> : {};
     const filteredRows: Array<Record<string, unknown>> = report.scope === "EVENT"
-      ? await buildEventReportRows({ reportType: report.reportType, criteria: { ...savedCriteria, ...((run.automation.criteria && typeof run.automation.criteria === "object") ? run.automation.criteria : {}) }, sort: report.sort })
+      ? await buildEventReportRows({ reportType: report.reportType, criteria: { ...savedCriteria, ...((run.automation.criteria && typeof run.automation.criteria === "object") ? run.automation.criteria : {}) }, sort: report.sort }, { now: run.scheduledFor ?? new Date(), timeZone: run.automation.timezone })
       : await buildMembershipReportRows({ ...report, criteria: { ...savedCriteria, ...((run.automation.criteria && typeof run.automation.criteria === "object") ? run.automation.criteria : {}) } });
     const rendered = run.automation.format === "PDF"
       ? { bodyText: `${report.name}\n\n${filteredRows.length} row(s) are included in the attached report.`, bodyHtml: `<h2>${report.name}</h2><p>${filteredRows.length} row(s) are included in the attached report.</p>`, attachments: [await renderPdfAttachment(report.name, columns, filteredRows)] }

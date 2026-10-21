@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { canAutomateReportScope, isAutomationDue, isRequestSchedulerLockAvailable, nextScheduledAt, normalizeAutomation, renderReportEmail, shouldAttemptRequestScheduler } from "@/lib/report-automations";
+import { closestUpcomingEvents } from "@/lib/event-reporting";
+import { canAutomateReportScope, isAutomationDue, isRequestSchedulerLockAvailable, nextScheduledAt, nextSundayDateKey, normalizeAutomation, renderReportEmail, shouldAttemptRequestScheduler } from "@/lib/report-automations";
 
 describe("report automation definitions", () => {
   it("normalizes recipients, limits, and schedule values", () => {
@@ -7,6 +8,26 @@ describe("report automation definitions", () => {
     expect(result.name).toBe("Weekly");
     expect(result.recipients).toEqual(["a@example.com"]);
     expect(result.schedule).toMatchObject({ hour: 23, minute: 0 });
+  });
+
+  it("preserves the coming-Sunday event selection mode", () => {
+    expect(normalizeAutomation({ criteria: { eventSelection: "NEXT_SUNDAY" } }).criteria.eventSelection).toBe("NEXT_SUNDAY");
+    expect(normalizeAutomation({ criteria: { eventSelection: "unsupported" } }).criteria.eventSelection).toBe("ALL");
+  });
+
+  it("calculates the coming Sunday in the automation timezone", () => {
+    expect(nextSundayDateKey(new Date("2026-10-21T15:17:00.000Z"), "America/Chicago")).toBe("2026-10-25");
+    expect(nextSundayDateKey(new Date("2026-10-25T15:17:00.000Z"), "America/Chicago")).toBe("2026-10-25");
+  });
+
+  it("limits volunteer reports to the closest future events", () => {
+    const now = new Date("2026-10-21T15:00:00.000Z");
+    const events = [
+      { id: "later", startsAt: new Date("2026-11-01T15:00:00.000Z") },
+      { id: "past", startsAt: new Date("2026-10-18T15:00:00.000Z") },
+      { id: "coming", startsAt: new Date("2026-10-25T15:00:00.000Z") }
+    ];
+    expect(closestUpcomingEvents(events, 1, now).map((event) => event.id)).toEqual(["coming"]);
   });
 
   it("only considers scheduled automations eligible at their configured time", () => {

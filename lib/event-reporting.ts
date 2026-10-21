@@ -12,6 +12,14 @@ export type EventReportType = (typeof EVENT_REPORT_TYPES)[number]["value"];
 export type EventReportColumn = { key: string; label: string };
 export type EventReportSummaryRow = { _eventId?: unknown; id?: unknown; attendanceCount?: unknown; _absenceCount?: unknown; attendanceStatus?: unknown; visitorCount?: unknown; _volunteerAssignmentCount?: unknown };
 
+export function closestUpcomingEvents<T extends { startsAt: Date }>(events: T[], limit: number, now = new Date()) {
+  if (!Number.isInteger(limit) || limit <= 0) return events;
+  return events
+    .filter((event) => event.startsAt.getTime() >= now.getTime())
+    .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime())
+    .slice(0, limit);
+}
+
 export const EVENT_REPORT_COLUMNS: EventReportColumn[] = [
   { key: "eventTitle", label: "Event" },
   { key: "eventType", label: "Event type" },
