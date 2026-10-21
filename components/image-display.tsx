@@ -62,7 +62,7 @@ export function ImageDisplay({
       } else if (hasEntered) {
         setInView(false);
       }
-    }, { threshold: 0.15 });
+    }, { threshold: 0.65 });
     observer.observe(imageRef.current);
     return () => observer.disconnect();
   }, [animationTrigger, hasEntered]);

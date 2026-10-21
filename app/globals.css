@@ -1306,6 +1306,43 @@ body:has(.page-chrome-hide-footer) > div > footer {
 
 .image-animation-fade.image-animation-enter { animation: block-fade-in .5s ease-out both; }
 
+@keyframes image-bounce-in {
+  0% { opacity: 0; transform: scale(.7); }
+  60% { opacity: 1; transform: scale(1.08); }
+  80% { transform: scale(.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes image-flip-in {
+  from { opacity: 0; transform: perspective(600px) rotateX(-90deg); }
+  to { opacity: 1; transform: perspective(600px) rotateX(0); }
+}
+
+@keyframes image-rotate-in {
+  from { opacity: 0; transform: rotate(-12deg) scale(.9); }
+  to { opacity: 1; transform: rotate(0) scale(1); }
+}
+
+@keyframes image-blur-in {
+  from { opacity: 0; filter: blur(12px); transform: scale(1.03); }
+  to { opacity: 1; filter: blur(0); transform: scale(1); }
+}
+
+@keyframes image-elastic-in {
+  0% { opacity: 0; transform: scale(.65); }
+  55% { opacity: 1; transform: scale(1.18); }
+  75% { transform: scale(.92); }
+  90% { transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes image-shake-in {
+  0% { opacity: 0; transform: translateX(0); }
+  20%, 60% { opacity: 1; transform: translateX(-.7rem); }
+  40%, 80% { transform: translateX(.7rem); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
 @media (min-width: 768px) and (max-width: 1023px) {
   .responsive-typography.blockquote-content {
     font-size: var(--tablet-font-size, var(--desktop-font-size, var(--blockquote-default-size, 1.5rem))) !important;
@@ -1323,12 +1360,12 @@ body:has(.page-chrome-hide-footer) > div > footer {
 .image-animation-slide-down.image-animation-enter { animation: block-slide-down .5s ease-out both; }
 .image-animation-slide-right.image-animation-enter { animation: block-slide-right .5s ease-out both; }
 .image-animation-zoom-out.image-animation-enter { animation: block-zoom-out .5s ease-out both; }
-.image-animation-bounce.image-animation-enter { animation: block-bounce-in .8s cubic-bezier(.22, 1, .36, 1) both; }
-.image-animation-flip.image-animation-enter { animation: block-flip-in .8s cubic-bezier(.22, 1, .36, 1) both; }
-.image-animation-rotate.image-animation-enter { animation: block-rotate-in .7s cubic-bezier(.22, 1, .36, 1) both; }
-.image-animation-blur.image-animation-enter { animation: block-blur-in .8s ease-out both; }
-.image-animation-elastic.image-animation-enter { animation: block-elastic .9s cubic-bezier(.22, 1, .36, 1) both; }
-.image-animation-shake.image-animation-enter { animation: block-shake .65s ease-in-out both; }
+.image-animation-bounce.image-animation-enter { animation: image-bounce-in .8s cubic-bezier(.22, 1, .36, 1) both; }
+.image-animation-flip.image-animation-enter { animation: image-flip-in .8s cubic-bezier(.22, 1, .36, 1) both; transform-origin: center bottom; }
+.image-animation-rotate.image-animation-enter { animation: image-rotate-in .7s cubic-bezier(.22, 1, .36, 1) both; }
+.image-animation-blur.image-animation-enter { animation: image-blur-in .8s ease-out both; }
+.image-animation-elastic.image-animation-enter { animation: image-elastic-in .9s cubic-bezier(.22, 1, .36, 1) both; }
+.image-animation-shake.image-animation-enter { animation: image-shake-in .65s ease-in-out both; }
 .image-animation-fade.image-animation-exit { animation: block-fade-in .5s ease-in reverse both; }
 .image-animation-slide-down.image-animation-exit { animation: image-slide-down .5s ease-in both; }
 .image-animation-slide-right.image-animation-exit { animation: image-slide-right .5s ease-in both; }
@@ -1336,12 +1373,12 @@ body:has(.page-chrome-hide-footer) > div > footer {
 .image-animation-slide-up.image-animation-exit { animation: block-slide-up .5s ease-in reverse both; }
 .image-animation-slide-left.image-animation-exit { animation: block-slide-left .5s ease-in reverse both; }
 .image-animation-zoom.image-animation-exit { animation: block-zoom-in .5s ease-in reverse both; }
-.image-animation-bounce.image-animation-exit { animation: block-bounce-in .8s ease-in reverse both; }
-.image-animation-flip.image-animation-exit { animation: block-flip-in .8s ease-in reverse both; }
-.image-animation-rotate.image-animation-exit { animation: block-rotate-in .7s ease-in reverse both; }
-.image-animation-blur.image-animation-exit { animation: block-blur-in .8s ease-in reverse both; }
-.image-animation-elastic.image-animation-exit { animation: block-elastic .9s ease-in reverse both; }
-.image-animation-shake.image-animation-exit { animation: block-shake .65s ease-in-out reverse both; }
+.image-animation-bounce.image-animation-exit { animation: image-bounce-in .8s ease-in reverse both; }
+.image-animation-flip.image-animation-exit { animation: image-flip-in .8s ease-in reverse both; }
+.image-animation-rotate.image-animation-exit { animation: image-rotate-in .7s ease-in reverse both; }
+.image-animation-blur.image-animation-exit { animation: image-blur-in .8s ease-in reverse both; }
+.image-animation-elastic.image-animation-exit { animation: image-elastic-in .9s ease-in reverse both; }
+.image-animation-shake.image-animation-exit { animation: image-shake-in .65s ease-in-out reverse both; }
 
 @media (prefers-reduced-motion: reduce) {
   .block-animation-fade-in,
