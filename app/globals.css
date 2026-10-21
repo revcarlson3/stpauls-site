@@ -657,8 +657,10 @@ body[data-theme-radius="soft"] {
 .site-header-preheader {
   max-height: 8rem;
   opacity: 1;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
   transition: max-height 180ms ease, opacity 180ms ease, transform 180ms ease;
+  z-index: 60;
 }
 
 .site-header-preheader-container {
@@ -668,6 +670,7 @@ body[data-theme-radius="soft"] {
 .site-header.is-sticky.is-scrolled .site-header-preheader {
   max-height: 0;
   opacity: 0;
+  overflow: hidden;
   transform: translateY(-100%);
 }
 

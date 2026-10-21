@@ -37,4 +37,13 @@ describe("public navigation styling and interaction", () => {
     expect(source).toContain("preHeaderMenuAlignment");
     expect(source).toContain("flex min-w-0 flex-1 flex-wrap items-center");
   });
+
+  it("keeps pre-header dropdowns above the main header and page content", () => {
+    const source = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8");
+    expect(source).toContain(".site-header-preheader {");
+    expect(source).toContain("overflow: visible;");
+    expect(source).toContain("z-index: 60;");
+    expect(source).toContain(".site-header.is-sticky.is-scrolled .site-header-preheader");
+    expect(source).toContain("overflow: hidden;");
+  });
 });
