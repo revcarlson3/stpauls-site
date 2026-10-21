@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { Button, Card } from "@/components/ui";
+import { orderMenuItems } from "@/lib/menu-input";
 
 type MenuItem = { id?: string; tempId?: string; label: string; href: string; position: number; parentId?: string | null; itemType: "INTERNAL" | "EXTERNAL"; openInNewTab: boolean };
 type Menu = { name: string; slug: string; items: MenuItem[] };
@@ -67,12 +68,13 @@ export function MenuEditor({ id }: { id: string }) {
 
   if (!menu && message === "Loading menu...") return <p role="status" className="text-sm text-ink/60">{message}</p>;
   if (!menu) return <Card><p role="alert" className="text-sm text-coral">{message}</p></Card>;
+  const orderedItems = orderMenuItems(menu.items);
   return <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-serif text-2xl">Menu items</h2><p className="mt-1 text-sm text-ink/55">Add internal pages or external URLs, then reorder them.</p></div></div>
       <div className="mt-5 grid gap-2">
         {menu.items.length === 0 && <p className="rounded-lg bg-mist p-4 text-sm text-ink/60">This menu has no items yet.</p>}
-        {menu.items.map((item, index) => <div key={item.id ?? item.tempId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ink/10 px-4 py-3 text-sm" style={{ marginLeft: item.parentId ? "1.25rem" : undefined }}><div><p className="font-semibold">{item.label}</p><p className="text-ink/50">{item.href} · {item.itemType === "EXTERNAL" ? "external" : "internal"}{item.parentId ? " · submenu item" : ""}{item.openInNewTab ? " · new tab" : ""}</p></div><div className="flex gap-2"><button type="button" className="focus-ring rounded px-2 py-1 hover:bg-mist" onClick={() => moveItem(index, -1)} disabled={index === 0}>↑</button><button type="button" className="focus-ring rounded px-2 py-1 hover:bg-mist" onClick={() => moveItem(index, 1)} disabled={index === menu.items.length - 1}>↓</button><button type="button" className="focus-ring rounded px-2 py-1 text-coral hover:bg-sand" onClick={() => editItem(item)}>Edit</button><button type="button" className="focus-ring rounded px-2 py-1 text-coral hover:bg-sand" onClick={() => removeItem(item.id ?? item.tempId ?? "")}>Delete</button></div></div>)}
+        {orderedItems.map(({ item, depth }) => { const index = menu.items.findIndex((candidate) => (candidate.id ?? candidate.tempId) === (item.id ?? item.tempId)); return <div key={item.id ?? item.tempId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ink/10 px-4 py-3 text-sm" style={{ marginLeft: depth ? `${depth * 1.25}rem` : undefined }}><div><p className="font-semibold">{item.label}</p><p className="text-ink/50">{item.href} · {item.itemType === "EXTERNAL" ? "external" : "internal"}{item.parentId ? " · submenu item" : ""}{item.openInNewTab ? " · new tab" : ""}</p></div><div className="flex gap-2"><button type="button" className="focus-ring rounded px-2 py-1 hover:bg-mist" onClick={() => moveItem(index, -1)} disabled={index === 0}>↑</button><button type="button" className="focus-ring rounded px-2 py-1 hover:bg-mist" onClick={() => moveItem(index, 1)} disabled={index === menu.items.length - 1}>↓</button><button type="button" className="focus-ring rounded px-2 py-1 text-coral hover:bg-sand" onClick={() => editItem(item)}>Edit</button><button type="button" className="focus-ring rounded px-2 py-1 text-coral hover:bg-sand" onClick={() => removeItem(item.id ?? item.tempId ?? "")}>Delete</button></div></div>; })}
       </div>
       <form className="mt-6 grid gap-3 border-t border-ink/10 pt-5" onSubmit={addOrUpdateItem}>
         <h3 className="font-semibold">{editingId ? "Edit item" : "Add item"}</h3>

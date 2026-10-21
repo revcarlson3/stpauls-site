@@ -8,6 +8,40 @@ export type MenuItemInput = {
   openInNewTab: boolean;
 };
 
+type MenuTreeItem = { id?: string; tempId?: string; parentId?: string | null; position: number };
+
+export function orderMenuItems<T extends MenuTreeItem>(items: T[]) {
+  const byKey = new Map(items.flatMap((item) => {
+    const key = item.id ?? item.tempId;
+    return key ? [[key, item] as const] : [];
+  }));
+  const children = new Map<string, T[]>();
+  for (const item of items) {
+    if (!item.parentId || !byKey.has(item.parentId)) continue;
+    const group = children.get(item.parentId) ?? [];
+    group.push(item);
+    children.set(item.parentId, group);
+  }
+  children.forEach((group) => group.sort((left, right) => left.position - right.position));
+
+  const ordered: { item: T; depth: number }[] = [];
+  const visited = new Set<string>();
+  function visit(item: T, depth: number) {
+    const key = item.id ?? item.tempId;
+    if (!key || visited.has(key)) return;
+    visited.add(key);
+    ordered.push({ item, depth });
+    for (const child of children.get(key) ?? []) visit(child, depth + 1);
+  }
+
+  const roots = items
+    .filter((item) => !item.parentId || !byKey.has(item.parentId))
+    .sort((left, right) => left.position - right.position);
+  for (const item of roots) visit(item, 0);
+  for (const item of items) visit(item, 0);
+  return ordered;
+}
+
 export function parseMenuDetails(value: unknown): { name: string; slug: string } | null {
   if (!value || typeof value !== "object") return null;
   const input = value as Record<string, unknown>;

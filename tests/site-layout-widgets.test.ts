@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeFooterLayout } from "@/lib/site-layout";
+import { orderMenuItems } from "@/lib/menu-input";
 import { isAllowedFaviconUrl } from "@/lib/site-identity-url";
 import { decodeTextEntities } from "@/lib/text-entities";
 import { parseWidgetInput } from "@/lib/widget-input";
@@ -16,6 +17,24 @@ describe("footer layout compatibility", () => {
       expect(isAllowedFaviconUrl("/api/media/upload?tenant=church-1&file=icon.png", "church-1")).toBe(true);
       expect(isAllowedFaviconUrl("/api/media/upload?file=icon.png", "church-1")).toBe(true);
       expect(isAllowedFaviconUrl("/uploads/site-identity/church-1/favicon-icon.svg", "church-1")).toBe(true);
+    });
+
+    describe("menu builder hierarchy ordering", () => {
+      it("places children under their selected parent regardless of flat positions", () => {
+        const ordered = orderMenuItems([
+          { id: "parent-a", label: "Parent A", parentId: null, position: 0 },
+          { id: "parent-b", label: "Parent B", parentId: null, position: 1 },
+          { id: "child-a", label: "Child A", parentId: "parent-a", position: 2 },
+          { id: "grandchild-a", label: "Grandchild A", parentId: "child-a", position: 3 }
+        ]);
+
+        expect(ordered.map(({ item, depth }) => [item.id, depth])).toEqual([
+          ["parent-a", 0],
+          ["child-a", 1],
+          ["grandchild-a", 2],
+          ["parent-b", 0]
+        ]);
+      });
     });
 
     it("rejects favicon URLs that point outside the current church", () => {
