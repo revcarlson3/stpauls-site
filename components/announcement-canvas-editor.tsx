@@ -161,6 +161,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
   const canvasElementRef = useRef<HTMLCanvasElement>(null);
   const fabricRef = useRef<Canvas | null>(null);
   const loadingRef = useRef(false);
+  const loadRequestRef = useRef(0);
   const lastDocumentRef = useRef(JSON.stringify(value));
   const lastEmittedRef = useRef(JSON.stringify(value));
   const [selected, setSelected] = useState<SelectedObject | null>(null);
@@ -211,6 +212,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
   const loadDocument = useCallback(async (document: AnnouncementDocument) => {
     const canvas = fabricRef.current;
     if (!canvas) return;
+    const requestId = ++loadRequestRef.current;
     loadingRef.current = true;
     canvas.clear();
     canvas.setDimensions({ width: document.width, height: document.height }, { cssOnly: false });
@@ -220,6 +222,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     canvas.upperCanvasEl.style.height = `${document.height}px`;
     canvas.backgroundColor = document.background;
     for (const element of document.elements) {
+      if (requestId !== loadRequestRef.current || fabricRef.current !== canvas) return;
       if (element.type === "text") {
         const object = new Textbox(element.text, { left: element.x, top: element.y, width: element.width, fontSize: element.fontSize, fontFamily: element.fontFamily, fill: element.fill, textAlign: element.align, fontWeight: element.fontStyle === "bold" ? "bold" : "normal", fontStyle: element.fontStyle === "italic" ? "italic" : "normal", editable: true, transparentCorners: false, cornerColor: "#e66f51", stroke: element.stroke, strokeWidth: element.strokeWidth, shadow: element.shadow ? new Shadow({ color: element.shadow.color, blur: element.shadow.blur, offsetX: element.shadow.offsetX, offsetY: element.shadow.offsetY }) : undefined });
         object.set({ scaleY: element.height / Math.max(1, object.getScaledHeight()) });
@@ -240,6 +243,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
         }
       }
     }
+    if (requestId !== loadRequestRef.current || fabricRef.current !== canvas) return;
     canvas.requestRenderAll();
     lastDocumentRef.current = JSON.stringify(document);
     lastEmittedRef.current = JSON.stringify(document);
