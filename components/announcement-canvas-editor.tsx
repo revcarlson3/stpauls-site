@@ -116,8 +116,24 @@ function shapeObject(element: Extract<AnnouncementElement, { type: "rect" }>) {
   return new Rect({ ...common, width: element.width, height: element.height, rx: element.cornerRadius, ry: element.cornerRadius });
 }
 
+function positionShapeObject(object: FabricObject, element: Extract<AnnouncementElement, { type: "rect" }>) {
+  object.set({ originX: "center", originY: "center" });
+  object.setPositionByOrigin(new Point(element.x + element.width / 2, element.y + element.height / 2), "center", "center");
+  object.setCoords();
+}
+
 function canvasObject(object: FabricObject) {
   return object as CanvasObject;
+}
+
+function objectTopLeft(object: FabricObject) {
+  const item = canvasObject(object);
+  const width = Math.max(1, object.getScaledWidth());
+  const height = Math.max(1, object.getScaledHeight());
+  if (item.announcementType === "rect" && object.originX === "center" && object.originY === "center") {
+    return { x: numberValue(object.left, 0) - width / 2, y: numberValue(object.top, 0) - height / 2 };
+  }
+  return { x: numberValue(object.left, 0), y: numberValue(object.top, 0) };
 }
 
 function numberValue(value: number | undefined, fallback: number) {
@@ -144,8 +160,8 @@ function selectedObject(object: FabricObject | undefined): SelectedObject | null
     fontStyle: textObject.fontWeight === "bold" ? "bold" : textObject.fontStyle === "italic" ? "italic" : "normal",
     underline: textObject.underline === true,
     opacity: numberValue(object.opacity, 1),
-    x: numberValue(object.left, 0),
-    y: numberValue(object.top, 0),
+    x: objectTopLeft(object).x,
+    y: objectTopLeft(object).y,
     width,
     height,
     link: (item as CanvasObject & { announcementLink?: string }).announcementLink,
@@ -168,8 +184,9 @@ function documentFromCanvas(canvas: Canvas, value: AnnouncementDocument): Announ
     const item = canvasObject(object);
     const type = item.announcementType;
     const id = item.announcementId;
-    const x = numberValue(object.left, 0);
-    const y = numberValue(object.top, 0);
+    const position = objectTopLeft(object);
+    const x = position.x;
+    const y = position.y;
     const width = Math.max(1, object.getScaledWidth());
     const height = Math.max(1, object.getScaledHeight());
     if (type === "text" && id) {
@@ -305,8 +322,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
         canvas.add(object);
       } else if (element.type === "rect") {
         const object = shapeObject(element);
-        object.setPositionByOrigin(new Point(element.x, element.y), "left", "top");
-        object.setCoords();
+        positionShapeObject(object, element);
         setCanvasObjectMetadata(object, element);
         canvas.add(object);
       } else {
@@ -685,8 +701,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     const position = dropPoint ? { x: Math.max(0, Math.min(currentPage.width - width, dropPoint.x - width / 2)), y: Math.max(0, Math.min(currentPage.height - height, dropPoint.y - height / 2)) } : centered;
     const element: Extract<AnnouncementElement, { type: "rect" }> = { id: `shape-${Date.now()}`, type: "rect", shape, x: position.x, y: position.y, width, height, fill: "#e66f51", cornerRadius };
     const object = shapeObject(element);
-    object.setPositionByOrigin(new Point(element.x, element.y), "left", "top");
-    object.setCoords();
+    positionShapeObject(object, element);
     setCanvasObjectMetadata(object, element);
     canvas.add(object);
     canvas.setActiveObject(object);
@@ -744,13 +759,18 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     const object = canvas?.getActiveObject();
     if (!canvas || !object) return;
     const item = canvasObject(object);
+    const nextPatch = { ...patch };
+    if (item.announcementType === "rect" && object.originX === "center" && object.originY === "center") {
+      if ("left" in nextPatch) nextPatch.left = Number(nextPatch.left) + object.getScaledWidth() / 2;
+      if ("top" in nextPatch) nextPatch.top = Number(nextPatch.top) + object.getScaledHeight() / 2;
+    }
     if ("announcementLink" in patch) item.announcementLink = String(patch.announcementLink ?? "");
     if ("announcementShape" in patch) item.announcementShape = patch.announcementShape as CanvasObject["announcementShape"];
     if ("shadowOptions" in patch) {
       const options = patch.shadowOptions as { color: string; blur: number; offsetX: number; offsetY: number } | null;
       object.set({ shadow: options ? new Shadow(options) : undefined });
     }
-    object.set(patch);
+    object.set(nextPatch);
     canvas.requestRenderAll();
     publishCanvas(canvas);
     refreshSelection();
