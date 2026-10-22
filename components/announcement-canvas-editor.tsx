@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
-import { Canvas, FabricImage, Line, Polygon, Rect, Shadow, Textbox, type FabricObject } from "fabric";
+import { Canvas, FabricImage, Line, Point, Polygon, Rect, Shadow, Textbox, type FabricObject } from "fabric";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui";
@@ -20,6 +20,8 @@ type CanvasObject = FabricObject & {
   announcementStroke?: string;
   announcementStrokeWidth?: number;
   announcementShape?: AnnouncementShape;
+  announcementWidth?: number;
+  announcementHeight?: number;
   announcementContainer?: "table" | "grid";
   announcementCellId?: string;
   announcementLayoutId?: string;
@@ -122,7 +124,9 @@ function shapeObject(element: Extract<AnnouncementElement, { type: "rect" }>) {
 }
 
 function positionShapeObject(object: FabricObject, element: Extract<AnnouncementElement, { type: "rect" }>) {
-  object.set({ originX: "left", originY: "top", left: element.x, top: element.y });
+  object.set({ originX: "left", originY: "top", scaleX: 1, scaleY: 1 });
+  object.setPositionByOrigin(new Point(element.x + element.width / 2, element.y + element.height / 2), "center", "center");
+  object.set({ originX: "left", originY: "top" });
   object.setCoords();
 }
 
@@ -132,8 +136,8 @@ function canvasObject(object: FabricObject) {
 
 function objectTopLeft(object: FabricObject) {
   const item = canvasObject(object);
-  const width = Math.max(1, object.getScaledWidth());
-  const height = Math.max(1, object.getScaledHeight());
+  const width = item.announcementType === "rect" ? numberValue(item.announcementWidth, object.getScaledWidth()) : Math.max(1, object.getScaledWidth());
+  const height = item.announcementType === "rect" ? numberValue(item.announcementHeight, object.getScaledHeight()) : Math.max(1, object.getScaledHeight());
   if (item.announcementType === "rect" && object.originX === "center" && object.originY === "center") {
     return { x: numberValue(object.left, 0) - width / 2, y: numberValue(object.top, 0) - height / 2 };
   }
@@ -201,6 +205,8 @@ function documentFromCanvas(canvas: Canvas, value: AnnouncementDocument): Announ
     if (type === "image" && id) {
       return { id, type, x, y, width, height, src: String((item as CanvasObject & { announcementSrc?: string }).announcementSrc ?? ""), alt: item.announcementAlt ?? "", cornerRadius: item.announcementCornerRadius ?? 0, container: item.announcementContainer, cellId: item.announcementCellId, layoutId: item.announcementLayoutId, layoutType: item.announcementLayoutType, layoutGap: item.announcementLayoutGap, layoutRows: item.announcementLayoutRows, layoutColumns: item.announcementLayoutColumns, cellRow: item.announcementCellRow, cellColumn: item.announcementCellColumn };
     }
+    item.announcementWidth = width;
+    item.announcementHeight = height;
     return { id: id ?? `shape-${Date.now()}`, type: "rect", x, y, width, height, fill: typeof object.fill === "string" ? object.fill : "#e66f51", cornerRadius: item.announcementCornerRadius ?? 0, shape: item.announcementShape ?? "rect", stroke: item.announcementStroke, strokeWidth: item.announcementStrokeWidth, container: item.announcementContainer, cellId: item.announcementCellId, layoutId: item.announcementLayoutId, layoutType: item.announcementLayoutType, layoutGap: item.announcementLayoutGap, layoutRows: item.announcementLayoutRows, layoutColumns: item.announcementLayoutColumns, cellRow: item.announcementCellRow, cellColumn: item.announcementCellColumn };
   });
   return { ...value, background: typeof canvas.backgroundColor === "string" ? canvas.backgroundColor : value.background, elements };
@@ -223,6 +229,8 @@ function setCanvasObjectMetadata(object: FabricObject, element: AnnouncementElem
     item.announcementCornerRadius = element.cornerRadius;
     item.announcementStroke = element.stroke;
     item.announcementStrokeWidth = element.strokeWidth;
+    item.announcementWidth = element.width;
+    item.announcementHeight = element.height;
   }
   if (element.container) {
     item.announcementContainer = element.container;
