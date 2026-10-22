@@ -92,7 +92,10 @@ describe("announcement publications", () => {
     };
     const parsed = parseAnnouncementDocument(document);
     expect(parsed?.elements.map((element) => element.type === "rect" ? element.shape : undefined)).toEqual(["star", "hexagon", "arrowRight", "heart", "flowchartDecision"]);
-    expect(announcementDocumentToHtml(parsed!)).toContain("clip-path:polygon");
+    const html = announcementDocumentToHtml(parsed!);
+    expect(html).toContain("clip-path:polygon");
+    expect(html).not.toContain("NaNpx");
+    expect(html).toContain("width:100px;height:100px");
   });
 
   it("preserves table and grid layout metadata across parsing", () => {

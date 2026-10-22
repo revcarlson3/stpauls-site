@@ -136,8 +136,8 @@ function canvasObject(object: FabricObject) {
 
 function objectTopLeft(object: FabricObject) {
   const item = canvasObject(object);
-  const width = item.announcementType === "rect" ? numberValue(item.announcementWidth, object.getScaledWidth()) : Math.max(1, object.getScaledWidth());
-  const height = item.announcementType === "rect" ? numberValue(item.announcementHeight, object.getScaledHeight()) : Math.max(1, object.getScaledHeight());
+  const width = item.announcementType === "rect" ? numberValue(item.announcementWidth, objectDimension(object, "width")) : objectDimension(object, "width");
+  const height = item.announcementType === "rect" ? numberValue(item.announcementHeight, objectDimension(object, "height")) : objectDimension(object, "height");
   if (item.announcementType === "rect" && object.originX === "center" && object.originY === "center") {
     return { x: numberValue(object.left, 0) - width / 2, y: numberValue(object.top, 0) - height / 2 };
   }
@@ -145,7 +145,17 @@ function objectTopLeft(object: FabricObject) {
 }
 
 function numberValue(value: number | undefined, fallback: number) {
-  return Number.isFinite(value) ? value as number : fallback;
+  return Number.isFinite(value) ? value as number : Number.isFinite(fallback) ? fallback : 0;
+}
+
+function objectDimension(object: FabricObject, axis: "width" | "height", fallback = 1) {
+  const scaled = axis === "width" ? object.getScaledWidth() : object.getScaledHeight();
+  if (Number.isFinite(scaled) && scaled > 0) return scaled;
+  const raw = axis === "width" ? object.width : object.height;
+  const scale = axis === "width" ? object.scaleX : object.scaleY;
+  const derived = Number(raw) * Number(scale ?? 1);
+  if (Number.isFinite(derived) && derived > 0) return derived;
+  return Number.isFinite(fallback) && fallback > 0 ? fallback : 1;
 }
 
 function selectedObject(object: FabricObject | undefined): SelectedObject | null {
@@ -154,8 +164,8 @@ function selectedObject(object: FabricObject | undefined): SelectedObject | null
   const id = item.announcementId;
   const type = item.announcementType;
   if (!id || !type) return null;
-  const width = Math.max(1, object.getScaledWidth());
-  const height = Math.max(1, object.getScaledHeight());
+  const width = objectDimension(object, "width");
+  const height = objectDimension(object, "height");
   const textObject = object as FabricObject & { text?: string; fontSize?: number; fontFamily?: string; textAlign?: "left" | "center" | "right"; fontStyle?: "normal" | "italic"; fontWeight?: string; underline?: boolean };
   return {
     id,
@@ -195,8 +205,8 @@ function documentFromCanvas(canvas: Canvas, value: AnnouncementDocument): Announ
     const position = objectTopLeft(object);
     const x = position.x;
     const y = position.y;
-    const width = Math.max(1, object.getScaledWidth());
-    const height = Math.max(1, object.getScaledHeight());
+    const width = type === "rect" ? numberValue(item.announcementWidth, objectDimension(object, "width")) : objectDimension(object, "width");
+    const height = type === "rect" ? numberValue(item.announcementHeight, objectDimension(object, "height")) : objectDimension(object, "height");
     if (type === "text" && id) {
       const textObject = object as FabricObject & { text?: string; fontSize?: number; fontFamily?: string; textAlign?: "left" | "center" | "right"; fontStyle?: "normal" | "italic"; fontWeight?: string; underline?: boolean };
       const shadow = object.shadow as { color?: string; blur?: number; offsetX?: number; offsetY?: number } | undefined;
