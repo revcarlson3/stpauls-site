@@ -40,4 +40,26 @@ describe("announcement publications", () => {
     expect(parseAnnouncementDocument(document)).not.toBeNull();
     expect(announcementDocumentToHtml(document)).toContain("Welcome home.");
   });
+
+  it("preserves multipage documents, text links, and shape variants", () => {
+    const document = {
+      ...defaultAnnouncementDocument("Page one"),
+      pages: [
+        {
+          id: "page-1",
+          width: 900,
+          height: 1200,
+          background: "#fff",
+          elements: [
+            { id: "linked", type: "text" as const, x: 20, y: 20, width: 300, height: 50, text: "Read more", fontSize: 24, fontFamily: "Roboto", fill: "#000", align: "left" as const, link: "https://example.com" },
+            { id: "circle", type: "rect" as const, shape: "circle" as const, x: 20, y: 100, width: 100, height: 100, fill: "#e66f51", cornerRadius: 50 }
+          ]
+        }
+      ]
+    };
+    const parsed = parseAnnouncementDocument(document);
+    expect(parsed?.pages).toHaveLength(1);
+    expect(announcementDocumentToHtml(parsed!)).toContain("https://example.com");
+    expect(announcementDocumentToHtml(parsed!)).toContain("border-radius:50%");
+  });
 });
