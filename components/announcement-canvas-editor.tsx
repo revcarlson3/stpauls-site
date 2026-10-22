@@ -75,6 +75,7 @@ const PAGE_PRESETS = [
   { label: "Square (1080 × 1080 px)", width: 1080, height: 1080 },
   { label: "Instagram portrait (1080 × 1350 px)", width: 1080, height: 1350 },
   { label: "Letter (8.5 × 11 in)", width: 816, height: 1056 },
+  { label: "Half page (8.5 × 5.5 in)", width: 816, height: 528 },
   { label: "A4 (210 × 297 mm)", width: 794, height: 1123 },
   { label: "Landscape (1200 × 900 px)", width: 1200, height: 900 }
 ];
@@ -258,6 +259,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
   const loadingRef = useRef(false);
   const loadRequestRef = useRef(0);
   const loadedPageRef = useRef(0);
+  const syncFromCanvasRef = useRef<() => void>(() => undefined);
   const layoutMoveRef = useRef<{ id: string; startX: number; startY: number; positions: Map<string, { x: number; y: number }> } | null>(null);
   const lastDocumentRef = useRef(JSON.stringify(value));
   const lastEmittedRef = useRef(JSON.stringify(value));
@@ -331,6 +333,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     publish(withPage(value, activePage, { ...currentPage, width: nextPage.width, height: nextPage.height, background: nextPage.background, elements: nextPage.elements }));
     refreshSelection();
   }, [activePage, currentPage, publish, refreshSelection, value]);
+  syncFromCanvasRef.current = syncFromCanvas;
 
   const loadDocument = useCallback(async (document: AnnouncementDocument) => {
     const canvas = fabricRef.current;
@@ -396,7 +399,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     fabricRef.current = canvas;
     const handleModified = (event?: { target?: FabricObject }) => {
       if (event?.target) resizeGridLayout(event.target);
-      syncFromCanvas();
+      syncFromCanvasRef.current();
     };
     const handleSelection = () => refreshSelection();
     const handleMoving = (event: { target?: FabricObject; e?: unknown }) => {
@@ -406,7 +409,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
         if (!pointer?.shiftKey) showGuides(event.target);
       }
     };
-    const handleMouseUp = () => { clearGuides(); syncFromCanvas(); };
+    const handleMouseUp = () => { clearGuides(); syncFromCanvasRef.current(); };
     const handleContext = (event: { target?: FabricObject; e?: { preventDefault: () => void; clientX: number; clientY: number } }) => {
       if (!event.target || canvasObject(event.target).announcementGuide) return;
       const item = canvasObject(event.target);
@@ -864,6 +867,24 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     onChange(next);
   }
 
+  function reorderPages(from: number, to: number) {
+    if (from === to || from < 0 || to < 0 || from >= pages.length || to >= pages.length) return;
+    const reordered = [...pages];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    const nextActive = activePage === from
+      ? to
+      : from < activePage && activePage <= to
+        ? activePage - 1
+        : to <= activePage && activePage < from
+          ? activePage + 1
+          : activePage;
+    const first = reordered[0] ?? currentPage;
+    const next = { ...value, width: first.width, height: first.height, background: first.background, elements: first.elements, pages: reordered };
+    setActivePage(nextActive);
+    publish(next);
+  }
+
   function changePageSize(width: number, height: number) {
     const nextPage = { ...currentPage, width, height };
     const next = withPage(value, activePage, nextPage);
@@ -1046,14 +1067,16 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
   return <div className="relative grid gap-3 overflow-hidden rounded-2xl border border-ink/10 bg-[#f3f4f6]" onContextMenu={(event) => event.preventDefault()}>
     <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 bg-white px-3 py-2">
       <span className="mr-2 font-semibold text-ink">Design</span>
-      <Button type="button" variant="secondary" onClick={addPage}>Add page</Button>
-      <select aria-label="Current page" className="focus-ring rounded-lg border border-ink/15 bg-white px-2 py-2 text-sm" value={activePage} onChange={(event) => setActivePage(Number(event.target.value))}>{pages.map((page, index) => <option key={page.id} value={index}>Page {index + 1}</option>)}</select>
       <select aria-label="Page size" className="focus-ring rounded-lg border border-ink/15 bg-white px-2 py-2 text-sm" value="" onChange={(event) => { const preset = PAGE_PRESETS.find((item) => item.label === event.target.value); if (preset) { setCustomWidth(String(preset.width)); setCustomHeight(String(preset.height)); setCustomUnit("px"); changePageSize(preset.width, preset.height); } }}>
         <option value="">Page size</option>{PAGE_PRESETS.map((preset) => <option key={preset.label} value={preset.label}>{preset.label}</option>)}
       </select>
       <div className="flex items-center gap-1 rounded-lg border border-ink/15 bg-white p-1"><input aria-label="Custom page width" type="number" min="1" value={customWidth} onChange={(event) => setCustomWidth(event.target.value)} className="w-16 px-1 text-xs" /><span className="text-xs text-ink/40">×</span><input aria-label="Custom page height" type="number" min="1" value={customHeight} onChange={(event) => setCustomHeight(event.target.value)} className="w-16 px-1 text-xs" /><select aria-label="Custom page size unit" value={customUnit} onChange={(event) => setCustomUnit(event.target.value)} className="text-xs"><option value="px">px</option><option value="in">in</option><option value="mm">mm</option><option value="cm">cm</option></select><button type="button" className="focus-ring rounded bg-coral px-2 py-1 text-xs font-semibold text-white" onClick={applyCustomPageSize}>Apply</button></div>
-      <Button type="button" variant="secondary" disabled={!history.length} onClick={undo}>Undo</Button>
-      <Button type="button" variant="secondary" disabled={!future.length} onClick={redo}>Redo</Button>
+      <button type="button" aria-label="Undo" title="Undo" className="focus-ring rounded-lg border border-ink/15 bg-white p-2 text-ink disabled:cursor-not-allowed disabled:opacity-40" disabled={!history.length} onClick={undo}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 6 6v1" /></svg>
+      </button>
+      <button type="button" aria-label="Redo" title="Redo" className="focus-ring rounded-lg border border-ink/15 bg-white p-2 text-ink disabled:cursor-not-allowed disabled:opacity-40" disabled={!future.length} onClick={redo}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 14 5-5-5-5" /><path d="M20 9H10a6 6 0 0 0-6 6v1" /></svg>
+      </button>
       <div className="relative">
         <button type="button" aria-haspopup="menu" aria-expanded={exportMenuOpen} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 text-sm" onClick={() => setExportMenuOpen((open) => !open)}>Download ▾</button>
         {exportMenuOpen && <div role="menu" className="absolute right-0 top-full z-20 mt-1 grid min-w-32 gap-1 rounded-lg border border-ink/15 bg-white p-1 shadow-xl">
@@ -1084,11 +1107,45 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
         {insertCategory === "shapes" && <div className="mt-3 grid max-h-[min(62vh,680px)] grid-cols-2 gap-2 overflow-y-auto pr-1">{ANNOUNCEMENT_SHAPES.map((shape) => { const cornerRadius = shape.value === "rect" && shape.label === "Rounded" ? 14 : 0; const points = announcementShapePoints(shape.value); return <button key={`${shape.value}-${shape.label}`} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-announcement-insert", JSON.stringify({ type: "shape", shape: shape.value, cornerRadius })); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => addShape(shape.value, undefined, cornerRadius)} className="focus-ring grid min-h-20 place-items-center rounded-xl border border-ink/10 p-2 text-xs hover:border-coral"><span className="grid h-10 w-12 place-items-center text-2xl text-coral" style={{ clipPath: points.length ? `polygon(${points.map(([x, y]) => `${x}% ${y}%`).join(",")})` : undefined, backgroundColor: "currentColor", borderRadius: shape.value === "circle" ? "999px" : cornerRadius ? "8px" : undefined }}>{points.length ? "" : shape.icon}</span><span>{shape.label}</span></button>; })}</div>}
         {insertCategory === "tables" && <div className="mt-3 grid gap-2">{TABLE_PRESETS.map((preset) => <button key={preset.value} type="button" onClick={() => addTable(preset)} className="focus-ring rounded-xl border border-ink/10 p-2 text-left hover:border-coral"><span className="grid overflow-hidden rounded border" style={{ gridTemplateColumns: `repeat(${preset.columns}, minmax(0, 1fr))` }}>{Array.from({ length: preset.rows * preset.columns }, (_, index) => { const row = Math.floor(index / preset.columns); const column = index % preset.columns; const header = row < preset.headerRows || column < preset.headerColumns; return <span key={index} className="h-5 border-b border-r" style={{ backgroundColor: header ? preset.headerFill : row % 2 === 0 && preset.value === "banded" ? "#f4f6f8" : preset.fill }} />; })}</span><span className="mt-2 block text-xs font-semibold">{preset.label}</span></button>)}</div>}
         {insertCategory === "grids" && <div className="mt-3 grid gap-2">{GRID_PRESETS.map((preset) => <button key={preset.value} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-announcement-insert", JSON.stringify({ type: "grid", grid: preset.value })); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => addGrid(preset)} className="focus-ring rounded-xl border border-ink/10 p-2 text-left hover:border-coral"><span className="grid rounded border border-ink/20 bg-mist/30 p-1" style={{ gridTemplateColumns: `repeat(${preset.columns}, minmax(0, 1fr))`, gap: 3 }}>{Array.from({ length: preset.rows * preset.columns }, (_, index) => <span key={index} className="h-7 rounded border border-dashed border-ink/25 bg-white" />)}</span><span className="mt-2 block text-xs font-semibold">{preset.label}</span></button>)}</div>}
-        {insertCategory === "images" && <div className="mt-3 grid gap-2">{mediaLoading && <p className="text-xs text-ink/55">Loading images...</p>}{mediaError && <p role="alert" className="text-xs text-coral">{mediaError}</p>}{!mediaLoading && !mediaAssets.length && <><p className="text-xs text-ink/55">No images found.</p><MediaPicker label="Open media library" permission="MANAGE_SETTINGS" onSelect={(asset) => addImage(asset.url, asset.altText ?? asset.title ?? asset.originalName)} /></>}{mediaAssets.map((asset) => <button key={asset.id} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-announcement-insert", JSON.stringify({ type: "image", url: asset.url, alt: asset.altText ?? asset.title ?? asset.originalName })); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => addImage(asset.url, asset.altText ?? asset.title ?? asset.originalName)} className="focus-ring overflow-hidden rounded-xl border border-ink/10 text-left hover:border-coral"><img src={asset.thumbnailUrl ?? asset.url} alt={asset.altText ?? asset.title ?? asset.originalName} className="aspect-video w-full object-cover" /><span className="block truncate p-2 text-xs font-semibold">{asset.title || asset.originalName}</span></button>)}</div>}
+        {insertCategory === "images" && <div className="mt-3 grid max-h-[min(62vh,680px)] gap-2 overflow-y-auto pr-1">{mediaLoading && <p className="text-xs text-ink/55">Loading images...</p>}{mediaError && <p role="alert" className="text-xs text-coral">{mediaError}</p>}{!mediaLoading && !mediaAssets.length && <><p className="text-xs text-ink/55">No images found.</p><MediaPicker label="Open media library" permission="MANAGE_SETTINGS" onSelect={(asset) => addImage(asset.url, asset.altText ?? asset.title ?? asset.originalName)} /></>}{mediaAssets.map((asset) => <button key={asset.id} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-announcement-insert", JSON.stringify({ type: "image", url: asset.url, alt: asset.altText ?? asset.title ?? asset.originalName })); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => addImage(asset.url, asset.altText ?? asset.title ?? asset.originalName)} className="focus-ring overflow-hidden rounded-xl border border-ink/10 text-left hover:border-coral"><img src={asset.thumbnailUrl ?? asset.url} alt={asset.altText ?? asset.title ?? asset.originalName} className="aspect-video w-full object-cover" /><span className="block truncate p-2 text-xs font-semibold">{asset.title || asset.originalName}</span></button>)}</div>}
         <label className="mt-5 grid gap-2 text-xs font-semibold text-ink/60">Page background<input type="color" value={currentPage.background} onChange={(event) => { const canvas = fabricRef.current; if (!canvas) return; canvas.backgroundColor = event.target.value; canvas.requestRenderAll(); publish(withPage(value, activePage, { ...currentPage, background: event.target.value })); }} className="h-10 w-full rounded border border-ink/10 bg-white p-1" /></label>
       </aside>
       <div className="min-w-0 overflow-auto p-5 sm:p-8" onDragOver={(event) => event.preventDefault()} onDrop={handleCanvasDrop}><div className="mx-auto overflow-hidden shadow-2xl" style={{ width: canvasWidth, height: currentPage.height * zoom }}><div ref={canvasViewportRef} className="overflow-hidden" style={{ width: currentPage.width, height: currentPage.height, transform: `scale(${zoom})`, transformOrigin: "top left" }}><canvas ref={canvasElementRef} /></div></div><p className="mt-4 text-center text-xs text-ink/50">Drag objects toward the dashed guides to align them. Hold Shift while dragging to bypass snapping. Double-click text or shapes to edit.</p></div>
       <aside className="border-t border-ink/10 bg-white p-3 lg:border-l lg:border-t-0"><p className="text-xs font-semibold uppercase tracking-wider text-ink/45">Properties</p>{selected ? <div className="mt-3 grid gap-3 text-xs">{(selected.type === "rect" || selected.type === "image") && <label className="grid gap-1 font-semibold text-ink/60">Proportional size<input type="range" min="25" max="200" step="1" value={sizeScaleBase?.id === selected.id ? sizeScale : 100} onChange={(event) => scaleSelectedSize(Number(event.target.value))} /><span className="font-normal text-ink/45">{sizeScaleBase?.id === selected.id ? `${sizeScale}% of original size` : "100% of original size"}</span></label>}{selected.layoutId && <div className="grid gap-2 rounded-lg border border-coral/30 bg-coral/5 p-2"><p className="font-semibold text-coral">{selected.layoutType === "grid" ? "Grid layout" : "Table layout"}</p>{selected.layoutType === "grid" && <label className="grid gap-1 font-semibold text-ink/60">Cell gap<input type="range" min="0" max="80" value={selected.layoutGap ?? 0} onChange={(event) => updateGridGap(Number(event.target.value))} /></label>}<Button type="button" variant="secondary" className="border-coral text-coral" onClick={deleteLayout}>Delete entire {selected.layoutType === "grid" ? "grid" : "table"}</Button></div>}{selectedText && <><label className="grid gap-1 font-semibold text-ink/60">Font search<input value={fontQuery} onChange={(event) => setFontQuery(event.target.value)} placeholder="Search fonts" className="focus-ring rounded border border-ink/15 px-2 py-1" /></label><label className="grid gap-1 font-semibold text-ink/60">Font<select value={selected.fontFamily ?? "Arial"} onChange={(event) => updateSelected({ fontFamily: event.target.value })} className="focus-ring rounded border border-ink/15 px-2 py-1"><optgroup label="Fonts used in canvas">{filterFonts(usedFonts).map((font) => <option key={`used-${font}`}>{font}</option>)}</optgroup><optgroup label="Commonly used fonts">{filterFonts(COMMONLY_USED_FONTS).map((font) => <option key={`common-used-${font}`}>{font}</option>)}</optgroup><optgroup label="Common fonts">{filterFonts(COMMON_FONTS).map((font) => <option key={`common-${font}`}>{font}</option>)}</optgroup><optgroup label="Alphabetical">{filterFonts(GOOGLE_FONTS.filter((font) => !groupedFonts.has(font))).sort((a, b) => a.localeCompare(b)).map((font) => <option key={`alphabetical-${font}`}>{font}</option>)}</optgroup></select></label><label className="grid gap-1 font-semibold text-ink/60">Size (px)<select value={Math.round(selected.fontSize ?? 24)} onChange={(event) => updateSelected({ fontSize: Number(event.target.value) })} className="focus-ring rounded border border-ink/15 px-2 py-1">{FONT_SIZES.map((size) => <option key={size} value={size}>{size}px</option>)}</select></label><div className="flex gap-2"><button type="button" aria-label="Bold" className="focus-ring rounded border border-ink/15 px-2 py-1 font-bold" onClick={() => updateSelected({ fontWeight: selected.fontStyle === "bold" ? "normal" : "bold" })}>B</button><button type="button" aria-label="Italic" className="focus-ring rounded border border-ink/15 px-2 py-1 italic" onClick={() => updateSelected({ fontStyle: selected.fontStyle === "italic" ? "normal" : "italic" })}>I</button><button type="button" aria-label="Underline" className={`focus-ring rounded border px-2 py-1 underline ${selected.underline ? "border-coral bg-coral/10 text-coral" : "border-ink/15"}`} onClick={() => updateSelected({ underline: !selected.underline })}>U</button>{(["left", "center", "right"] as const).map((align) => <button key={align} type="button" aria-label={`${align} align`} title={`${align} align`} className={`focus-ring rounded border px-2 py-1 text-lg leading-none ${selected.align === align ? "border-coral text-coral" : "border-ink/15"}`} onClick={() => updateSelected({ textAlign: align })}>{alignIcon(align)}</button>)}</div><label className="grid gap-1 font-semibold text-ink/60">Link (optional)<input type="url" value={selected.link ?? ""} onChange={(event) => updateSelected({ announcementLink: event.target.value })} placeholder="https://..." className="focus-ring rounded border border-ink/15 px-2 py-1" /></label><div className="grid gap-2"><div className="grid grid-cols-2 gap-2"><Button type="button" className={selected.shadow && selected.shadow.color !== "#ffffffcc" ? "border-coral bg-coral/10 text-coral" : ""} variant="secondary" onClick={() => updateSelected({ shadowOptions: selected.shadow && selected.shadow.color !== "#ffffffcc" ? null : { color: "#00000066", blur: 8, offsetX: 2, offsetY: 2 } })}>Text shadow</Button><Button type="button" className={selected.shadow?.color === "#ffffffcc" ? "border-coral bg-coral/10 text-coral" : ""} variant="secondary" onClick={() => updateSelected({ shadowOptions: selected.shadow?.color === "#ffffffcc" ? null : { color: "#ffffffcc", blur: 0, offsetX: 0, offsetY: 2 } })}>Text lift</Button></div>{selected.shadow && <div className="grid grid-cols-2 gap-2"><label className="grid gap-1 font-semibold text-ink/60">Color<input type="color" value={selected.shadow.color.slice(0, 7)} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, color: event.target.value } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Blur<input type="range" min="0" max="40" value={selected.shadow.blur} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, blur: Number(event.target.value) } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Horizontal distance<input type="range" min="-40" max="40" value={selected.shadow.offsetX} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, offsetX: Number(event.target.value) } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Vertical distance<input type="range" min="-40" max="40" value={selected.shadow.offsetY} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, offsetY: Number(event.target.value) } })} /></label></div>}</div></>}{selected.type === "rect" && <label className="grid gap-1 font-semibold text-ink/60">Shape<select value={selected.shape ?? "rect"} onChange={(event) => updateSelected({ announcementShape: event.target.value })} className="focus-ring rounded border border-ink/15 px-2 py-1"><option value="rect">Rectangle</option>{ANNOUNCEMENT_SHAPES.filter((shape, index, all) => shape.value !== "rect" || index === 0).map((shape) => <option key={`${shape.value}-${shape.label}`} value={shape.value}>{shape.label}</option>)}</select></label>}{selected.type !== "image" && <label className="grid gap-1 font-semibold text-ink/60">Color<input type="color" value={selected.fill?.startsWith("#") ? selected.fill : "#17324d"} onChange={(event) => updateSelected({ fill: event.target.value })} className="h-9 w-full rounded border border-ink/10 p-1" /></label>}<label className="grid gap-1 font-semibold text-ink/60">Opacity<input type="range" min="0.1" max="1" step="0.05" value={selected.opacity} onChange={(event) => updateSelected({ opacity: Number(event.target.value) })} /></label><div className="grid grid-cols-2 gap-2"><Button type="button" variant="secondary" onClick={duplicateSelected}>Duplicate</Button><Button type="button" variant="secondary" onClick={deleteSelected}>Delete</Button></div><div className="grid grid-cols-2 gap-2"><Button type="button" variant="secondary" onClick={() => moveLayer("up")}>Bring forward</Button><Button type="button" variant="secondary" onClick={() => moveLayer("down")}>Send backward</Button></div></div> : <p className="mt-3 text-xs leading-5 text-ink/50">Select an object to edit its properties, or right-click for item actions.</p>}<div className="mt-6 border-t border-ink/10 pt-3"><p className="text-xs font-semibold uppercase tracking-wider text-ink/45">Layers</p><div className="mt-2 grid gap-1">{layers.map((layer) => <button type="button" key={layer.id} className={`focus-ring truncate rounded px-2 py-1 text-left text-xs ${selected?.id === layer.id ? "bg-coral/10 font-semibold text-coral" : "hover:bg-mist"}`} onClick={() => { const canvas = fabricRef.current; const object = canvas?.getObjects().find((candidate) => canvasObject(candidate).announcementId === layer.id); if (canvas && object) { canvas.setActiveObject(object); canvas.requestRenderAll(); refreshSelection(); } }}>{layer.type === "text" ? (layer.text || "Text").slice(0, 24) : layer.type === "image" ? "Image" : `${layer.shape ?? "Shape"}`}</button>)}</div></div></aside>
+    </div>
+    <div className="border-t border-ink/10 bg-[#f8f9fa] px-3 py-3">
+      <div className="flex items-stretch gap-3 overflow-x-auto pb-1">
+        {pages.map((page, index) => <button
+          key={page.id}
+          type="button"
+          draggable
+          aria-label={`Select page ${index + 1}`}
+          onClick={() => setActivePage(index)}
+          onDragStart={(event) => {
+            event.dataTransfer.setData("application/x-announcement-page-index", String(index));
+            event.dataTransfer.effectAllowed = "move";
+          }}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            const from = Number(event.dataTransfer.getData("application/x-announcement-page-index"));
+            if (Number.isInteger(from)) reorderPages(from, index);
+          }}
+          className={`focus-ring flex w-32 shrink-0 flex-col gap-2 rounded-xl border bg-white p-2 text-left shadow-sm transition ${activePage === index ? "border-coral ring-2 ring-coral/20" : "border-ink/10 hover:border-coral/50"}`}
+        >
+          <span className="grid w-full place-items-center overflow-hidden rounded border border-ink/10 text-xs text-ink/45" style={{ aspectRatio: `${page.width} / ${page.height}`, backgroundColor: page.background }}>
+            {page.elements.length ? `${page.elements.length} ${page.elements.length === 1 ? "item" : "items"}` : "Blank page"}
+          </span>
+          <span className="flex items-center justify-between gap-2 text-xs font-semibold">
+            <span>Page {index + 1}</span>
+            <span className="text-ink/35" aria-hidden="true">↔</span>
+          </span>
+        </button>)}
+        <button type="button" className="focus-ring flex w-32 shrink-0 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-ink/20 bg-white p-2 text-xs font-semibold text-ink/60 hover:border-coral hover:text-coral" onClick={addPage}>
+          <span className="text-2xl leading-none" aria-hidden="true">+</span>
+          <span>Add page</span>
+        </button>
+      </div>
     </div>
     <div className="flex items-center justify-end gap-3 border-t border-ink/10 bg-white px-3 py-2">
       <span className="text-xs font-semibold text-ink/60">Zoom {Math.round(zoom * 100)}%</span>
