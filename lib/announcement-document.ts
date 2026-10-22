@@ -4,10 +4,89 @@ export const ANNOUNCEMENT_DOCUMENT_VERSION = 1;
 export const ANNOUNCEMENT_CANVAS_WIDTH = 900;
 export const ANNOUNCEMENT_CANVAS_HEIGHT = 1200;
 
+export type AnnouncementShape =
+  | "rect"
+  | "circle"
+  | "triangle"
+  | "star"
+  | "diamond"
+  | "pentagon"
+  | "hexagon"
+  | "octagon"
+  | "arrowRight"
+  | "arrowLeft"
+  | "arrowUp"
+  | "arrowDown"
+  | "chevron"
+  | "speechBubble"
+  | "heart"
+  | "cloud"
+  | "plus"
+  | "flowchartProcess"
+  | "flowchartDecision"
+  | "banner"
+  | "ribbon";
+
+export const ANNOUNCEMENT_SHAPES: { value: AnnouncementShape; label: string; icon: string }[] = [
+  { value: "rect", label: "Square", icon: "■" },
+  { value: "rect", label: "Rounded", icon: "▣" },
+  { value: "circle", label: "Circle", icon: "●" },
+  { value: "triangle", label: "Triangle", icon: "▲" },
+  { value: "star", label: "Star", icon: "★" },
+  { value: "diamond", label: "Diamond", icon: "◆" },
+  { value: "pentagon", label: "Pentagon", icon: "⬟" },
+  { value: "hexagon", label: "Hexagon", icon: "⬢" },
+  { value: "octagon", label: "Octagon", icon: "🛑" },
+  { value: "arrowRight", label: "Arrow right", icon: "➜" },
+  { value: "arrowLeft", label: "Arrow left", icon: "←" },
+  { value: "arrowUp", label: "Arrow up", icon: "↑" },
+  { value: "arrowDown", label: "Arrow down", icon: "↓" },
+  { value: "chevron", label: "Chevron", icon: "❯" },
+  { value: "speechBubble", label: "Speech bubble", icon: "▱" },
+  { value: "heart", label: "Heart", icon: "♥" },
+  { value: "cloud", label: "Cloud", icon: "☁" },
+  { value: "plus", label: "Plus", icon: "+" },
+  { value: "flowchartProcess", label: "Process", icon: "▭" },
+  { value: "flowchartDecision", label: "Decision", icon: "◇" },
+  { value: "banner", label: "Banner", icon: "▰" },
+  { value: "ribbon", label: "Ribbon", icon: "🎗" }
+];
+
+const SHAPE_POINTS: Partial<Record<AnnouncementShape, [number, number][]>> = {
+  triangle: [[50, 0], [100, 100], [0, 100]],
+  star: [[50, 0], [61, 35], [98, 35], [68, 57], [79, 100], [50, 73], [21, 100], [32, 57], [2, 35], [39, 35]],
+  diamond: [[50, 0], [100, 50], [50, 100], [0, 50]],
+  pentagon: [[50, 0], [100, 38], [81, 100], [19, 100], [0, 38]],
+  hexagon: [[25, 0], [75, 0], [100, 50], [75, 100], [25, 100], [0, 50]],
+  octagon: [[29, 0], [71, 0], [100, 29], [100, 71], [71, 100], [29, 100], [0, 71], [0, 29]],
+  arrowRight: [[0, 30], [58, 30], [58, 5], [100, 50], [58, 95], [58, 70], [0, 70]],
+  arrowLeft: [[42, 30], [100, 30], [100, 70], [42, 70], [42, 95], [0, 50], [42, 5]],
+  arrowUp: [[30, 42], [30, 100], [70, 100], [70, 42], [95, 42], [50, 0], [5, 42]],
+  arrowDown: [[30, 0], [70, 0], [70, 58], [95, 58], [50, 100], [5, 58], [30, 58]],
+  chevron: [[0, 0], [25, 0], [75, 50], [25, 100], [0, 100], [50, 50]],
+  speechBubble: [[0, 0], [100, 0], [100, 72], [65, 72], [48, 100], [48, 72], [0, 72]],
+  heart: [[50, 92], [7, 42], [5, 25], [15, 8], [31, 5], [50, 22], [69, 5], [85, 8], [95, 25], [93, 42]],
+  cloud: [[18, 72], [5, 59], [8, 39], [25, 31], [31, 12], [49, 3], [67, 12], [73, 28], [91, 29], [100, 45], [94, 63], [79, 72]],
+  plus: [[35, 0], [65, 0], [65, 35], [100, 35], [100, 65], [65, 65], [65, 100], [35, 100], [35, 65], [0, 65], [0, 35], [35, 35]],
+  flowchartProcess: [[12, 0], [88, 0], [100, 12], [100, 88], [88, 100], [12, 100], [0, 88], [0, 12]],
+  flowchartDecision: [[50, 0], [100, 50], [50, 100], [0, 50]],
+  banner: [[0, 12], [15, 12], [15, 0], [85, 0], [85, 12], [100, 12], [88, 50], [100, 88], [85, 88], [85, 100], [15, 100], [15, 88], [0, 88], [12, 50]],
+  ribbon: [[0, 12], [75, 12], [100, 0], [88, 50], [100, 100], [75, 88], [0, 88], [12, 50]]
+};
+
+export function announcementShapePoints(shape: AnnouncementShape) {
+  return SHAPE_POINTS[shape] ?? [];
+}
+
+export function announcementShapeClipPath(shape: AnnouncementShape) {
+  const points = announcementShapePoints(shape);
+  return points.length ? `polygon(${points.map(([x, y]) => `${x}% ${y}%`).join(",")})` : undefined;
+}
+
 export type AnnouncementElement =
-  | { id: string; type: "text"; x: number; y: number; width: number; height: number; text: string; fontSize: number; fontFamily: string; fill: string; align: "left" | "center" | "right"; fontStyle?: "normal" | "bold" | "italic"; underline?: boolean; link?: string; shadow?: { color: string; blur: number; offsetX: number; offsetY: number }; stroke?: string; strokeWidth?: number }
-  | { id: string; type: "rect"; x: number; y: number; width: number; height: number; fill: string; cornerRadius: number; shape?: "rect" | "circle" | "triangle" | "star"; stroke?: string; strokeWidth?: number }
-  | { id: string; type: "image"; x: number; y: number; width: number; height: number; src: string; alt: string; cornerRadius: number };
+  | { id: string; type: "text"; x: number; y: number; width: number; height: number; text: string; fontSize: number; fontFamily: string; fill: string; align: "left" | "center" | "right"; fontStyle?: "normal" | "bold" | "italic"; underline?: boolean; link?: string; shadow?: { color: string; blur: number; offsetX: number; offsetY: number }; stroke?: string; strokeWidth?: number; container?: "table" | "grid"; cellId?: string }
+  | { id: string; type: "rect"; x: number; y: number; width: number; height: number; fill: string; cornerRadius: number; shape?: AnnouncementShape; stroke?: string; strokeWidth?: number; container?: "table" | "grid"; cellId?: string }
+  | { id: string; type: "image"; x: number; y: number; width: number; height: number; src: string; alt: string; cornerRadius: number; container?: "table" | "grid"; cellId?: string };
 
 export type AnnouncementPage = {
   id: string;
@@ -31,6 +110,11 @@ export function centeredAnnouncementPosition(pageWidth: number, pageHeight: numb
     x: Math.max(margin, (pageWidth - elementWidth) / 2),
     y: Math.max(margin, (pageHeight - elementHeight) / 2),
   };
+}
+
+export function announcementCanvasDropPoint(clientX: number, clientY: number, canvasBounds: { left: number; top: number }, zoom: number) {
+  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return { x: (clientX - canvasBounds.left) / safeZoom, y: (clientY - canvasBounds.top) / safeZoom };
 }
 
 function boundedNumber(value: unknown, fallback: number, min: number, max: number) {
@@ -73,11 +157,12 @@ export function parseAnnouncementDocument(value: unknown): AnnouncementDocument 
       height: boundedNumber(item.height, 60, 1, 4000)
     };
     if (type === "text" && typeof item.text === "string") {
-      elements.push({ ...base, type, text: item.text.slice(0, 5000), fontSize: boundedNumber(item.fontSize, 24, 8, 180), fontFamily: typeof item.fontFamily === "string" ? item.fontFamily.slice(0, 80) : "Arial", fill: typeof item.fill === "string" ? item.fill.slice(0, 40) : "#17324d", align: item.align === "center" || item.align === "right" ? item.align : "left", fontStyle: item.fontStyle === "bold" || item.fontStyle === "italic" ? item.fontStyle : "normal", underline: item.underline === true, link: typeof item.link === "string" && /^https?:\/\//i.test(item.link) ? item.link.slice(0, 500) : undefined, shadow: item.shadow && typeof item.shadow === "object" ? { color: typeof (item.shadow as Record<string, unknown>).color === "string" ? String((item.shadow as Record<string, unknown>).color).slice(0, 40) : "#00000066", blur: boundedNumber((item.shadow as Record<string, unknown>).blur, 0, 0, 80), offsetX: boundedNumber((item.shadow as Record<string, unknown>).offsetX, 0, -100, 100), offsetY: boundedNumber((item.shadow as Record<string, unknown>).offsetY, 0, -100, 100) } : undefined, stroke: typeof item.stroke === "string" ? item.stroke.slice(0, 40) : undefined, strokeWidth: boundedNumber(item.strokeWidth, 0, 0, 20) });
+      elements.push({ ...base, type, text: item.text.slice(0, 5000), fontSize: boundedNumber(item.fontSize, 24, 8, 180), fontFamily: typeof item.fontFamily === "string" ? item.fontFamily.slice(0, 80) : "Arial", fill: typeof item.fill === "string" ? item.fill.slice(0, 40) : "#17324d", align: item.align === "center" || item.align === "right" ? item.align : "left", fontStyle: item.fontStyle === "bold" || item.fontStyle === "italic" ? item.fontStyle : "normal", underline: item.underline === true, link: typeof item.link === "string" && /^https?:\/\//i.test(item.link) ? item.link.slice(0, 500) : undefined, shadow: item.shadow && typeof item.shadow === "object" ? { color: typeof (item.shadow as Record<string, unknown>).color === "string" ? String((item.shadow as Record<string, unknown>).color).slice(0, 40) : "#00000066", blur: boundedNumber((item.shadow as Record<string, unknown>).blur, 0, 0, 80), offsetX: boundedNumber((item.shadow as Record<string, unknown>).offsetX, 0, -100, 100), offsetY: boundedNumber((item.shadow as Record<string, unknown>).offsetY, 0, -100, 100) } : undefined, stroke: typeof item.stroke === "string" ? item.stroke.slice(0, 40) : undefined, strokeWidth: boundedNumber(item.strokeWidth, 0, 0, 20), container: item.container === "table" || item.container === "grid" ? item.container : undefined, cellId: typeof item.cellId === "string" ? item.cellId.slice(0, 100) : undefined });
     } else if (type === "rect") {
-      elements.push({ ...base, type, fill: typeof item.fill === "string" ? item.fill.slice(0, 40) : "#e66f51", cornerRadius: boundedNumber(item.cornerRadius, 0, 0, 200), shape: item.shape === "circle" || item.shape === "triangle" || item.shape === "star" ? item.shape : "rect", stroke: typeof item.stroke === "string" ? item.stroke.slice(0, 40) : undefined, strokeWidth: boundedNumber(item.strokeWidth, 0, 0, 50) });
+      const shape = ANNOUNCEMENT_SHAPES.some((candidate) => candidate.value === item.shape) ? item.shape as AnnouncementShape : "rect";
+      elements.push({ ...base, type, fill: typeof item.fill === "string" ? item.fill.slice(0, 40) : "#e66f51", cornerRadius: boundedNumber(item.cornerRadius, 0, 0, 200), shape, stroke: typeof item.stroke === "string" ? item.stroke.slice(0, 40) : undefined, strokeWidth: boundedNumber(item.strokeWidth, 0, 0, 50), container: item.container === "table" || item.container === "grid" ? item.container : undefined, cellId: typeof item.cellId === "string" ? item.cellId.slice(0, 100) : undefined });
     } else if (type === "image" && typeof item.src === "string" && /^(https?:\/\/|\/)/i.test(item.src)) {
-      elements.push({ ...base, type, src: item.src.slice(0, 2000), alt: typeof item.alt === "string" ? item.alt.slice(0, 300) : "", cornerRadius: boundedNumber(item.cornerRadius, 0, 0, 200) });
+      elements.push({ ...base, type, src: item.src.slice(0, 2000), alt: typeof item.alt === "string" ? item.alt.slice(0, 300) : "", cornerRadius: boundedNumber(item.cornerRadius, 0, 0, 200), container: item.container === "table" || item.container === "grid" ? item.container : undefined, cellId: typeof item.cellId === "string" ? item.cellId.slice(0, 100) : undefined });
     }
   });
   const width = boundedNumber(source.width, ANNOUNCEMENT_CANVAS_WIDTH, 320, 2000);
@@ -103,7 +188,7 @@ export function announcementDocumentToHtml(document: AnnouncementDocument): stri
       return element.link ? `<a href="${escapeHtml(element.link)}" target="_blank" rel="noopener noreferrer">${text}</a>` : text;
     }
     if (element.type === "image") return `<img src="${escapeHtml(element.src)}" alt="${escapeHtml(element.alt)}" style="${style}object-fit:cover;border-radius:${element.cornerRadius}px">`;
-    const shapeStyle = element.shape === "circle" ? "border-radius:50%;" : element.shape === "triangle" ? `clip-path:polygon(50% 0%, 100% 100%, 0% 100%);` : element.shape === "star" ? "clip-path:polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 100%, 50% 73%, 21% 100%, 32% 57%, 2% 35%, 39% 35%);" : `border-radius:${element.cornerRadius}px;`;
+    const shapeStyle = element.shape === "circle" ? "border-radius:50%;" : announcementShapeClipPath(element.shape ?? "rect") ? `clip-path:${announcementShapeClipPath(element.shape ?? "rect")};` : `border-radius:${element.cornerRadius}px;`;
     return `<div aria-hidden="true" style="${style}background:${escapeHtml(element.fill)};${shapeStyle}${element.stroke ? `border:${element.strokeWidth ?? 1}px solid ${escapeHtml(element.stroke)};` : ""}"></div>`;
   }).join("");
   return `<div class="announcement-document" style="position:relative;width:${document.width}px;max-width:100%;min-height:${document.height}px;background:${escapeHtml(document.background)};overflow:hidden">${elements}</div>`;

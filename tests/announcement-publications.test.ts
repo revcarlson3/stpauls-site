@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { blockDefinitions } from "@/lib/blocks";
 import { parsePublicationInput } from "@/lib/announcement-publications";
-import { announcementDocumentToHtml, centeredAnnouncementPosition, defaultAnnouncementDocument, parseAnnouncementDocument, parseOrMigrateAnnouncementDocument } from "@/lib/announcement-document";
+import { ANNOUNCEMENT_SHAPES, announcementCanvasDropPoint, announcementDocumentToHtml, centeredAnnouncementPosition, defaultAnnouncementDocument, parseAnnouncementDocument, parseOrMigrateAnnouncementDocument } from "@/lib/announcement-document";
 
 describe("announcement publications", () => {
   it("centers inserted elements within the page and keeps oversized elements inside the margin", () => {
     expect(centeredAnnouncementPosition(1200, 800, 400, 200)).toEqual({ x: 400, y: 300 });
     expect(centeredAnnouncementPosition(300, 200, 400, 300)).toEqual({ x: 24, y: 24 });
+  });
+
+  it("converts drops from the visible canvas bounds instead of the editor column bounds", () => {
+    expect(announcementCanvasDropPoint(500, 400, { left: 180, top: 100 }, 0.5)).toEqual({ x: 640, y: 600 });
   });
 
   it("requires a title and non-empty rich content", () => {
@@ -69,5 +73,25 @@ describe("announcement publications", () => {
     expect(parsed?.pages).toHaveLength(1);
     expect(announcementDocumentToHtml(parsed!)).toContain("https://example.com");
     expect(announcementDocumentToHtml(parsed!)).toContain("border-radius:50%");
+  });
+
+  it("accepts the expanded shape catalog and preserves shapes in generated HTML", () => {
+    const document = {
+      ...defaultAnnouncementDocument("Shape catalog"),
+      elements: ANNOUNCEMENT_SHAPES.filter((shape) => ["star", "hexagon", "arrowRight", "heart", "flowchartDecision"].includes(shape.value)).map((shape, index) => ({
+        id: `shape-${shape.value}-${index}`,
+        type: "rect" as const,
+        shape: shape.value,
+        x: 20 + index * 120,
+        y: 200,
+        width: 100,
+        height: 100,
+        fill: "#e66f51",
+        cornerRadius: 0
+      }))
+    };
+    const parsed = parseAnnouncementDocument(document);
+    expect(parsed?.elements.map((element) => element.type === "rect" ? element.shape : undefined)).toEqual(["star", "hexagon", "arrowRight", "heart", "flowchartDecision"]);
+    expect(announcementDocumentToHtml(parsed!)).toContain("clip-path:polygon");
   });
 });

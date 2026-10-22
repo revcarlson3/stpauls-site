@@ -6,9 +6,11 @@ import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui";
 import { MediaPicker } from "@/components/media-picker";
-import { announcementDocumentToHtml, centeredAnnouncementPosition, defaultAnnouncementDocument, type AnnouncementDocument, type AnnouncementElement, type AnnouncementPage } from "@/lib/announcement-document";
+import { ANNOUNCEMENT_SHAPES, announcementCanvasDropPoint, announcementDocumentToHtml, announcementShapePoints, centeredAnnouncementPosition, defaultAnnouncementDocument, type AnnouncementDocument, type AnnouncementElement, type AnnouncementPage, type AnnouncementShape } from "@/lib/announcement-document";
 
 type MediaAsset = { id: string; originalName: string; url: string; mimeType: string; altText: string | null; title: string | null };
+
+type LayoutCategory = "text" | "images" | "shapes" | "tables" | "grids";
 
 type CanvasObject = FabricObject & {
   announcementId?: string;
@@ -17,7 +19,9 @@ type CanvasObject = FabricObject & {
   announcementCornerRadius?: number;
   announcementStroke?: string;
   announcementStrokeWidth?: number;
-  announcementShape?: "rect" | "circle" | "triangle" | "star";
+  announcementShape?: AnnouncementShape;
+  announcementContainer?: "table" | "grid";
+  announcementCellId?: string;
   announcementGuide?: boolean;
   announcementLink?: string;
 };
@@ -41,7 +45,7 @@ type SelectedObject = {
   shadow?: { color: string; blur: number; offsetX: number; offsetY: number };
   stroke?: string;
   strokeWidth?: number;
-  shape?: "rect" | "circle" | "triangle" | "star";
+  shape?: AnnouncementShape;
 };
 
 const COMMONLY_USED_FONTS = ["Arial", "Georgia", "Roboto", "Open Sans", "Montserrat", "Poppins"];
@@ -58,6 +62,19 @@ const PAGE_PRESETS = [
   { label: "A4 (210 × 297 mm)", width: 794, height: 1123 },
   { label: "Landscape (1200 × 900 px)", width: 1200, height: 900 }
 ];
+const TABLE_PRESETS = [
+  { value: "header", label: "Header row", rows: 4, columns: 3, headerRows: 1, headerColumns: 0, fill: "#fffaf2", headerFill: "#17324d", stroke: "#d6d9df" },
+  { value: "banded", label: "Banded rows", rows: 5, columns: 3, headerRows: 1, headerColumns: 0, fill: "#ffffff", headerFill: "#e66f51", stroke: "#d6d9df" },
+  { value: "headers", label: "Header row + column", rows: 4, columns: 4, headerRows: 1, headerColumns: 1, fill: "#fffaf2", headerFill: "#17324d", stroke: "#d6d9df" },
+  { value: "plain", label: "Plain grid", rows: 5, columns: 4, headerRows: 0, headerColumns: 0, fill: "#ffffff", headerFill: "#ffffff", stroke: "#aeb6c2" }
+] as const;
+const GRID_PRESETS = [
+  { value: "2x2", label: "2 × 2 cards", rows: 2, columns: 2, gap: 18 },
+  { value: "3x2", label: "3 × 2 cards", rows: 2, columns: 3, gap: 14 },
+  { value: "2x3", label: "2 × 3 cards", rows: 3, columns: 2, gap: 14 },
+  { value: "4x1", label: "4 columns", rows: 1, columns: 4, gap: 12 },
+  { value: "photo", label: "Photo grid", rows: 3, columns: 3, gap: 8 }
+] as const;
 
 function pageList(document: AnnouncementDocument) {
   return document.pages?.length ? document.pages : [{ id: "page-1", width: document.width, height: document.height, background: document.background, elements: document.elements }];
@@ -77,7 +94,8 @@ function shapeObject(element: Extract<AnnouncementElement, { type: "rect" }>) {
   const common = { left: element.x, top: element.y, originX: "left" as const, originY: "top" as const, fill: element.fill, stroke: element.stroke, strokeWidth: element.strokeWidth, transparentCorners: false, cornerColor: "#e66f51" };
   if (element.shape === "circle") return new Circle({ ...common, radius: 50, scaleX: element.width / 100, scaleY: element.height / 100 });
   if (element.shape === "triangle") return new Triangle({ ...common, width: element.width, height: element.height });
-  if (element.shape === "star") return new Polygon([{ x: 50, y: 0 }, { x: 61, y: 35 }, { x: 98, y: 35 }, { x: 68, y: 57 }, { x: 79, y: 100 }, { x: 50, y: 73 }, { x: 21, y: 100 }, { x: 32, y: 57 }, { x: 2, y: 35 }, { x: 39, y: 35 }], { ...common, scaleX: element.width / 100, scaleY: element.height / 100 });
+  const points = announcementShapePoints(element.shape ?? "rect");
+  if (points.length) return new Polygon(points.map(([x, y]) => ({ x, y })), { ...common, scaleX: element.width / 100, scaleY: element.height / 100 });
   return new Rect({ ...common, width: element.width, height: element.height, rx: element.cornerRadius, ry: element.cornerRadius });
 }
 
@@ -133,12 +151,12 @@ function documentFromCanvas(canvas: Canvas, value: AnnouncementDocument): Announ
     if (type === "text" && id) {
       const textObject = object as FabricObject & { text?: string; fontSize?: number; fontFamily?: string; textAlign?: "left" | "center" | "right"; fontStyle?: "normal" | "italic"; fontWeight?: string; underline?: boolean };
       const shadow = object.shadow as { color?: string; blur?: number; offsetX?: number; offsetY?: number } | undefined;
-      return { id, type, x, y, width, height, text: (textObject.text ?? "").slice(0, 5000), fontSize: numberValue(textObject.fontSize, 24), fontFamily: (textObject.fontFamily ?? "Arial").slice(0, 80), fill: typeof object.fill === "string" ? object.fill : "#17324d", align: textObject.textAlign ?? "left", fontStyle: textObject.fontWeight === "bold" ? "bold" : textObject.fontStyle === "italic" ? "italic" : "normal", underline: textObject.underline === true, link: (item as CanvasObject & { announcementLink?: string }).announcementLink, shadow: shadow ? { color: shadow.color ?? "#00000066", blur: shadow.blur ?? 0, offsetX: shadow.offsetX ?? 0, offsetY: shadow.offsetY ?? 0 } : undefined, stroke: typeof object.stroke === "string" ? object.stroke : undefined, strokeWidth: numberValue(object.strokeWidth, 0) };
+      return { id, type, x, y, width, height, text: (textObject.text ?? "").slice(0, 5000), fontSize: numberValue(textObject.fontSize, 24), fontFamily: (textObject.fontFamily ?? "Arial").slice(0, 80), fill: typeof object.fill === "string" ? object.fill : "#17324d", align: textObject.textAlign ?? "left", fontStyle: textObject.fontWeight === "bold" ? "bold" : textObject.fontStyle === "italic" ? "italic" : "normal", underline: textObject.underline === true, link: (item as CanvasObject & { announcementLink?: string }).announcementLink, shadow: shadow ? { color: shadow.color ?? "#00000066", blur: shadow.blur ?? 0, offsetX: shadow.offsetX ?? 0, offsetY: shadow.offsetY ?? 0 } : undefined, stroke: typeof object.stroke === "string" ? object.stroke : undefined, strokeWidth: numberValue(object.strokeWidth, 0), container: item.announcementContainer, cellId: item.announcementCellId };
     }
     if (type === "image" && id) {
-      return { id, type, x, y, width, height, src: String((item as CanvasObject & { announcementSrc?: string }).announcementSrc ?? ""), alt: item.announcementAlt ?? "", cornerRadius: item.announcementCornerRadius ?? 0 };
+      return { id, type, x, y, width, height, src: String((item as CanvasObject & { announcementSrc?: string }).announcementSrc ?? ""), alt: item.announcementAlt ?? "", cornerRadius: item.announcementCornerRadius ?? 0, container: item.announcementContainer, cellId: item.announcementCellId };
     }
-    return { id: id ?? `shape-${Date.now()}`, type: "rect", x, y, width, height, fill: typeof object.fill === "string" ? object.fill : "#e66f51", cornerRadius: item.announcementCornerRadius ?? 0, shape: item.announcementShape ?? "rect", stroke: item.announcementStroke, strokeWidth: item.announcementStrokeWidth };
+    return { id: id ?? `shape-${Date.now()}`, type: "rect", x, y, width, height, fill: typeof object.fill === "string" ? object.fill : "#e66f51", cornerRadius: item.announcementCornerRadius ?? 0, shape: item.announcementShape ?? "rect", stroke: item.announcementStroke, strokeWidth: item.announcementStrokeWidth, container: item.announcementContainer, cellId: item.announcementCellId };
   });
   return { ...value, background: typeof canvas.backgroundColor === "string" ? canvas.backgroundColor : value.background, elements };
 }
@@ -161,10 +179,15 @@ function setCanvasObjectMetadata(object: FabricObject, element: AnnouncementElem
     item.announcementStroke = element.stroke;
     item.announcementStrokeWidth = element.strokeWidth;
   }
+  if (element.container) {
+    item.announcementContainer = element.container;
+    item.announcementCellId = element.cellId;
+  }
 }
 
 export function AnnouncementCanvasEditor({ value, onChange }: { value: AnnouncementDocument; onChange: (value: AnnouncementDocument) => void }) {
   const canvasElementRef = useRef<HTMLCanvasElement>(null);
+  const canvasViewportRef = useRef<HTMLDivElement>(null);
   const fabricRef = useRef<Canvas | null>(null);
   const loadingRef = useRef(false);
   const loadRequestRef = useRef(0);
@@ -179,7 +202,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
   const [layers, setLayers] = useState<AnnouncementElement[]>(value.elements);
   const [fontQuery, setFontQuery] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: AnnouncementElement["type"] } | null>(null);
-  const [insertCategory, setInsertCategory] = useState<"text" | "images" | "shapes">("text");
+  const [insertCategory, setInsertCategory] = useState<LayoutCategory>("text");
   const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaError, setMediaError] = useState("");
@@ -250,6 +273,8 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
         canvas.add(object);
       } else if (element.type === "rect") {
         const object = shapeObject(element);
+        object.set({ originX: "left", originY: "top", left: element.x, top: element.y });
+        object.setCoords();
         setCanvasObjectMetadata(object, element);
         canvas.add(object);
       } else {
@@ -399,13 +424,103 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     publish(withPage(value, activePage, { ...currentPage, width: nextPage.width, height: nextPage.height, background: nextPage.background, elements: nextPage.elements }));
   }
 
+  function layoutCellAtPoint(point: { x: number; y: number }) {
+    const canvas = fabricRef.current;
+    const cell = canvas?.getObjects().slice().reverse().find((candidate) => {
+      const item = canvasObject(candidate);
+      if (!item.announcementCellId) return false;
+      const left = numberValue(candidate.left, 0);
+      const top = numberValue(candidate.top, 0);
+      return point.x >= left && point.x <= left + candidate.getScaledWidth() && point.y >= top && point.y <= top + candidate.getScaledHeight();
+    });
+    if (!cell) return null;
+    return { x: numberValue(cell.left, 0), y: numberValue(cell.top, 0), width: cell.getScaledWidth(), height: cell.getScaledHeight() };
+  }
+
+  function activeLayoutCell() {
+    const canvas = fabricRef.current;
+    const active = canvas?.getActiveObject();
+    if (!active || !canvasObject(active).announcementCellId) return null;
+    return { x: numberValue(active.left, 0), y: numberValue(active.top, 0), width: active.getScaledWidth(), height: active.getScaledHeight() };
+  }
+
+  function addTable(preset: typeof TABLE_PRESETS[number]) {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    const width = Math.min(760, currentPage.width - 48);
+    const height = Math.min(560, currentPage.height - 48);
+    const position = centeredAnnouncementPosition(currentPage.width, currentPage.height, width, height);
+    const cellWidth = width / preset.columns;
+    const cellHeight = height / preset.rows;
+    const containerId = `table-${Date.now()}`;
+    const objects: FabricObject[] = [];
+    for (let row = 0; row < preset.rows; row += 1) {
+      for (let column = 0; column < preset.columns; column += 1) {
+        const isHeader = row < preset.headerRows || column < preset.headerColumns;
+        const cell = { id: `table-cell-${containerId}-${row}-${column}`, type: "rect" as const, x: position.x + column * cellWidth, y: position.y + row * cellHeight, width: cellWidth, height: cellHeight, fill: isHeader ? preset.headerFill : (row % 2 === 0 && preset.value === "banded" ? "#f4f6f8" : preset.fill), cornerRadius: 0, stroke: preset.stroke, strokeWidth: 1, container: "table" as const, cellId: `table-cell-${containerId}-${row}-${column}` };
+        const object = shapeObject(cell);
+        object.setCoords();
+        setCanvasObjectMetadata(object, cell);
+        const item = canvasObject(object);
+        item.announcementContainer = "table";
+        item.announcementCellId = cell.id;
+        item.announcementId = cell.id;
+        objects.push(object);
+        if (isHeader) {
+          const label = new Textbox(`${preset.headerColumns && column === 0 ? "Row" : `Column ${column + 1}`}`, { left: cell.x + 10, top: cell.y + 10, originX: "left", originY: "top", width: Math.max(20, cell.width - 20), height: Math.max(20, cell.height - 20), fontSize: 18, fontFamily: "Arial", fill: preset.headerFill === "#17324d" ? "#ffffff" : "#17324d", textAlign: "center", editable: true, transparentCorners: false, cornerColor: "#e66f51" });
+          setCanvasObjectMetadata(label, { id: `table-label-${containerId}-${row}-${column}`, type: "text", x: cell.x + 10, y: cell.y + 10, width: Math.max(20, cell.width - 20), height: Math.max(20, cell.height - 20), text: `${preset.headerColumns && column === 0 ? "Row" : `Column ${column + 1}`}`, fontSize: 18, fontFamily: "Arial", fill: preset.headerFill === "#17324d" ? "#ffffff" : "#17324d", align: "center", fontStyle: "bold", container: "table", cellId: cell.id });
+          objects.push(label);
+        }
+      }
+    }
+    canvas.add(...objects);
+    canvas.setActiveObject(objects[0]);
+    canvas.requestRenderAll();
+    publishCanvas(canvas);
+    refreshSelection();
+  }
+
+  function addGrid(preset: typeof GRID_PRESETS[number]) {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    const width = Math.min(760, currentPage.width - 48);
+    const height = Math.min(700, currentPage.height - 48);
+    const position = centeredAnnouncementPosition(currentPage.width, currentPage.height, width, height);
+    const cellWidth = (width - preset.gap * (preset.columns - 1)) / preset.columns;
+    const cellHeight = (height - preset.gap * (preset.rows - 1)) / preset.rows;
+    const containerId = `grid-${Date.now()}`;
+    const objects = Array.from({ length: preset.rows * preset.columns }, (_, index) => {
+      const row = Math.floor(index / preset.columns);
+      const column = index % preset.columns;
+      const cell = { id: `grid-cell-${containerId}-${row}-${column}`, type: "rect" as const, x: position.x + column * (cellWidth + preset.gap), y: position.y + row * (cellHeight + preset.gap), width: cellWidth, height: cellHeight, fill: "#ffffff", cornerRadius: 12, stroke: "#c7ced8", strokeWidth: 2, container: "grid" as const, cellId: `grid-cell-${containerId}-${row}-${column}` };
+      const object = shapeObject(cell);
+      object.setCoords();
+      setCanvasObjectMetadata(object, cell);
+      const item = canvasObject(object);
+      item.announcementContainer = "grid";
+      item.announcementCellId = cell.id;
+      item.announcementId = cell.id;
+      return object;
+    });
+    canvas.add(...objects);
+    canvas.setActiveObject(objects[0]);
+    canvas.requestRenderAll();
+    publishCanvas(canvas);
+    refreshSelection();
+  }
+
   function addText(left?: number, top?: number, width = Math.min(700, currentPage.width - 140), preset: "textbox" | "heading" | "subheading" | "body" = "textbox") {
     const canvas = fabricRef.current;
     if (!canvas) return;
     const centeredWidth = Math.max(120, Math.min(width, currentPage.width - 48));
     const styles = { textbox: { text: "Double-click to edit", fontSize: 34, height: 90 }, heading: { text: "Heading", fontSize: 52, height: 110 }, subheading: { text: "Subheading", fontSize: 36, height: 90 }, body: { text: "Body text", fontSize: 24, height: 180 } }[preset];
-    const presetPosition = centeredAnnouncementPosition(currentPage.width, currentPage.height, centeredWidth, styles.height);
-    const element: Extract<AnnouncementElement, { type: "text" }> = { id: `text-${Date.now()}`, type: "text", x: left ?? presetPosition.x, y: top ?? presetPosition.y, width: centeredWidth, height: styles.height, text: styles.text, fontSize: styles.fontSize, fontFamily: "Arial", fill: "#17324d", align: "center", fontStyle: "normal", underline: false };
+    const cell = left === undefined && top === undefined ? activeLayoutCell() : null;
+    const cellWidth = cell ? Math.max(48, cell.width - 16) : centeredWidth;
+    const cellHeight = cell ? Math.max(48, cell.height - 16) : styles.height;
+    const presetPosition = cell ? centeredAnnouncementPosition(cell.width, cell.height, cellWidth, Math.min(styles.height, cellHeight), 8) : centeredAnnouncementPosition(currentPage.width, currentPage.height, centeredWidth, styles.height);
+    const activeObject = canvas.getActiveObject();
+    const activeCellObject = activeObject ? canvasObject(activeObject) : undefined;
+    const element: Extract<AnnouncementElement, { type: "text" }> = { id: `text-${Date.now()}`, type: "text", x: left ?? (cell ? cell.x + presetPosition.x : presetPosition.x), y: top ?? (cell ? cell.y + presetPosition.y : presetPosition.y), width: cellWidth, height: cell ? Math.min(styles.height, cellHeight) : styles.height, text: styles.text, fontSize: styles.fontSize, fontFamily: "Arial", fill: "#17324d", align: "center", fontStyle: "normal", underline: false, container: activeCellObject?.announcementContainer, cellId: activeCellObject?.announcementCellId };
     const object = new Textbox(element.text, { left: element.x, top: element.y, originX: "left", originY: "top", width: element.width, fontSize: element.fontSize, fontFamily: element.fontFamily, fill: element.fill, textAlign: element.align, editable: true, transparentCorners: false, cornerColor: "#e66f51" });
     object.set({ scaleY: element.height / Math.max(1, object.getScaledHeight()) });
     setCanvasObjectMetadata(object, element);
@@ -416,7 +531,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     refreshSelection();
   }
 
-  function addShape(shape: "rect" | "circle" | "triangle" | "star" = "rect", dropPoint?: { x: number; y: number }, cornerRadius = 14) {
+  function addShape(shape: AnnouncementShape = "rect", dropPoint?: { x: number; y: number }, cornerRadius = 14) {
     const canvas = fabricRef.current;
     if (!canvas) return;
     const width = Math.min(260, currentPage.width - 48);
@@ -439,11 +554,13 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     const canvas = fabricRef.current;
     if (!canvas) return;
     void FabricImage.fromURL(url, { crossOrigin: "anonymous" }).then((object) => {
-      const width = Math.min(700, currentPage.width - 48);
-      const height = Math.min(300, currentPage.height - 48);
-      const centered = centeredAnnouncementPosition(currentPage.width, currentPage.height, width, height);
-      const position = dropPoint ? { x: Math.max(0, Math.min(currentPage.width - width, dropPoint.x - width / 2)), y: Math.max(0, Math.min(currentPage.height - height, dropPoint.y - height / 2)) } : centered;
-      const element: Extract<AnnouncementElement, { type: "image" }> = { id: `image-${Date.now()}`, type: "image", x: position.x, y: position.y, width, height, src: url, alt, cornerRadius: 14 };
+      const cell = dropPoint ? layoutCellAtPoint(dropPoint) : activeLayoutCell();
+      const width = cell ? Math.max(32, Math.min(cell.width - 16, 700)) : Math.min(700, currentPage.width - 48);
+      const height = cell ? Math.max(32, Math.min(cell.height - 16, 300)) : Math.min(300, currentPage.height - 48);
+      const centered = cell ? centeredAnnouncementPosition(cell.width, cell.height, width, height, 8) : centeredAnnouncementPosition(currentPage.width, currentPage.height, width, height);
+      const position = dropPoint && !cell ? { x: Math.max(0, Math.min(currentPage.width - width, dropPoint.x - width / 2)), y: Math.max(0, Math.min(currentPage.height - height, dropPoint.y - height / 2)) } : { x: (cell?.x ?? 0) + centered.x, y: (cell?.y ?? 0) + centered.y };
+      const activeCellObject = cell ? canvas.getObjects().map((candidate) => canvasObject(candidate)).find((candidate) => candidate.announcementCellId && numberValue(candidate.left, 0) === cell.x && numberValue(candidate.top, 0) === cell.y) : undefined;
+      const element: Extract<AnnouncementElement, { type: "image" }> = { id: `image-${Date.now()}`, type: "image", x: position.x, y: position.y, width, height, src: url, alt, cornerRadius: 14, container: activeCellObject?.announcementContainer, cellId: activeCellObject?.announcementCellId };
       object.set({ left: element.x, top: element.y, originX: "left", originY: "top", scaleX: element.width / Math.max(1, object.width ?? element.width), scaleY: element.height / Math.max(1, object.height ?? element.height), transparentCorners: false, cornerColor: "#e66f51" });
       setCanvasObjectMetadata(object, element);
       canvas.add(object);
@@ -455,8 +572,8 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
   }
 
   function canvasDropPoint(event: DragEvent<HTMLDivElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    return { x: (event.clientX - bounds.left) / zoom, y: (event.clientY - bounds.top) / zoom };
+    const bounds = canvasViewportRef.current?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect();
+    return announcementCanvasDropPoint(event.clientX, event.clientY, bounds, zoom);
   }
 
   function handleCanvasDrop(event: DragEvent<HTMLDivElement>) {
@@ -465,7 +582,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     const payload = event.dataTransfer.getData("application/x-announcement-insert");
     if (!payload) return;
     try {
-      const item = JSON.parse(payload) as { type: "image" | "shape"; url?: string; alt?: string; shape?: "rect" | "circle" | "triangle" | "star"; cornerRadius?: number };
+      const item = JSON.parse(payload) as { type: "image" | "shape"; url?: string; alt?: string; shape?: AnnouncementShape; cornerRadius?: number };
       if (item.type === "image" && item.url) addImage(item.url, item.alt ?? "", point);
       if (item.type === "shape" && item.shape) addShape(item.shape, point, item.cornerRadius);
     } catch {
@@ -670,8 +787,8 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     <div className="flex flex-wrap items-center gap-2 border-b border-ink/10 bg-white px-3 py-2">
       <span className="mr-2 font-semibold text-ink">Design</span>
       <Button type="button" variant="secondary" onClick={() => addText()}>Text</Button>
-      <select aria-label="Add shape" className="focus-ring rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm" value="" onChange={(event) => { if (event.target.value) addShape(event.target.value as "rect" | "circle" | "triangle" | "star"); }}>
-        <option value="">Add shape</option><option value="rect">Square / rectangle</option><option value="circle">Circle</option><option value="triangle">Triangle</option><option value="star">Star</option>
+      <select aria-label="Add shape" className="focus-ring rounded-lg border border-ink/15 bg-white px-3 py-2 text-sm" value="" onChange={(event) => { if (event.target.value) addShape(event.target.value as AnnouncementShape); }}>
+        <option value="">Add shape</option>{ANNOUNCEMENT_SHAPES.filter((shape, index, all) => all.findIndex((candidate) => candidate.value === shape.value) === index).map((shape) => <option key={shape.value} value={shape.value}>{shape.label}</option>)}
       </select>
       <MediaPicker label="Images" permission="MANAGE_SETTINGS" onSelect={(asset) => addImage(asset.url, asset.altText ?? asset.title ?? asset.originalName)} />
       <Button type="button" variant="secondary" onClick={addPage}>Add page</Button>
@@ -688,7 +805,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     <div className="grid min-w-0 lg:grid-cols-[64px_200px_minmax(0,1fr)_260px]">
       <aside className="hidden border-r border-ink/10 bg-white p-2 lg:block">
         <p className="sr-only">Insert category</p>
-        {([['text', 'T', 'Text'], ['images', '?', 'Images'], ['shapes', '?', 'Shapes']] as const).map(([category, icon, label]) => <button key={category} type="button" aria-label={label} title={label} onClick={() => setInsertCategory(category)} className={"focus-ring mb-2 flex w-full flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold " + (insertCategory === category ? "border-coral bg-coral/10 text-coral" : "border-transparent text-ink/60 hover:border-ink/15")}>{icon}<span>{label}</span></button>)}
+        {([['text', 'T', 'Text'], ['images', '▧', 'Images'], ['shapes', '◆', 'Shapes'], ['tables', '▤', 'Tables'], ['grids', '▦', 'Grid']] as const).map(([category, icon, label]) => <button key={category} type="button" aria-label={label} title={label} onClick={() => setInsertCategory(category)} className={"focus-ring mb-2 flex w-full flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold " + (insertCategory === category ? "border-coral bg-coral/10 text-coral" : "border-transparent text-ink/60 hover:border-ink/15")}>{icon}<span>{label}</span></button>)}
       </aside>
       <aside className="hidden border-r border-ink/10 bg-white p-3 lg:block">
         <p className="text-xs font-semibold uppercase tracking-wider text-ink/45">Add to page</p>
@@ -698,12 +815,14 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
           <button type="button" onClick={() => addText(undefined, undefined, Math.min(700, currentPage.width - 48), "subheading")} className="focus-ring rounded-xl border border-ink/10 p-3 text-left hover:border-coral"><span className="block text-lg font-semibold">Subheading</span><span className="text-xs text-ink/55">Supporting text</span></button>
           <button type="button" onClick={() => addText(undefined, undefined, Math.min(650, currentPage.width - 48), "body")} className="focus-ring rounded-xl border border-ink/10 p-3 text-left hover:border-coral"><span className="block text-sm">Body</span><span className="text-xs text-ink/55">Readable paragraph text</span></button>
         </div>}
-        {insertCategory === "shapes" && <div className="mt-3 grid grid-cols-2 gap-2">{([['rect', 'Square', 0], ['rect', 'Rounded', 14], ['circle', 'Circle', 0], ['triangle', 'Triangle', 0], ['star', 'Star', 0]] as const).map(([shape, label, cornerRadius], index) => <button key={label} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-announcement-insert", JSON.stringify({ type: "shape", shape, cornerRadius })); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => addShape(shape, undefined, cornerRadius)} className="focus-ring grid min-h-20 place-items-center rounded-xl border border-ink/10 p-2 text-xs hover:border-coral"><span className={index === 0 ? "h-10 w-10 bg-coral" : index === 1 ? "h-10 w-10 rounded-lg bg-coral" : index === 2 ? "h-10 w-10 rounded-full bg-coral" : index === 3 ? "h-0 w-0 border-x-[20px] border-b-[36px] border-x-transparent border-b-coral" : "text-3xl text-coral"}>{index === 4 ? "?" : ""}</span><span>{label}</span></button>)}</div>}
+        {insertCategory === "shapes" && <div className="mt-3 grid max-h-[min(62vh,680px)] grid-cols-2 gap-2 overflow-y-auto pr-1">{ANNOUNCEMENT_SHAPES.map((shape) => { const cornerRadius = shape.value === "rect" && shape.label === "Rounded" ? 14 : 0; const points = announcementShapePoints(shape.value); return <button key={`${shape.value}-${shape.label}`} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-announcement-insert", JSON.stringify({ type: "shape", shape: shape.value, cornerRadius })); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => addShape(shape.value, undefined, cornerRadius)} className="focus-ring grid min-h-20 place-items-center rounded-xl border border-ink/10 p-2 text-xs hover:border-coral"><span className="grid h-10 w-12 place-items-center text-2xl text-coral" style={{ clipPath: points.length ? `polygon(${points.map(([x, y]) => `${x}% ${y}%`).join(",")})` : undefined, backgroundColor: "currentColor", borderRadius: shape.value === "circle" ? "999px" : cornerRadius ? "8px" : undefined }}>{points.length ? "" : shape.icon}</span><span>{shape.label}</span></button>; })}</div>}
+        {insertCategory === "tables" && <div className="mt-3 grid gap-2">{TABLE_PRESETS.map((preset) => <button key={preset.value} type="button" onClick={() => addTable(preset)} className="focus-ring rounded-xl border border-ink/10 p-2 text-left hover:border-coral"><span className="grid overflow-hidden rounded border" style={{ gridTemplateColumns: `repeat(${preset.columns}, minmax(0, 1fr))` }}>{Array.from({ length: preset.rows * preset.columns }, (_, index) => { const row = Math.floor(index / preset.columns); const column = index % preset.columns; const header = row < preset.headerRows || column < preset.headerColumns; return <span key={index} className="h-5 border-b border-r" style={{ backgroundColor: header ? preset.headerFill : row % 2 === 0 && preset.value === "banded" ? "#f4f6f8" : preset.fill }} />; })}</span><span className="mt-2 block text-xs font-semibold">{preset.label}</span></button>)}</div>}
+        {insertCategory === "grids" && <div className="mt-3 grid gap-2">{GRID_PRESETS.map((preset) => <button key={preset.value} type="button" onClick={() => addGrid(preset)} className="focus-ring rounded-xl border border-ink/10 p-2 text-left hover:border-coral"><span className="grid rounded border border-ink/20 bg-mist/30 p-1" style={{ gridTemplateColumns: `repeat(${preset.columns}, minmax(0, 1fr))`, gap: 3 }}>{Array.from({ length: preset.rows * preset.columns }, (_, index) => <span key={index} className="h-7 rounded border border-dashed border-ink/25 bg-white" />)}</span><span className="mt-2 block text-xs font-semibold">{preset.label}</span></button>)}</div>}
         {insertCategory === "images" && <div className="mt-3 grid gap-2">{mediaLoading && <p className="text-xs text-ink/55">Loading images...</p>}{mediaError && <p role="alert" className="text-xs text-coral">{mediaError}</p>}{!mediaLoading && !mediaAssets.length && <><p className="text-xs text-ink/55">No images found.</p><MediaPicker label="Open media library" permission="MANAGE_SETTINGS" onSelect={(asset) => addImage(asset.url, asset.altText ?? asset.title ?? asset.originalName)} /></>}{mediaAssets.map((asset) => <button key={asset.id} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-announcement-insert", JSON.stringify({ type: "image", url: asset.url, alt: asset.altText ?? asset.title ?? asset.originalName })); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => addImage(asset.url, asset.altText ?? asset.title ?? asset.originalName)} className="focus-ring overflow-hidden rounded-xl border border-ink/10 text-left hover:border-coral"><img src={asset.url} alt={asset.altText ?? asset.title ?? asset.originalName} className="aspect-video w-full object-cover" /><span className="block truncate p-2 text-xs font-semibold">{asset.title || asset.originalName}</span></button>)}</div>}
         <label className="mt-5 grid gap-2 text-xs font-semibold text-ink/60">Page background<input type="color" value={currentPage.background} onChange={(event) => { const canvas = fabricRef.current; if (!canvas) return; canvas.backgroundColor = event.target.value; canvas.requestRenderAll(); publish(withPage(value, activePage, { ...currentPage, background: event.target.value })); }} className="h-10 w-full rounded border border-ink/10 bg-white p-1" /></label>
       </aside>
-      <div className="min-w-0 overflow-auto p-5 sm:p-8" onDragOver={(event) => event.preventDefault()} onDrop={handleCanvasDrop}><div className="mx-auto overflow-hidden shadow-2xl" style={{ width: canvasWidth, height: currentPage.height * zoom }}><div style={{ width: currentPage.width, height: currentPage.height, transform: `scale(${zoom})`, transformOrigin: "top left" }}><canvas ref={canvasElementRef} /></div></div><p className="mt-4 text-center text-xs text-ink/50">Drag objects toward the dashed guides to align them. Hold Shift while dragging to bypass snapping. Double-click text or shapes to edit.</p></div>
-      <aside className="border-t border-ink/10 bg-white p-3 lg:border-l lg:border-t-0"><p className="text-xs font-semibold uppercase tracking-wider text-ink/45">Properties</p>{selected ? <div className="mt-3 grid gap-3 text-xs"><div className="grid grid-cols-2 gap-2"><label className="grid gap-1 font-semibold text-ink/60">X<input type="number" value={Math.round(selected.x)} onChange={(event) => updateSelected({ left: Number(event.target.value) })} className="focus-ring rounded border border-ink/15 px-2 py-1" /></label><label className="grid gap-1 font-semibold text-ink/60">Y<input type="number" value={Math.round(selected.y)} onChange={(event) => updateSelected({ top: Number(event.target.value) })} className="focus-ring rounded border border-ink/15 px-2 py-1" /></label></div>{selectedText && <><label className="grid gap-1 font-semibold text-ink/60">Font search<input value={fontQuery} onChange={(event) => setFontQuery(event.target.value)} placeholder="Search fonts" className="focus-ring rounded border border-ink/15 px-2 py-1" /></label><label className="grid gap-1 font-semibold text-ink/60">Font<select value={selected.fontFamily ?? "Arial"} onChange={(event) => updateSelected({ fontFamily: event.target.value })} className="focus-ring rounded border border-ink/15 px-2 py-1"><optgroup label="Fonts used in canvas">{filterFonts(usedFonts).map((font) => <option key={`used-${font}`}>{font}</option>)}</optgroup><optgroup label="Commonly used fonts">{filterFonts(COMMONLY_USED_FONTS).map((font) => <option key={`common-used-${font}`}>{font}</option>)}</optgroup><optgroup label="Common fonts">{filterFonts(COMMON_FONTS).map((font) => <option key={`common-${font}`}>{font}</option>)}</optgroup><optgroup label="Alphabetical">{filterFonts(GOOGLE_FONTS.filter((font) => !groupedFonts.has(font))).sort((a, b) => a.localeCompare(b)).map((font) => <option key={`alphabetical-${font}`}>{font}</option>)}</optgroup></select></label><label className="grid gap-1 font-semibold text-ink/60">Size (px)<select value={Math.round(selected.fontSize ?? 24)} onChange={(event) => updateSelected({ fontSize: Number(event.target.value) })} className="focus-ring rounded border border-ink/15 px-2 py-1">{FONT_SIZES.map((size) => <option key={size} value={size}>{size}px</option>)}</select></label><div className="flex gap-2"><button type="button" aria-label="Bold" className="focus-ring rounded border border-ink/15 px-2 py-1 font-bold" onClick={() => updateSelected({ fontWeight: selected.fontStyle === "bold" ? "normal" : "bold" })}>B</button><button type="button" aria-label="Italic" className="focus-ring rounded border border-ink/15 px-2 py-1 italic" onClick={() => updateSelected({ fontStyle: selected.fontStyle === "italic" ? "normal" : "italic" })}>I</button><button type="button" aria-label="Underline" className={`focus-ring rounded border px-2 py-1 underline ${selected.underline ? "border-coral bg-coral/10 text-coral" : "border-ink/15"}`} onClick={() => updateSelected({ underline: !selected.underline })}>U</button>{(["left", "center", "right"] as const).map((align) => <button key={align} type="button" aria-label={`${align} align`} title={`${align} align`} className={`focus-ring rounded border px-2 py-1 text-lg leading-none ${selected.align === align ? "border-coral text-coral" : "border-ink/15"}`} onClick={() => updateSelected({ textAlign: align })}>{alignIcon(align)}</button>)}</div><label className="grid gap-1 font-semibold text-ink/60">Link (optional)<input type="url" value={selected.link ?? ""} onChange={(event) => updateSelected({ announcementLink: event.target.value })} placeholder="https://..." className="focus-ring rounded border border-ink/15 px-2 py-1" /></label><div className="grid gap-2"><div className="grid grid-cols-2 gap-2"><Button type="button" className={selected.shadow && selected.shadow.color !== "#ffffffcc" ? "border-coral bg-coral/10 text-coral" : ""} variant="secondary" onClick={() => updateSelected({ shadowOptions: selected.shadow && selected.shadow.color !== "#ffffffcc" ? null : { color: "#00000066", blur: 8, offsetX: 2, offsetY: 2 } })}>Text shadow</Button><Button type="button" className={selected.shadow?.color === "#ffffffcc" ? "border-coral bg-coral/10 text-coral" : ""} variant="secondary" onClick={() => updateSelected({ shadowOptions: selected.shadow?.color === "#ffffffcc" ? null : { color: "#ffffffcc", blur: 0, offsetX: 0, offsetY: 2 } })}>Text lift</Button></div>{selected.shadow && <div className="grid grid-cols-2 gap-2"><label className="grid gap-1 font-semibold text-ink/60">Color<input type="color" value={selected.shadow.color.slice(0, 7)} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, color: event.target.value } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Blur<input type="range" min="0" max="40" value={selected.shadow.blur} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, blur: Number(event.target.value) } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Horizontal distance<input type="range" min="-40" max="40" value={selected.shadow.offsetX} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, offsetX: Number(event.target.value) } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Vertical distance<input type="range" min="-40" max="40" value={selected.shadow.offsetY} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, offsetY: Number(event.target.value) } })} /></label></div>}</div></>}{selected.type === "rect" && <label className="grid gap-1 font-semibold text-ink/60">Shape<select value={selected.shape ?? "rect"} onChange={(event) => updateSelected({ announcementShape: event.target.value })} className="focus-ring rounded border border-ink/15 px-2 py-1"><option value="rect">Rectangle</option><option value="circle">Circle</option><option value="triangle">Triangle</option><option value="star">Star</option></select></label>}{selected.type !== "image" && <label className="grid gap-1 font-semibold text-ink/60">Color<input type="color" value={selected.fill?.startsWith("#") ? selected.fill : "#17324d"} onChange={(event) => updateSelected({ fill: event.target.value })} className="h-9 w-full rounded border border-ink/10 p-1" /></label>}<label className="grid gap-1 font-semibold text-ink/60">Opacity<input type="range" min="0.1" max="1" step="0.05" value={selected.opacity} onChange={(event) => updateSelected({ opacity: Number(event.target.value) })} /></label><div className="grid grid-cols-2 gap-2"><Button type="button" variant="secondary" onClick={duplicateSelected}>Duplicate</Button><Button type="button" variant="secondary" onClick={deleteSelected}>Delete</Button></div><div className="grid grid-cols-2 gap-2"><Button type="button" variant="secondary" onClick={() => moveLayer("up")}>Bring forward</Button><Button type="button" variant="secondary" onClick={() => moveLayer("down")}>Send backward</Button></div></div> : <p className="mt-3 text-xs leading-5 text-ink/50">Select an object to edit its properties, or right-click for item actions.</p>}<div className="mt-6 border-t border-ink/10 pt-3"><p className="text-xs font-semibold uppercase tracking-wider text-ink/45">Layers</p><div className="mt-2 grid gap-1">{layers.map((layer) => <button type="button" key={layer.id} className={`focus-ring truncate rounded px-2 py-1 text-left text-xs ${selected?.id === layer.id ? "bg-coral/10 font-semibold text-coral" : "hover:bg-mist"}`} onClick={() => { const canvas = fabricRef.current; const object = canvas?.getObjects().find((candidate) => canvasObject(candidate).announcementId === layer.id); if (canvas && object) { canvas.setActiveObject(object); canvas.requestRenderAll(); refreshSelection(); } }}>{layer.type === "text" ? (layer.text || "Text").slice(0, 24) : layer.type === "image" ? "Image" : `${layer.shape ?? "Shape"}`}</button>)}</div></div></aside>
+      <div className="min-w-0 overflow-auto p-5 sm:p-8" onDragOver={(event) => event.preventDefault()} onDrop={handleCanvasDrop}><div className="mx-auto overflow-hidden shadow-2xl" style={{ width: canvasWidth, height: currentPage.height * zoom }}><div ref={canvasViewportRef} style={{ width: currentPage.width, height: currentPage.height, transform: `scale(${zoom})`, transformOrigin: "top left" }}><canvas ref={canvasElementRef} /></div></div><p className="mt-4 text-center text-xs text-ink/50">Drag objects toward the dashed guides to align them. Hold Shift while dragging to bypass snapping. Double-click text or shapes to edit.</p></div>
+      <aside className="border-t border-ink/10 bg-white p-3 lg:border-l lg:border-t-0"><p className="text-xs font-semibold uppercase tracking-wider text-ink/45">Properties</p>{selected ? <div className="mt-3 grid gap-3 text-xs"><div className="grid grid-cols-2 gap-2"><label className="grid gap-1 font-semibold text-ink/60">X<input type="number" value={Math.round(selected.x)} onChange={(event) => updateSelected({ left: Number(event.target.value) })} className="focus-ring rounded border border-ink/15 px-2 py-1" /></label><label className="grid gap-1 font-semibold text-ink/60">Y<input type="number" value={Math.round(selected.y)} onChange={(event) => updateSelected({ top: Number(event.target.value) })} className="focus-ring rounded border border-ink/15 px-2 py-1" /></label></div>{selectedText && <><label className="grid gap-1 font-semibold text-ink/60">Font search<input value={fontQuery} onChange={(event) => setFontQuery(event.target.value)} placeholder="Search fonts" className="focus-ring rounded border border-ink/15 px-2 py-1" /></label><label className="grid gap-1 font-semibold text-ink/60">Font<select value={selected.fontFamily ?? "Arial"} onChange={(event) => updateSelected({ fontFamily: event.target.value })} className="focus-ring rounded border border-ink/15 px-2 py-1"><optgroup label="Fonts used in canvas">{filterFonts(usedFonts).map((font) => <option key={`used-${font}`}>{font}</option>)}</optgroup><optgroup label="Commonly used fonts">{filterFonts(COMMONLY_USED_FONTS).map((font) => <option key={`common-used-${font}`}>{font}</option>)}</optgroup><optgroup label="Common fonts">{filterFonts(COMMON_FONTS).map((font) => <option key={`common-${font}`}>{font}</option>)}</optgroup><optgroup label="Alphabetical">{filterFonts(GOOGLE_FONTS.filter((font) => !groupedFonts.has(font))).sort((a, b) => a.localeCompare(b)).map((font) => <option key={`alphabetical-${font}`}>{font}</option>)}</optgroup></select></label><label className="grid gap-1 font-semibold text-ink/60">Size (px)<select value={Math.round(selected.fontSize ?? 24)} onChange={(event) => updateSelected({ fontSize: Number(event.target.value) })} className="focus-ring rounded border border-ink/15 px-2 py-1">{FONT_SIZES.map((size) => <option key={size} value={size}>{size}px</option>)}</select></label><div className="flex gap-2"><button type="button" aria-label="Bold" className="focus-ring rounded border border-ink/15 px-2 py-1 font-bold" onClick={() => updateSelected({ fontWeight: selected.fontStyle === "bold" ? "normal" : "bold" })}>B</button><button type="button" aria-label="Italic" className="focus-ring rounded border border-ink/15 px-2 py-1 italic" onClick={() => updateSelected({ fontStyle: selected.fontStyle === "italic" ? "normal" : "italic" })}>I</button><button type="button" aria-label="Underline" className={`focus-ring rounded border px-2 py-1 underline ${selected.underline ? "border-coral bg-coral/10 text-coral" : "border-ink/15"}`} onClick={() => updateSelected({ underline: !selected.underline })}>U</button>{(["left", "center", "right"] as const).map((align) => <button key={align} type="button" aria-label={`${align} align`} title={`${align} align`} className={`focus-ring rounded border px-2 py-1 text-lg leading-none ${selected.align === align ? "border-coral text-coral" : "border-ink/15"}`} onClick={() => updateSelected({ textAlign: align })}>{alignIcon(align)}</button>)}</div><label className="grid gap-1 font-semibold text-ink/60">Link (optional)<input type="url" value={selected.link ?? ""} onChange={(event) => updateSelected({ announcementLink: event.target.value })} placeholder="https://..." className="focus-ring rounded border border-ink/15 px-2 py-1" /></label><div className="grid gap-2"><div className="grid grid-cols-2 gap-2"><Button type="button" className={selected.shadow && selected.shadow.color !== "#ffffffcc" ? "border-coral bg-coral/10 text-coral" : ""} variant="secondary" onClick={() => updateSelected({ shadowOptions: selected.shadow && selected.shadow.color !== "#ffffffcc" ? null : { color: "#00000066", blur: 8, offsetX: 2, offsetY: 2 } })}>Text shadow</Button><Button type="button" className={selected.shadow?.color === "#ffffffcc" ? "border-coral bg-coral/10 text-coral" : ""} variant="secondary" onClick={() => updateSelected({ shadowOptions: selected.shadow?.color === "#ffffffcc" ? null : { color: "#ffffffcc", blur: 0, offsetX: 0, offsetY: 2 } })}>Text lift</Button></div>{selected.shadow && <div className="grid grid-cols-2 gap-2"><label className="grid gap-1 font-semibold text-ink/60">Color<input type="color" value={selected.shadow.color.slice(0, 7)} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, color: event.target.value } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Blur<input type="range" min="0" max="40" value={selected.shadow.blur} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, blur: Number(event.target.value) } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Horizontal distance<input type="range" min="-40" max="40" value={selected.shadow.offsetX} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, offsetX: Number(event.target.value) } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Vertical distance<input type="range" min="-40" max="40" value={selected.shadow.offsetY} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, offsetY: Number(event.target.value) } })} /></label></div>}</div></>}{selected.type === "rect" && <label className="grid gap-1 font-semibold text-ink/60">Shape<select value={selected.shape ?? "rect"} onChange={(event) => updateSelected({ announcementShape: event.target.value })} className="focus-ring rounded border border-ink/15 px-2 py-1"><option value="rect">Rectangle</option>{ANNOUNCEMENT_SHAPES.filter((shape, index, all) => shape.value !== "rect" || index === 0).map((shape) => <option key={`${shape.value}-${shape.label}`} value={shape.value}>{shape.label}</option>)}</select></label>}{selected.type !== "image" && <label className="grid gap-1 font-semibold text-ink/60">Color<input type="color" value={selected.fill?.startsWith("#") ? selected.fill : "#17324d"} onChange={(event) => updateSelected({ fill: event.target.value })} className="h-9 w-full rounded border border-ink/10 p-1" /></label>}<label className="grid gap-1 font-semibold text-ink/60">Opacity<input type="range" min="0.1" max="1" step="0.05" value={selected.opacity} onChange={(event) => updateSelected({ opacity: Number(event.target.value) })} /></label><div className="grid grid-cols-2 gap-2"><Button type="button" variant="secondary" onClick={duplicateSelected}>Duplicate</Button><Button type="button" variant="secondary" onClick={deleteSelected}>Delete</Button></div><div className="grid grid-cols-2 gap-2"><Button type="button" variant="secondary" onClick={() => moveLayer("up")}>Bring forward</Button><Button type="button" variant="secondary" onClick={() => moveLayer("down")}>Send backward</Button></div></div> : <p className="mt-3 text-xs leading-5 text-ink/50">Select an object to edit its properties, or right-click for item actions.</p>}<div className="mt-6 border-t border-ink/10 pt-3"><p className="text-xs font-semibold uppercase tracking-wider text-ink/45">Layers</p><div className="mt-2 grid gap-1">{layers.map((layer) => <button type="button" key={layer.id} className={`focus-ring truncate rounded px-2 py-1 text-left text-xs ${selected?.id === layer.id ? "bg-coral/10 font-semibold text-coral" : "hover:bg-mist"}`} onClick={() => { const canvas = fabricRef.current; const object = canvas?.getObjects().find((candidate) => canvasObject(candidate).announcementId === layer.id); if (canvas && object) { canvas.setActiveObject(object); canvas.requestRenderAll(); refreshSelection(); } }}>{layer.type === "text" ? (layer.text || "Text").slice(0, 24) : layer.type === "image" ? "Image" : `${layer.shape ?? "Shape"}`}</button>)}</div></div></aside>
     </div>
     {contextMenu && <div className="fixed z-50 grid min-w-40 gap-1 rounded-lg border border-ink/15 bg-white p-1 text-sm shadow-xl" style={{ left: contextMenu.x, top: contextMenu.y }} onMouseLeave={() => setContextMenu(null)}><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={() => { duplicateSelected(); setContextMenu(null); }}>Duplicate</button><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={() => { moveLayer("up"); setContextMenu(null); }}>Bring forward</button><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={() => { moveLayer("down"); setContextMenu(null); }}>Send backward</button><button type="button" className="rounded px-3 py-2 text-left text-coral hover:bg-mist" onClick={() => { deleteSelected(); setContextMenu(null); }}>Delete</button></div>}
   </div>;
