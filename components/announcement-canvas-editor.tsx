@@ -173,6 +173,9 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: AnnouncementElement["type"] } | null>(null);
   const pages = pageList(value);
   const currentPage = pages[activePage] ?? pages[0];
+  const [customWidth, setCustomWidth] = useState(String(currentPage?.width ?? value.width));
+  const [customHeight, setCustomHeight] = useState(String(currentPage?.height ?? value.height));
+  const [customUnit, setCustomUnit] = useState("px");
 
   const refreshSelection = useCallback(() => {
     const canvas = fabricRef.current;
@@ -429,6 +432,13 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     void loadDocument({ ...nextPage, version: 1, elements: nextPage.elements });
   }
 
+  function applyCustomPageSize() {
+    const factor = customUnit === "in" ? 96 : customUnit === "mm" ? 96 / 25.4 : customUnit === "cm" ? 96 / 2.54 : 1;
+    const width = Math.round(Number(customWidth) * factor);
+    const height = Math.round(Number(customHeight) * factor);
+    if (width >= 320 && height >= 320 && width <= 2000 && height <= 3000) changePageSize(width, height);
+  }
+
   function downloadFile(name: string, contents: string, type: string) {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([contents], { type }));
@@ -589,10 +599,10 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
       <MediaPicker label="Images" permission="MANAGE_SETTINGS" onSelect={(asset) => addImage(asset.url, asset.altText ?? asset.title ?? asset.originalName)} />
       <Button type="button" variant="secondary" onClick={addPage}>Add page</Button>
       <select aria-label="Current page" className="focus-ring rounded-lg border border-ink/15 bg-white px-2 py-2 text-sm" value={activePage} onChange={(event) => setActivePage(Number(event.target.value))}>{pages.map((page, index) => <option key={page.id} value={index}>Page {index + 1}</option>)}</select>
-      <select aria-label="Page size" className="focus-ring rounded-lg border border-ink/15 bg-white px-2 py-2 text-sm" value="" onChange={(event) => { const preset = PAGE_PRESETS.find((item) => item.label === event.target.value); if (preset) changePageSize(preset.width, preset.height); }}>
+      <select aria-label="Page size" className="focus-ring rounded-lg border border-ink/15 bg-white px-2 py-2 text-sm" value="" onChange={(event) => { const preset = PAGE_PRESETS.find((item) => item.label === event.target.value); if (preset) { setCustomWidth(String(preset.width)); setCustomHeight(String(preset.height)); setCustomUnit("px"); changePageSize(preset.width, preset.height); } }}>
         <option value="">Page size</option>{PAGE_PRESETS.map((preset) => <option key={preset.label} value={preset.label}>{preset.label}</option>)}
       </select>
-      <button type="button" className="focus-ring rounded-lg border border-ink/15 bg-white px-2 py-2 text-sm" onClick={() => { const width = Number(window.prompt("Page width in pixels", String(currentPage.width))); const height = Number(window.prompt("Page height in pixels", String(currentPage.height))); if (width >= 320 && height >= 320) changePageSize(width, height); }}>Custom size</button>
+      <div className="flex items-center gap-1 rounded-lg border border-ink/15 bg-white p-1"><input aria-label="Custom page width" type="number" min="1" value={customWidth} onChange={(event) => setCustomWidth(event.target.value)} className="w-16 px-1 text-xs" /><span className="text-xs text-ink/40">×</span><input aria-label="Custom page height" type="number" min="1" value={customHeight} onChange={(event) => setCustomHeight(event.target.value)} className="w-16 px-1 text-xs" /><select aria-label="Custom page size unit" value={customUnit} onChange={(event) => setCustomUnit(event.target.value)} className="text-xs"><option value="px">px</option><option value="in">in</option><option value="mm">mm</option><option value="cm">cm</option></select><button type="button" className="focus-ring rounded bg-coral px-2 py-1 text-xs font-semibold text-white" onClick={applyCustomPageSize}>Apply</button></div>
       <span className="ml-auto flex items-center gap-2 text-xs font-semibold text-ink/60">Zoom <input aria-label="Canvas zoom" type="range" min="0.35" max="0.9" step="0.01" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /></span>
       <Button type="button" variant="secondary" disabled={!history.length} onClick={undo}>Undo</Button>
       <Button type="button" variant="secondary" disabled={!future.length} onClick={redo}>Redo</Button>
