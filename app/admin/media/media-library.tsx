@@ -13,6 +13,7 @@ type MediaAsset = {
   originalName: string;
   storedFilename: string;
   url: string;
+  thumbnailUrl?: string;
   mimeType: string;
   sizeBytes: number;
   altText: string | null;
@@ -811,7 +812,7 @@ function MediaThumbnail({ asset, className = "", fit = "cover" }: { asset: Media
   if (asset.mediaType === "image") {
     return (
       <div className={`relative ${className}`}>
-        <Image src={asset.url} alt={asset.altText ?? asset.title ?? asset.originalName} fill sizes="(min-width: 1280px) 20rem, (min-width: 640px) 50vw, 100vw" className={`object-${fit}`} unoptimized onError={() => setFailed(true)} />
+        <Image src={asset.thumbnailUrl ?? asset.url} alt={asset.altText ?? asset.title ?? asset.originalName} fill sizes="(min-width: 1280px) 20rem, (min-width: 640px) 50vw, 100vw" className={`object-${fit}`} unoptimized onError={() => setFailed(true)} />
       </div>
     );
   }

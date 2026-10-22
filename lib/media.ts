@@ -46,10 +46,36 @@ export function mediaServeUrl(filename: string, churchId?: string) {
   return `/api/media/upload?${churchId ? `tenant=${encodeURIComponent(churchId)}&` : ""}file=${encodeURIComponent(filename)}`;
 }
 
+export function mediaThumbnailFilename(filename: string) {
+  return `${filename}.thumb.webp`;
+}
+
+export function mediaThumbnailServeUrl(filename: string, churchId?: string) {
+  return `${mediaServeUrl(filename, churchId)}&variant=thumbnail`;
+}
+
 export function mediaAbsolutePath(filename: string, churchId?: string) {
   const safeFilename = filename.replace(/\\/g, "/").replace(/^\/+/, "");
   if (churchId && !safeFilename.includes("/")) return path.join(mediaDirectory, churchId, safeFilename);
   return path.join(mediaDirectory, safeFilename);
+}
+
+export async function ensureMediaThumbnail(filename: string, churchId: string, allowLegacy = false) {
+  const thumbnailPath = mediaAbsolutePath(mediaThumbnailFilename(filename), churchId);
+  try {
+    await stat(thumbnailPath);
+    return thumbnailPath;
+  } catch {
+    const source = await readMediaFile(filename, churchId, allowLegacy);
+    const thumbnail = await sharp(source)
+      .rotate()
+      .resize({ width: 480, height: 480, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 78 })
+      .toBuffer();
+    await mkdir(path.dirname(thumbnailPath), { recursive: true });
+    await writeFile(thumbnailPath, thumbnail);
+    return thumbnailPath;
+  }
 }
 
 function isLegacyMediaUrl(url: string) {
@@ -240,6 +266,7 @@ export async function deleteMediaAsset(id: string) {
   if (linked.length) throw new Error(`Cannot delete linked media asset. It is used by: ${linked.map((page) => page.title).join(", ")}.`);
   await db.mediaAsset.delete({ where: { id } });
   await unlink(isLegacyMediaUrl(asset.url) ? mediaAbsolutePath(asset.storedFilename) : mediaAbsolutePath(asset.storedFilename, asset.churchId)).catch(() => undefined);
+  await unlink(mediaAbsolutePath(mediaThumbnailFilename(asset.storedFilename), asset.churchId)).catch(() => undefined);
   return { deleted: true, id: asset.id };
 }
 
@@ -397,7 +424,7 @@ async function syncLegacyMediaAssets(churchId: string) {
 }
 
 function serializeMediaAsset(asset: MediaAssetRecord, linkedPages: { id: string; title: string; slug: string }[] = []) {
-  return { ...asset, linkedPages, mediaType: mediaTypeFromMimeType(asset.mimeType) };
+  return { ...asset, linkedPages, mediaType: mediaTypeFromMimeType(asset.mimeType), ...(asset.mimeType.startsWith("image/") ? { thumbnailUrl: mediaThumbnailServeUrl(asset.storedFilename, asset.churchId) } : {}) };
 }
 
 function mediaTypeWhere(type: MediaFilter): Prisma.MediaAssetWhereInput | null {

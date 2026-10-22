@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mediaServeUrl } from "@/lib/media";
+import { mediaServeUrl, mediaThumbnailServeUrl } from "@/lib/media";
 import { siteIdentityAssetUrl } from "@/lib/site-identity";
 import { tenantOwnsResource } from "@/lib/tenant";
 
@@ -8,6 +8,12 @@ describe("tenant-bound public assets", () => {
     const url = mediaServeUrl("asset.png", "church-a");
     expect(url).toBe("/api/media/upload?tenant=church-a&file=asset.png");
     expect(url).not.toBe(mediaServeUrl("asset.png", "church-b"));
+  });
+
+  it("keeps generated thumbnail URLs tenant-bound", () => {
+    const url = mediaThumbnailServeUrl("asset.png", "church-a");
+    expect(url).toBe("/api/media/upload?tenant=church-a&file=asset.png&variant=thumbnail");
+    expect(url).not.toBe(mediaThumbnailServeUrl("asset.png", "church-b"));
   });
 
   it("binds identity asset URLs to their owning tenant", () => {

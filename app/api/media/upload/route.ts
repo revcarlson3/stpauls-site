@@ -2,7 +2,7 @@ import { apiErrorResponse } from "@/lib/api-errors";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth";
-import { allowedMediaMimeTypes, inferMediaMimeType, mediaAbsolutePath, parseMediaByteRange, saveUploadedMediaFile } from "@/lib/media";
+import { allowedMediaMimeTypes, ensureMediaThumbnail, inferMediaMimeType, mediaAbsolutePath, parseMediaByteRange, saveUploadedMediaFile } from "@/lib/media";
 import { db } from "@/lib/db";
 import { headers as requestHeaders } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   const filename = new URL(request.url).searchParams.get("file") ?? "";
+  const variant = new URL(request.url).searchParams.get("variant");
   if (!/^[a-zA-Z0-9-]+\.(png|jpe?g|webp|gif|mp4|webm|mov|pdf|docx?|xlsx?|pptx?|rtf|txt|csv|xml|json|zip|rar|7z|gz|odt|ods|odp)$/.test(filename)) return NextResponse.json({ error: "Invalid media file." }, { status: 400 });
   try {
     const requestedTenant = new URL(request.url).searchParams.get("tenant");
@@ -38,11 +39,21 @@ export async function GET(request: Request) {
     const user = publicTenant ? null : await getCurrentUser();
     const churchId = publicTenant?.id ?? user?.churchId;
     if (!churchId || (requestedTenant && !tenantOwnsResource(requestedTenant, churchId))) return NextResponse.json({ error: "Image not found." }, { status: 404 });
-    const asset = await db.mediaAsset.findFirst({ where: { storedFilename: filename, churchId }, select: { churchId: true, url: true } });
+    const asset = await db.mediaAsset.findFirst({ where: { storedFilename: filename, churchId }, select: { churchId: true, url: true, mimeType: true } });
     if (!asset) return NextResponse.json({ error: "Image not found." }, { status: 404 });
     const allowLegacy = asset.url.startsWith("/api/media/upload?file=");
     let filePath = mediaAbsolutePath(filename, churchId);
     let fileSize: number;
+    let contentType = inferMediaMimeType(filename);
+    if (variant === "thumbnail" && asset.mimeType.startsWith("image/")) {
+      try {
+        filePath = await ensureMediaThumbnail(filename, churchId, allowLegacy);
+        contentType = "image/webp";
+      } catch {
+        filePath = mediaAbsolutePath(filename, churchId);
+        contentType = inferMediaMimeType(filename);
+      }
+    }
     try {
       fileSize = (await stat(filePath)).size;
     } catch {
@@ -50,7 +61,6 @@ export async function GET(request: Request) {
       filePath = mediaAbsolutePath(filename);
       fileSize = (await stat(filePath)).size;
     }
-    const contentType = inferMediaMimeType(filename);
     const range = parseMediaByteRange(request.headers.get("range"), fileSize);
     if (range === null) {
       return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${fileSize}`, "Accept-Ranges": "bytes" } });
