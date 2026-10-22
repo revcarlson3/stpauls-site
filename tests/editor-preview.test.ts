@@ -82,4 +82,14 @@ describe("page editor site preview target", () => {
     expect(auth).toContain('settings.emailMfaEnabled && user.emailVerifiedAt ? "email" : ""');
     expect(auth).toContain('settings.smsMfaEnabled && user.phoneVerifiedAt && user.phoneNumber ? "sms" : ""');
   });
+
+  it("uses a shell-free unavailable page for unpublished public routes", () => {
+    const page = fs.readFileSync(path.resolve(process.cwd(), "app/(public)/[slug]/page.tsx"), "utf8");
+
+    expect(page).toContain("function PageUnavailable()");
+    expect(page).toContain('className="fixed inset-0 z-[100]');
+    expect(page).toContain('page.status !== "PUBLISHED"');
+    expect(page).toContain("Page not available");
+    expect(page).toContain("return { robots: { index: false, follow: false } }");
+  });
 });
