@@ -4,6 +4,10 @@ import { parsePublicationInput } from "@/lib/announcement-publications";
 import { ANNOUNCEMENT_SHAPES, announcementCanvasDropPoint, announcementDocumentToHtml, centeredAnnouncementPosition, defaultAnnouncementDocument, parseAnnouncementDocument, parseOrMigrateAnnouncementDocument } from "@/lib/announcement-document";
 
 describe("announcement publications", () => {
+  it("starts blank announcements without implicit layers", () => {
+    expect(defaultAnnouncementDocument("Blank").elements).toEqual([]);
+  });
+
   it("centers inserted elements within the page and keeps oversized elements inside the margin", () => {
     expect(centeredAnnouncementPosition(1200, 800, 400, 200)).toEqual({ x: 400, y: 300 });
     expect(centeredAnnouncementPosition(300, 200, 400, 300)).toEqual({ x: 24, y: 24 });
@@ -38,8 +42,8 @@ describe("announcement publications", () => {
 
   it("accepts a visual document as the canonical publication payload", () => {
     const document = defaultAnnouncementDocument("Christmas service");
-    const title = document.elements.find((element) => element.id === "title");
-    if (title?.type === "text") title.underline = true;
+    const title = { id: "title", type: "text" as const, x: 70, y: 70, width: 760, height: 90, text: "Christmas service", fontSize: 52, fontFamily: "Georgia", fill: "#17324d", align: "center" as const, fontStyle: "bold" as const, underline: true };
+    document.elements = [title];
     const publication = parsePublicationInput({ title: "Christmas service", documentJson: document });
     expect(publication.documentJson).toEqual(parseAnnouncementDocument(document));
     expect(publication.bodyHtml).toContain("Christmas service");

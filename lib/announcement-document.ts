@@ -132,11 +132,7 @@ export function defaultAnnouncementDocument(title = ""): AnnouncementDocument {
     width: ANNOUNCEMENT_CANVAS_WIDTH,
     height: ANNOUNCEMENT_CANVAS_HEIGHT,
     background: "#fffaf2",
-    elements: [
-      { id: "title", type: "text", x: 70, y: 70, width: 760, height: 90, text: title || "Weekly news", fontSize: 52, fontFamily: "Georgia", fill: "#17324d", align: "center", fontStyle: "bold" },
-      { id: "rule", type: "rect", x: 120, y: 185, width: 660, height: 6, fill: "#e66f51", cornerRadius: 3 },
-      { id: "body", type: "text", x: 90, y: 245, width: 720, height: 250, text: "Add your announcement content here.", fontSize: 24, fontFamily: "Arial", fill: "#17324d", align: "left" }
-    ]
+    elements: []
   };
 }
 
@@ -197,8 +193,7 @@ export function announcementDocumentToHtml(document: AnnouncementDocument): stri
 export function legacyHtmlToAnnouncementDocument(title: string, bodyHtml: string) {
   const document = defaultAnnouncementDocument(title);
   const text = sanitizeAnnouncementHtml(bodyHtml).replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<[^>]*>/g, "").replace(/&nbsp;/gi, " ").trim();
-  const body = document.elements.find((element) => element.id === "body");
-  if (body?.type === "text") body.text = text || body.text;
+  document.elements = [{ id: "body", type: "text", x: 90, y: 90, width: 720, height: 250, text: text || title || "Announcement", fontSize: 24, fontFamily: "Arial", fill: "#17324d", align: "left" }];
   return document;
 }
 
