@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
-import { Canvas, FabricImage, Line, Polygon, Rect, Shadow, Textbox, type FabricObject } from "fabric";
+import { Canvas, FabricImage, Line, Rect, Shadow, Textbox, type FabricObject } from "fabric";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui";
@@ -111,19 +111,7 @@ function googleFontUrl(font: string) {
 
 function shapeObject(element: Extract<AnnouncementElement, { type: "rect" }>) {
   const common = { left: element.x, top: element.y, originX: "left" as const, originY: "top" as const, fill: element.fill, stroke: element.stroke, strokeWidth: element.strokeWidth, transparentCorners: false, cornerColor: "#e66f51" };
-  const points = element.shape === "circle"
-    ? Array.from({ length: 32 }, (_, index) => {
-        const angle = (Math.PI * 2 * index) / 32;
-        return [50 + 50 * Math.cos(angle), 50 + 50 * Math.sin(angle)] as [number, number];
-      })
-    : announcementShapePoints(element.shape ?? "rect");
-  const object = new Rect({ ...common, width: element.width, height: element.height, rx: element.cornerRadius, ry: element.cornerRadius });
-  if (points.length) {
-    object.set({
-      clipPath: new Polygon(points.map(([x, y]) => ({ x: x * element.width / 100 - element.width / 2, y: y * element.height / 100 - element.height / 2 })), { originX: "center", originY: "center", left: 0, top: 0 })
-    });
-  }
-  return object;
+  return new Rect({ ...common, width: element.width, height: element.height, rx: element.cornerRadius, ry: element.cornerRadius });
 }
 
 function positionShapeObject(object: FabricObject, element: Extract<AnnouncementElement, { type: "rect" }>) {
