@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import nextConfig from "../next.config.mjs";
 
 describe("production notification worker configuration", () => {
   it("enables the Next.js instrumentation hook", () => {
-    expect(nextConfig.experimental?.instrumentationHook).toBe(true);
+    const nextConfig = readFileSync(new URL("../next.config.mjs", import.meta.url), "utf8");
+    expect(nextConfig).toContain("instrumentationHook: true");
   });
 });

@@ -26,6 +26,13 @@ export type AnnouncementDocument = {
   pages?: AnnouncementPage[];
 };
 
+export function centeredAnnouncementPosition(pageWidth: number, pageHeight: number, elementWidth: number, elementHeight: number, margin = 24) {
+  return {
+    x: Math.max(margin, (pageWidth - elementWidth) / 2),
+    y: Math.max(margin, (pageHeight - elementHeight) / 2),
+  };
+}
+
 function boundedNumber(value: unknown, fallback: number, min: number, max: number) {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : fallback;

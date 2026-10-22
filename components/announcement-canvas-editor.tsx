@@ -6,7 +6,7 @@ import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui";
 import { MediaPicker } from "@/components/media-picker";
-import { announcementDocumentToHtml, defaultAnnouncementDocument, type AnnouncementDocument, type AnnouncementElement, type AnnouncementPage } from "@/lib/announcement-document";
+import { announcementDocumentToHtml, centeredAnnouncementPosition, defaultAnnouncementDocument, type AnnouncementDocument, type AnnouncementElement, type AnnouncementPage } from "@/lib/announcement-document";
 
 type CanvasObject = FabricObject & {
   announcementId?: string;
@@ -166,7 +166,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
   const [selected, setSelected] = useState<SelectedObject | null>(null);
   const [history, setHistory] = useState<AnnouncementDocument[]>([]);
   const [future, setFuture] = useState<AnnouncementDocument[]>([]);
-  const [zoom, setZoom] = useState(0.58);
+  const [zoom, setZoom] = useState(0.72);
   const [activePage, setActivePage] = useState(0);
   const [layers, setLayers] = useState<AnnouncementElement[]>(value.elements);
   const [fontQuery, setFontQuery] = useState("");
@@ -213,7 +213,11 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     if (!canvas) return;
     loadingRef.current = true;
     canvas.clear();
-    canvas.setDimensions({ width: document.width, height: document.height });
+    canvas.setDimensions({ width: document.width, height: document.height }, { cssOnly: false });
+    canvas.lowerCanvasEl.style.width = `${document.width}px`;
+    canvas.lowerCanvasEl.style.height = `${document.height}px`;
+    canvas.upperCanvasEl.style.width = `${document.width}px`;
+    canvas.upperCanvasEl.style.height = `${document.height}px`;
     canvas.backgroundColor = document.background;
     for (const element of document.elements) {
       if (element.type === "text") {
@@ -359,16 +363,19 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     publish(withPage(value, activePage, { ...currentPage, width: nextPage.width, height: nextPage.height, background: nextPage.background, elements: nextPage.elements }));
   }
 
-  function addText(left = 100, top = Math.max(100, currentPage.height / 2 - 45), width = Math.min(700, currentPage.width - 140)) {
+  function addText(left = 0, top = 0, width = Math.min(700, currentPage.width - 140)) {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    const element: Extract<AnnouncementElement, { type: "text" }> = { id: `text-${Date.now()}`, type: "text", x: left, y: top, width, height: 90, text: "Double-click to edit", fontSize: 34, fontFamily: "Arial", fill: "#17324d", align: "left", fontStyle: "normal" };
+    const centeredWidth = Math.max(120, Math.min(width, currentPage.width - 48));
+    const centered = centeredAnnouncementPosition(currentPage.width, currentPage.height, centeredWidth, 90);
+    const centeredLeft = left || centered.x;
+    const centeredTop = top || centered.y;
+    const element: Extract<AnnouncementElement, { type: "text" }> = { id: `text-${Date.now()}`, type: "text", x: centeredLeft, y: centeredTop, width: centeredWidth, height: 90, text: "Double-click to edit", fontSize: 34, fontFamily: "Arial", fill: "#17324d", align: "left", fontStyle: "normal" };
     const object = new Textbox(element.text, { left: element.x, top: element.y, width: element.width, fontSize: element.fontSize, fontFamily: element.fontFamily, fill: element.fill, editable: true, transparentCorners: false, cornerColor: "#e66f51" });
     object.set({ scaleY: element.height / Math.max(1, object.getScaledHeight()) });
     setCanvasObjectMetadata(object, element);
     canvas.add(object);
     canvas.setActiveObject(object);
-    object.enterEditing();
     canvas.requestRenderAll();
     publishCanvas(canvas);
     refreshSelection();
@@ -377,7 +384,10 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
   function addShape(shape: "rect" | "circle" | "triangle" | "star" = "rect") {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    const element: Extract<AnnouncementElement, { type: "rect" }> = { id: `shape-${Date.now()}`, type: "rect", shape, x: 100, y: Math.max(100, currentPage.height / 2 - 50), width: 260, height: 120, fill: "#e66f51", cornerRadius: 14 };
+    const width = Math.min(260, currentPage.width - 48);
+    const height = Math.min(120, currentPage.height - 48);
+    const centered = centeredAnnouncementPosition(currentPage.width, currentPage.height, width, height);
+    const element: Extract<AnnouncementElement, { type: "rect" }> = { id: `shape-${Date.now()}`, type: "rect", shape, x: centered.x, y: centered.y, width, height, fill: "#e66f51", cornerRadius: 14 };
     const object = shapeObject(element);
     setCanvasObjectMetadata(object, element);
     canvas.add(object);
@@ -391,7 +401,10 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     const canvas = fabricRef.current;
     if (!canvas) return;
     void FabricImage.fromURL(url, { crossOrigin: "anonymous" }).then((object) => {
-      const element: Extract<AnnouncementElement, { type: "image" }> = { id: `image-${Date.now()}`, type: "image", x: 100, y: 680, width: 700, height: 300, src: url, alt, cornerRadius: 14 };
+      const width = Math.min(700, currentPage.width - 48);
+      const height = Math.min(300, currentPage.height - 48);
+      const centered = centeredAnnouncementPosition(currentPage.width, currentPage.height, width, height);
+      const element: Extract<AnnouncementElement, { type: "image" }> = { id: `image-${Date.now()}`, type: "image", x: centered.x, y: centered.y, width, height, src: url, alt, cornerRadius: 14 };
       object.set({ left: element.x, top: element.y, scaleX: element.width / Math.max(1, object.width ?? element.width), scaleY: element.height / Math.max(1, object.height ?? element.height), transparentCorners: false, cornerColor: "#e66f51" });
       setCanvasObjectMetadata(object, element);
       canvas.add(object);
@@ -603,7 +616,7 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
         <option value="">Page size</option>{PAGE_PRESETS.map((preset) => <option key={preset.label} value={preset.label}>{preset.label}</option>)}
       </select>
       <div className="flex items-center gap-1 rounded-lg border border-ink/15 bg-white p-1"><input aria-label="Custom page width" type="number" min="1" value={customWidth} onChange={(event) => setCustomWidth(event.target.value)} className="w-16 px-1 text-xs" /><span className="text-xs text-ink/40">×</span><input aria-label="Custom page height" type="number" min="1" value={customHeight} onChange={(event) => setCustomHeight(event.target.value)} className="w-16 px-1 text-xs" /><select aria-label="Custom page size unit" value={customUnit} onChange={(event) => setCustomUnit(event.target.value)} className="text-xs"><option value="px">px</option><option value="in">in</option><option value="mm">mm</option><option value="cm">cm</option></select><button type="button" className="focus-ring rounded bg-coral px-2 py-1 text-xs font-semibold text-white" onClick={applyCustomPageSize}>Apply</button></div>
-      <span className="ml-auto flex items-center gap-2 text-xs font-semibold text-ink/60">Zoom <input aria-label="Canvas zoom" type="range" min="0.35" max="0.9" step="0.01" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /></span>
+      <span className="ml-auto flex items-center gap-2 text-xs font-semibold text-ink/60">Zoom {Math.round(zoom * 100)}% <input aria-label="Canvas zoom" type="range" min="0.35" max="2.5" step="0.01" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /></span>
       <Button type="button" variant="secondary" disabled={!history.length} onClick={undo}>Undo</Button>
       <Button type="button" variant="secondary" disabled={!future.length} onClick={redo}>Redo</Button>
       <div className="flex gap-1"><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={exportPng}>PNG</button><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={exportSvg}>SVG</button><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={exportZip}>ZIP</button><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={exportHtml}>HTML</button><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={exportPdf}>PDF</button><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={printPdf}>Print</button></div>

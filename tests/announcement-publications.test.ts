@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { blockDefinitions } from "@/lib/blocks";
 import { parsePublicationInput } from "@/lib/announcement-publications";
-import { announcementDocumentToHtml, defaultAnnouncementDocument, parseAnnouncementDocument, parseOrMigrateAnnouncementDocument } from "@/lib/announcement-document";
+import { announcementDocumentToHtml, centeredAnnouncementPosition, defaultAnnouncementDocument, parseAnnouncementDocument, parseOrMigrateAnnouncementDocument } from "@/lib/announcement-document";
 
 describe("announcement publications", () => {
+  it("centers inserted elements within the page and keeps oversized elements inside the margin", () => {
+    expect(centeredAnnouncementPosition(1200, 800, 400, 200)).toEqual({ x: 400, y: 300 });
+    expect(centeredAnnouncementPosition(300, 200, 400, 300)).toEqual({ x: 24, y: 24 });
+  });
+
   it("requires a title and non-empty rich content", () => {
     expect(() => parsePublicationInput({ title: "", bodyHtml: "<p>Content</p>" })).toThrow("title");
     expect(() => parsePublicationInput({ title: "Weekly news", bodyHtml: "<p> </p>" })).toThrow("content");
