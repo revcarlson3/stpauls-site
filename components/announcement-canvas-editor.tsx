@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { Canvas, Circle, FabricImage, Line, Polygon, Rect, Shadow, Textbox, Triangle, type FabricObject } from "fabric";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui";
 import { MediaPicker } from "@/components/media-picker";
 import { announcementDocumentToHtml, centeredAnnouncementPosition, defaultAnnouncementDocument, type AnnouncementDocument, type AnnouncementElement, type AnnouncementPage } from "@/lib/announcement-document";
+
+type MediaAsset = { id: string; originalName: string; url: string; mimeType: string; altText: string | null; title: string | null };
 
 type CanvasObject = FabricObject & {
   announcementId?: string;
@@ -72,11 +74,11 @@ function googleFontUrl(font: string) {
 }
 
 function shapeObject(element: Extract<AnnouncementElement, { type: "rect" }>) {
-  const common = { left: element.x, top: element.y, originX: "left" as const, originY: "top" as const, width: element.width, height: element.height, fill: element.fill, stroke: element.stroke, strokeWidth: element.strokeWidth, transparentCorners: false, cornerColor: "#e66f51" };
-  if (element.shape === "circle") return new Circle({ ...common, radius: Math.min(element.width, element.height) / 2, width: element.width, height: element.height });
-  if (element.shape === "triangle") return new Triangle(common);
+  const common = { left: element.x, top: element.y, originX: "left" as const, originY: "top" as const, fill: element.fill, stroke: element.stroke, strokeWidth: element.strokeWidth, transparentCorners: false, cornerColor: "#e66f51" };
+  if (element.shape === "circle") return new Circle({ ...common, radius: 50, scaleX: element.width / 100, scaleY: element.height / 100 });
+  if (element.shape === "triangle") return new Triangle({ ...common, width: element.width, height: element.height });
   if (element.shape === "star") return new Polygon([{ x: 50, y: 0 }, { x: 61, y: 35 }, { x: 98, y: 35 }, { x: 68, y: 57 }, { x: 79, y: 100 }, { x: 50, y: 73 }, { x: 21, y: 100 }, { x: 32, y: 57 }, { x: 2, y: 35 }, { x: 39, y: 35 }], { ...common, scaleX: element.width / 100, scaleY: element.height / 100 });
-  return new Rect({ ...common, rx: element.cornerRadius, ry: element.cornerRadius });
+  return new Rect({ ...common, width: element.width, height: element.height, rx: element.cornerRadius, ry: element.cornerRadius });
 }
 
 function canvasObject(object: FabricObject) {
@@ -177,6 +179,10 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
   const [layers, setLayers] = useState<AnnouncementElement[]>(value.elements);
   const [fontQuery, setFontQuery] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: AnnouncementElement["type"] } | null>(null);
+  const [insertCategory, setInsertCategory] = useState<"text" | "images" | "shapes">("text");
+  const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaError, setMediaError] = useState("");
   const pages = pageList(value);
   const currentPage = pages[activePage] ?? pages[0];
   const [customWidth, setCustomWidth] = useState(String(currentPage?.width ?? value.width));
@@ -265,6 +271,17 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     loadingRef.current = false;
     refreshSelection();
   }, [activePage, refreshSelection]);
+
+  useEffect(() => {
+    if (insertCategory !== "images") return;
+    setMediaLoading(true);
+    setMediaError("");
+    void fetch("/api/media?type=image&context=site-settings", { cache: "no-store" }).then(async (response) => {
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Unable to load images.");
+      setMediaAssets(Array.isArray(body) ? body as MediaAsset[] : []);
+    }).catch((reason: unknown) => setMediaError(reason instanceof Error ? reason.message : "Unable to load images.")).finally(() => setMediaLoading(false));
+  }, [insertCategory]);
 
   useEffect(() => {
     if (!canvasElementRef.current || fabricRef.current) return;
@@ -382,14 +399,13 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     publish(withPage(value, activePage, { ...currentPage, width: nextPage.width, height: nextPage.height, background: nextPage.background, elements: nextPage.elements }));
   }
 
-  function addText(left = 0, top = 0, width = Math.min(700, currentPage.width - 140)) {
+  function addText(left?: number, top?: number, width = Math.min(700, currentPage.width - 140), preset: "textbox" | "heading" | "subheading" | "body" = "textbox") {
     const canvas = fabricRef.current;
     if (!canvas) return;
     const centeredWidth = Math.max(120, Math.min(width, currentPage.width - 48));
-    const centered = centeredAnnouncementPosition(currentPage.width, currentPage.height, centeredWidth, 90);
-    const centeredLeft = left || centered.x;
-    const centeredTop = top || centered.y;
-    const element: Extract<AnnouncementElement, { type: "text" }> = { id: `text-${Date.now()}`, type: "text", x: centeredLeft, y: centeredTop, width: centeredWidth, height: 90, text: "Double-click to edit", fontSize: 34, fontFamily: "Arial", fill: "#17324d", align: "center", fontStyle: "normal", underline: false };
+    const styles = { textbox: { text: "Double-click to edit", fontSize: 34, height: 90 }, heading: { text: "Heading", fontSize: 52, height: 110 }, subheading: { text: "Subheading", fontSize: 36, height: 90 }, body: { text: "Body text", fontSize: 24, height: 180 } }[preset];
+    const presetPosition = centeredAnnouncementPosition(currentPage.width, currentPage.height, centeredWidth, styles.height);
+    const element: Extract<AnnouncementElement, { type: "text" }> = { id: `text-${Date.now()}`, type: "text", x: left ?? presetPosition.x, y: top ?? presetPosition.y, width: centeredWidth, height: styles.height, text: styles.text, fontSize: styles.fontSize, fontFamily: "Arial", fill: "#17324d", align: "center", fontStyle: "normal", underline: false };
     const object = new Textbox(element.text, { left: element.x, top: element.y, originX: "left", originY: "top", width: element.width, fontSize: element.fontSize, fontFamily: element.fontFamily, fill: element.fill, textAlign: element.align, editable: true, transparentCorners: false, cornerColor: "#e66f51" });
     object.set({ scaleY: element.height / Math.max(1, object.getScaledHeight()) });
     setCanvasObjectMetadata(object, element);
@@ -400,14 +416,17 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     refreshSelection();
   }
 
-  function addShape(shape: "rect" | "circle" | "triangle" | "star" = "rect") {
+  function addShape(shape: "rect" | "circle" | "triangle" | "star" = "rect", dropPoint?: { x: number; y: number }, cornerRadius = 14) {
     const canvas = fabricRef.current;
     if (!canvas) return;
     const width = Math.min(260, currentPage.width - 48);
     const height = Math.min(120, currentPage.height - 48);
     const centered = centeredAnnouncementPosition(currentPage.width, currentPage.height, width, height);
-    const element: Extract<AnnouncementElement, { type: "rect" }> = { id: `shape-${Date.now()}`, type: "rect", shape, x: centered.x, y: centered.y, width, height, fill: "#e66f51", cornerRadius: 14 };
+    const position = dropPoint ? { x: Math.max(0, Math.min(currentPage.width - width, dropPoint.x - width / 2)), y: Math.max(0, Math.min(currentPage.height - height, dropPoint.y - height / 2)) } : centered;
+    const element: Extract<AnnouncementElement, { type: "rect" }> = { id: `shape-${Date.now()}`, type: "rect", shape, x: position.x, y: position.y, width, height, fill: "#e66f51", cornerRadius };
     const object = shapeObject(element);
+    object.set({ originX: "left", originY: "top", left: element.x, top: element.y });
+    object.setCoords();
     setCanvasObjectMetadata(object, element);
     canvas.add(object);
     canvas.setActiveObject(object);
@@ -416,14 +435,15 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
     refreshSelection();
   }
 
-  function addImage(url: string, alt = "") {
+  function addImage(url: string, alt = "", dropPoint?: { x: number; y: number }) {
     const canvas = fabricRef.current;
     if (!canvas) return;
     void FabricImage.fromURL(url, { crossOrigin: "anonymous" }).then((object) => {
       const width = Math.min(700, currentPage.width - 48);
       const height = Math.min(300, currentPage.height - 48);
       const centered = centeredAnnouncementPosition(currentPage.width, currentPage.height, width, height);
-      const element: Extract<AnnouncementElement, { type: "image" }> = { id: `image-${Date.now()}`, type: "image", x: centered.x, y: centered.y, width, height, src: url, alt, cornerRadius: 14 };
+      const position = dropPoint ? { x: Math.max(0, Math.min(currentPage.width - width, dropPoint.x - width / 2)), y: Math.max(0, Math.min(currentPage.height - height, dropPoint.y - height / 2)) } : centered;
+      const element: Extract<AnnouncementElement, { type: "image" }> = { id: `image-${Date.now()}`, type: "image", x: position.x, y: position.y, width, height, src: url, alt, cornerRadius: 14 };
       object.set({ left: element.x, top: element.y, originX: "left", originY: "top", scaleX: element.width / Math.max(1, object.width ?? element.width), scaleY: element.height / Math.max(1, object.height ?? element.height), transparentCorners: false, cornerColor: "#e66f51" });
       setCanvasObjectMetadata(object, element);
       canvas.add(object);
@@ -432,6 +452,25 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
       publishCanvas(canvas);
       refreshSelection();
     });
+  }
+
+  function canvasDropPoint(event: DragEvent<HTMLDivElement>) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return { x: (event.clientX - bounds.left) / zoom, y: (event.clientY - bounds.top) / zoom };
+  }
+
+  function handleCanvasDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const point = canvasDropPoint(event);
+    const payload = event.dataTransfer.getData("application/x-announcement-insert");
+    if (!payload) return;
+    try {
+      const item = JSON.parse(payload) as { type: "image" | "shape"; url?: string; alt?: string; shape?: "rect" | "circle" | "triangle" | "star"; cornerRadius?: number };
+      if (item.type === "image" && item.url) addImage(item.url, item.alt ?? "", point);
+      if (item.type === "shape" && item.shape) addShape(item.shape, point, item.cornerRadius);
+    } catch {
+      setMediaError("Unable to add the dropped item.");
+    }
   }
 
   function updateSelected(patch: Record<string, unknown>) {
@@ -646,9 +685,24 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
       <Button type="button" variant="secondary" disabled={!future.length} onClick={redo}>Redo</Button>
       <div className="flex gap-1"><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={exportPng}>PNG</button><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={exportSvg}>SVG</button><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={exportZip}>ZIP</button><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={exportHtml}>HTML</button><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={exportPdf}>PDF</button><button type="button" className="focus-ring rounded border border-ink/15 px-2 py-1 text-xs" onClick={printPdf}>Print</button></div>
     </div>
-    <div className="grid min-w-0 lg:grid-cols-[180px_minmax(0,1fr)_260px]">
-      <aside className="hidden border-r border-ink/10 bg-white p-3 lg:block"><p className="text-xs font-semibold uppercase tracking-wider text-ink/45">Add to page</p><div className="mt-3 grid gap-2"><button type="button" onClick={() => addText()} className="focus-ring rounded-xl border border-ink/10 p-3 text-left hover:border-coral"><span className="block text-lg font-bold">T</span><span className="text-xs font-semibold">Text box</span></button><div className="grid grid-cols-2 gap-2">{(["rect", "circle", "triangle", "star"] as const).map((shape) => <button key={shape} type="button" onClick={() => addShape(shape)} className="focus-ring rounded-xl border border-ink/10 p-2 text-left text-xs capitalize hover:border-coral">{shape}</button>)}</div><div className="rounded-xl border border-ink/10 p-3"><MediaPicker label="Add image" permission="MANAGE_SETTINGS" onSelect={(asset) => addImage(asset.url, asset.altText ?? asset.title ?? asset.originalName)} /></div></div><label className="mt-5 grid gap-2 text-xs font-semibold text-ink/60">Page background<input type="color" value={currentPage.background} onChange={(event) => { const canvas = fabricRef.current; if (!canvas) return; canvas.backgroundColor = event.target.value; canvas.requestRenderAll(); publish(withPage(value, activePage, { ...currentPage, background: event.target.value })); }} className="h-10 w-full rounded border border-ink/10 bg-white p-1" /></label></aside>
-      <div className="min-w-0 overflow-auto p-5 sm:p-8"><div className="mx-auto overflow-hidden shadow-2xl" style={{ width: canvasWidth, height: currentPage.height * zoom }}><div style={{ width: currentPage.width, height: currentPage.height, transform: `scale(${zoom})`, transformOrigin: "top left" }}><canvas ref={canvasElementRef} /></div></div><p className="mt-4 text-center text-xs text-ink/50">Drag objects toward the dashed guides to align them. Hold Shift while dragging to bypass snapping. Double-click text or shapes to edit.</p></div>
+    <div className="grid min-w-0 lg:grid-cols-[64px_200px_minmax(0,1fr)_260px]">
+      <aside className="hidden border-r border-ink/10 bg-white p-2 lg:block">
+        <p className="sr-only">Insert category</p>
+        {([['text', 'T', 'Text'], ['images', '?', 'Images'], ['shapes', '?', 'Shapes']] as const).map(([category, icon, label]) => <button key={category} type="button" aria-label={label} title={label} onClick={() => setInsertCategory(category)} className={"focus-ring mb-2 flex w-full flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold " + (insertCategory === category ? "border-coral bg-coral/10 text-coral" : "border-transparent text-ink/60 hover:border-ink/15")}>{icon}<span>{label}</span></button>)}
+      </aside>
+      <aside className="hidden border-r border-ink/10 bg-white p-3 lg:block">
+        <p className="text-xs font-semibold uppercase tracking-wider text-ink/45">Add to page</p>
+        {insertCategory === "text" && <div className="mt-3 grid gap-2">
+          <button type="button" onClick={() => addText()} className="focus-ring rounded-xl border border-ink/10 p-3 text-left hover:border-coral"><span className="block text-lg font-bold">T</span><span className="text-xs font-semibold">Add a Textbox</span></button>
+          <button type="button" onClick={() => addText(undefined, undefined, Math.min(760, currentPage.width - 48), "heading")} className="focus-ring rounded-xl border border-ink/10 p-3 text-left hover:border-coral"><span className="block text-xl font-bold">Heading</span><span className="text-xs text-ink/55">Large centered heading</span></button>
+          <button type="button" onClick={() => addText(undefined, undefined, Math.min(700, currentPage.width - 48), "subheading")} className="focus-ring rounded-xl border border-ink/10 p-3 text-left hover:border-coral"><span className="block text-lg font-semibold">Subheading</span><span className="text-xs text-ink/55">Supporting text</span></button>
+          <button type="button" onClick={() => addText(undefined, undefined, Math.min(650, currentPage.width - 48), "body")} className="focus-ring rounded-xl border border-ink/10 p-3 text-left hover:border-coral"><span className="block text-sm">Body</span><span className="text-xs text-ink/55">Readable paragraph text</span></button>
+        </div>}
+        {insertCategory === "shapes" && <div className="mt-3 grid grid-cols-2 gap-2">{([['rect', 'Square', 0], ['rect', 'Rounded', 14], ['circle', 'Circle', 0], ['triangle', 'Triangle', 0], ['star', 'Star', 0]] as const).map(([shape, label, cornerRadius], index) => <button key={label} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-announcement-insert", JSON.stringify({ type: "shape", shape, cornerRadius })); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => addShape(shape, undefined, cornerRadius)} className="focus-ring grid min-h-20 place-items-center rounded-xl border border-ink/10 p-2 text-xs hover:border-coral"><span className={index === 0 ? "h-10 w-10 bg-coral" : index === 1 ? "h-10 w-10 rounded-lg bg-coral" : index === 2 ? "h-10 w-10 rounded-full bg-coral" : index === 3 ? "h-0 w-0 border-x-[20px] border-b-[36px] border-x-transparent border-b-coral" : "text-3xl text-coral"}>{index === 4 ? "?" : ""}</span><span>{label}</span></button>)}</div>}
+        {insertCategory === "images" && <div className="mt-3 grid gap-2">{mediaLoading && <p className="text-xs text-ink/55">Loading images...</p>}{mediaError && <p role="alert" className="text-xs text-coral">{mediaError}</p>}{!mediaLoading && !mediaAssets.length && <><p className="text-xs text-ink/55">No images found.</p><MediaPicker label="Open media library" permission="MANAGE_SETTINGS" onSelect={(asset) => addImage(asset.url, asset.altText ?? asset.title ?? asset.originalName)} /></>}{mediaAssets.map((asset) => <button key={asset.id} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-announcement-insert", JSON.stringify({ type: "image", url: asset.url, alt: asset.altText ?? asset.title ?? asset.originalName })); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => addImage(asset.url, asset.altText ?? asset.title ?? asset.originalName)} className="focus-ring overflow-hidden rounded-xl border border-ink/10 text-left hover:border-coral"><img src={asset.url} alt={asset.altText ?? asset.title ?? asset.originalName} className="aspect-video w-full object-cover" /><span className="block truncate p-2 text-xs font-semibold">{asset.title || asset.originalName}</span></button>)}</div>}
+        <label className="mt-5 grid gap-2 text-xs font-semibold text-ink/60">Page background<input type="color" value={currentPage.background} onChange={(event) => { const canvas = fabricRef.current; if (!canvas) return; canvas.backgroundColor = event.target.value; canvas.requestRenderAll(); publish(withPage(value, activePage, { ...currentPage, background: event.target.value })); }} className="h-10 w-full rounded border border-ink/10 bg-white p-1" /></label>
+      </aside>
+      <div className="min-w-0 overflow-auto p-5 sm:p-8" onDragOver={(event) => event.preventDefault()} onDrop={handleCanvasDrop}><div className="mx-auto overflow-hidden shadow-2xl" style={{ width: canvasWidth, height: currentPage.height * zoom }}><div style={{ width: currentPage.width, height: currentPage.height, transform: `scale(${zoom})`, transformOrigin: "top left" }}><canvas ref={canvasElementRef} /></div></div><p className="mt-4 text-center text-xs text-ink/50">Drag objects toward the dashed guides to align them. Hold Shift while dragging to bypass snapping. Double-click text or shapes to edit.</p></div>
       <aside className="border-t border-ink/10 bg-white p-3 lg:border-l lg:border-t-0"><p className="text-xs font-semibold uppercase tracking-wider text-ink/45">Properties</p>{selected ? <div className="mt-3 grid gap-3 text-xs"><div className="grid grid-cols-2 gap-2"><label className="grid gap-1 font-semibold text-ink/60">X<input type="number" value={Math.round(selected.x)} onChange={(event) => updateSelected({ left: Number(event.target.value) })} className="focus-ring rounded border border-ink/15 px-2 py-1" /></label><label className="grid gap-1 font-semibold text-ink/60">Y<input type="number" value={Math.round(selected.y)} onChange={(event) => updateSelected({ top: Number(event.target.value) })} className="focus-ring rounded border border-ink/15 px-2 py-1" /></label></div>{selectedText && <><label className="grid gap-1 font-semibold text-ink/60">Font search<input value={fontQuery} onChange={(event) => setFontQuery(event.target.value)} placeholder="Search fonts" className="focus-ring rounded border border-ink/15 px-2 py-1" /></label><label className="grid gap-1 font-semibold text-ink/60">Font<select value={selected.fontFamily ?? "Arial"} onChange={(event) => updateSelected({ fontFamily: event.target.value })} className="focus-ring rounded border border-ink/15 px-2 py-1"><optgroup label="Fonts used in canvas">{filterFonts(usedFonts).map((font) => <option key={`used-${font}`}>{font}</option>)}</optgroup><optgroup label="Commonly used fonts">{filterFonts(COMMONLY_USED_FONTS).map((font) => <option key={`common-used-${font}`}>{font}</option>)}</optgroup><optgroup label="Common fonts">{filterFonts(COMMON_FONTS).map((font) => <option key={`common-${font}`}>{font}</option>)}</optgroup><optgroup label="Alphabetical">{filterFonts(GOOGLE_FONTS.filter((font) => !groupedFonts.has(font))).sort((a, b) => a.localeCompare(b)).map((font) => <option key={`alphabetical-${font}`}>{font}</option>)}</optgroup></select></label><label className="grid gap-1 font-semibold text-ink/60">Size (px)<select value={Math.round(selected.fontSize ?? 24)} onChange={(event) => updateSelected({ fontSize: Number(event.target.value) })} className="focus-ring rounded border border-ink/15 px-2 py-1">{FONT_SIZES.map((size) => <option key={size} value={size}>{size}px</option>)}</select></label><div className="flex gap-2"><button type="button" aria-label="Bold" className="focus-ring rounded border border-ink/15 px-2 py-1 font-bold" onClick={() => updateSelected({ fontWeight: selected.fontStyle === "bold" ? "normal" : "bold" })}>B</button><button type="button" aria-label="Italic" className="focus-ring rounded border border-ink/15 px-2 py-1 italic" onClick={() => updateSelected({ fontStyle: selected.fontStyle === "italic" ? "normal" : "italic" })}>I</button><button type="button" aria-label="Underline" className={`focus-ring rounded border px-2 py-1 underline ${selected.underline ? "border-coral bg-coral/10 text-coral" : "border-ink/15"}`} onClick={() => updateSelected({ underline: !selected.underline })}>U</button>{(["left", "center", "right"] as const).map((align) => <button key={align} type="button" aria-label={`${align} align`} title={`${align} align`} className={`focus-ring rounded border px-2 py-1 text-lg leading-none ${selected.align === align ? "border-coral text-coral" : "border-ink/15"}`} onClick={() => updateSelected({ textAlign: align })}>{alignIcon(align)}</button>)}</div><label className="grid gap-1 font-semibold text-ink/60">Link (optional)<input type="url" value={selected.link ?? ""} onChange={(event) => updateSelected({ announcementLink: event.target.value })} placeholder="https://..." className="focus-ring rounded border border-ink/15 px-2 py-1" /></label><div className="grid gap-2"><div className="grid grid-cols-2 gap-2"><Button type="button" className={selected.shadow && selected.shadow.color !== "#ffffffcc" ? "border-coral bg-coral/10 text-coral" : ""} variant="secondary" onClick={() => updateSelected({ shadowOptions: selected.shadow && selected.shadow.color !== "#ffffffcc" ? null : { color: "#00000066", blur: 8, offsetX: 2, offsetY: 2 } })}>Text shadow</Button><Button type="button" className={selected.shadow?.color === "#ffffffcc" ? "border-coral bg-coral/10 text-coral" : ""} variant="secondary" onClick={() => updateSelected({ shadowOptions: selected.shadow?.color === "#ffffffcc" ? null : { color: "#ffffffcc", blur: 0, offsetX: 0, offsetY: 2 } })}>Text lift</Button></div>{selected.shadow && <div className="grid grid-cols-2 gap-2"><label className="grid gap-1 font-semibold text-ink/60">Color<input type="color" value={selected.shadow.color.slice(0, 7)} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, color: event.target.value } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Blur<input type="range" min="0" max="40" value={selected.shadow.blur} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, blur: Number(event.target.value) } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Horizontal distance<input type="range" min="-40" max="40" value={selected.shadow.offsetX} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, offsetX: Number(event.target.value) } })} /></label><label className="grid gap-1 font-semibold text-ink/60">Vertical distance<input type="range" min="-40" max="40" value={selected.shadow.offsetY} onChange={(event) => updateSelected({ shadowOptions: { ...selected.shadow, offsetY: Number(event.target.value) } })} /></label></div>}</div></>}{selected.type === "rect" && <label className="grid gap-1 font-semibold text-ink/60">Shape<select value={selected.shape ?? "rect"} onChange={(event) => updateSelected({ announcementShape: event.target.value })} className="focus-ring rounded border border-ink/15 px-2 py-1"><option value="rect">Rectangle</option><option value="circle">Circle</option><option value="triangle">Triangle</option><option value="star">Star</option></select></label>}{selected.type !== "image" && <label className="grid gap-1 font-semibold text-ink/60">Color<input type="color" value={selected.fill?.startsWith("#") ? selected.fill : "#17324d"} onChange={(event) => updateSelected({ fill: event.target.value })} className="h-9 w-full rounded border border-ink/10 p-1" /></label>}<label className="grid gap-1 font-semibold text-ink/60">Opacity<input type="range" min="0.1" max="1" step="0.05" value={selected.opacity} onChange={(event) => updateSelected({ opacity: Number(event.target.value) })} /></label><div className="grid grid-cols-2 gap-2"><Button type="button" variant="secondary" onClick={duplicateSelected}>Duplicate</Button><Button type="button" variant="secondary" onClick={deleteSelected}>Delete</Button></div><div className="grid grid-cols-2 gap-2"><Button type="button" variant="secondary" onClick={() => moveLayer("up")}>Bring forward</Button><Button type="button" variant="secondary" onClick={() => moveLayer("down")}>Send backward</Button></div></div> : <p className="mt-3 text-xs leading-5 text-ink/50">Select an object to edit its properties, or right-click for item actions.</p>}<div className="mt-6 border-t border-ink/10 pt-3"><p className="text-xs font-semibold uppercase tracking-wider text-ink/45">Layers</p><div className="mt-2 grid gap-1">{layers.map((layer) => <button type="button" key={layer.id} className={`focus-ring truncate rounded px-2 py-1 text-left text-xs ${selected?.id === layer.id ? "bg-coral/10 font-semibold text-coral" : "hover:bg-mist"}`} onClick={() => { const canvas = fabricRef.current; const object = canvas?.getObjects().find((candidate) => canvasObject(candidate).announcementId === layer.id); if (canvas && object) { canvas.setActiveObject(object); canvas.requestRenderAll(); refreshSelection(); } }}>{layer.type === "text" ? (layer.text || "Text").slice(0, 24) : layer.type === "image" ? "Image" : `${layer.shape ?? "Shape"}`}</button>)}</div></div></aside>
     </div>
     {contextMenu && <div className="fixed z-50 grid min-w-40 gap-1 rounded-lg border border-ink/15 bg-white p-1 text-sm shadow-xl" style={{ left: contextMenu.x, top: contextMenu.y }} onMouseLeave={() => setContextMenu(null)}><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={() => { duplicateSelected(); setContextMenu(null); }}>Duplicate</button><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={() => { moveLayer("up"); setContextMenu(null); }}>Bring forward</button><button type="button" className="rounded px-3 py-2 text-left hover:bg-mist" onClick={() => { moveLayer("down"); setContextMenu(null); }}>Send backward</button><button type="button" className="rounded px-3 py-2 text-left text-coral hover:bg-mist" onClick={() => { deleteSelected(); setContextMenu(null); }}>Delete</button></div>}
