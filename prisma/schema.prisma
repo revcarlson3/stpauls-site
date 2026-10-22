@@ -204,6 +204,8 @@ model User {
   supportTicketsCreated          SupportTicket[]                 @relation("SupportTicketCreator")
   supportTicketsAssigned         SupportTicket[]                 @relation("SupportTicketAssignee")
   supportTicketMessages          SupportTicketMessage[]          @relation("SupportTicketMessageAuthor")
+  announcementPublications       AnnouncementPublication[]      @relation("AnnouncementPublicationCreatedBy")
+  announcementTemplates          AnnouncementTemplate[]         @relation("AnnouncementTemplateCreatedBy")
 }
 
 model Church {
@@ -264,6 +266,8 @@ model Church {
   supportTickets                       SupportTicket[]
   announcements                        GlobalAnnouncementDelivery[]
   ownedAnnouncements                   GlobalAnnouncement[]                  @relation("GlobalAnnouncementChurch")
+  announcementPublications             AnnouncementPublication[]
+  announcementTemplates                AnnouncementTemplate[]
   auditLogs                            AuditLog[]
   createdAt                            DateTime                              @default(now())
   updatedAt                            DateTime                              @updatedAt
@@ -2277,4 +2281,57 @@ model GlobalAnnouncementDelivery {
 
   @@unique([announcementId, churchId])
   @@index([churchId, acknowledgedAt])
+}
+
+model AnnouncementPublication {
+  id             String                       @id @default(cuid())
+  churchId       String
+  church         Church                       @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  title          String
+  bodyHtml       String
+  documentJson   Json?
+  status         String                       @default("DRAFT")
+  publishAt      DateTime?
+  publishedAt    DateTime?
+  createdById    String
+  createdBy      User                         @relation("AnnouncementPublicationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  sourceId       String?
+  source         AnnouncementPublication?     @relation("AnnouncementPublicationSource", fields: [sourceId], references: [id], onDelete: SetNull)
+  copies         AnnouncementPublication[]    @relation("AnnouncementPublicationSource")
+  emailDelivery  AnnouncementEmailDelivery?
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+
+  @@index([churchId, status, publishAt])
+  @@index([churchId, publishedAt])
+}
+
+model AnnouncementTemplate {
+  id         String   @id @default(cuid())
+  churchId   String
+  church     Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  name       String
+  title      String
+  bodyHtml   String
+  documentJson Json?
+  createdById String
+  createdBy  User     @relation("AnnouncementTemplateCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([churchId, name])
+  @@index([churchId, updatedAt])
+}
+
+model AnnouncementEmailDelivery {
+  id             String                 @id @default(cuid())
+  publicationId  String                 @unique
+  publication    AnnouncementPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  status         String                 @default("SENDING")
+  recipientCount Int                    @default(0)
+  sentCount      Int                    @default(0)
+  failedCount    Int                    @default(0)
+  startedAt      DateTime               @default(now())
+  completedAt    DateTime?
+  note           String?
 }

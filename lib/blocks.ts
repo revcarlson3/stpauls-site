@@ -18,6 +18,7 @@ export type BlockType =
   | "buttons"
   | "table"
   | "calendar"
+  | "announcements"
   | "widget"
   | "divider"
   | "spacer"
@@ -142,6 +143,7 @@ export const blockDefinitions: Record<BlockType, BlockDefinition> = {
   buttons: { label: "Buttons", description: "One or more links, actions, or anchor buttons", defaultSpan: 8 },
   table: { label: "Table", description: "Structured rows and columns with responsive public rendering", defaultSpan: 12 },
   calendar: { label: "Events calendar", description: "Public calendar of published church events", defaultSpan: 12 },
+  announcements: { label: "Announcements", description: "Latest publication with links to the announcement archive", defaultSpan: 12 },
   widget: { label: "Widget", description: "Reusable menu or text content", defaultSpan: 12 },
   divider: { label: "Divider", description: "Decorative line between page elements", defaultSpan: 12 },
   spacer: { label: "Spacer", description: "Blank responsive space between elements", defaultSpan: 12 },

@@ -1,5 +1,6 @@
 import React, { type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { blockDefinitions, parseTableConfig } from "@/lib/blocks";
 import { listPublicWidgets, resolvePublicMenu, resolvePublicWidget } from "@/lib/content";
 import { MenuLinks } from "@/components/menu-links";
@@ -11,6 +12,9 @@ import { FormRenderer } from "@/components/form-renderer";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { PublicWidget } from "@/components/public-widget";
 import { PublicEventCalendar } from "@/components/public-event-calendar";
+import { resolvePublicTenant } from "@/lib/platform-domain";
+import { listPublicAnnouncementData } from "@/lib/announcement-publications";
+import { AnnouncementArchive, AnnouncementPublicationContent } from "@/components/announcement-publications";
 
 type RenderBlock = {
   id: string;
@@ -454,6 +458,11 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
     if (block.type === "calendar") {
       const calendarView = block.props?.calendarDefaultView === "week" || block.props?.calendarDefaultView === "agenda" ? block.props.calendarDefaultView : "month";
       return <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`calendar-block-surface ${padding} ${alignment} ${animation}`} style={style} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}><div className={responsiveContentClass(block.props ?? {}, "calendarDefaultView")}><div className="responsive-content-base"><PublicEventCalendar defaultView={calendarView} /></div>{responsiveDevices.map((device) => { const value = responsiveString(block.props ?? {}, "calendarDefaultView", device); return value === undefined ? null : <div key={device} className={`responsive-content-variant responsive-content-${device}`}><PublicEventCalendar defaultView={value === "week" || value === "agenda" ? value : "month"} /></div>; })}</div></BlockSurface>;
+    }
+    if (block.type === "announcements") {
+      const tenant = await resolvePublicTenant(headers().get("host"));
+      const data = tenant ? await listPublicAnnouncementData(tenant.id) : { latest: null, archive: [] };
+      return <BlockSurface key={block.id} as="section" labelledBy={headingId} className={`${padding} ${alignment} ${animation}`} style={style} background={background} overlay={block.props?.overlayType && block.props.overlayType !== "none" && block.props.overlayHidden !== true ? overlay : undefined} overlayOpacity={overlayOpacity(block.props?.overlayOpacity)}>{data.latest ? <><AnnouncementPublicationContent publication={data.latest} />{block.props?.announcementArchive !== false && <AnnouncementArchive items={data.archive} />}</> : <p className="text-ink/60">There are no published announcements yet.</p>}</BlockSurface>;
     }
     if (block.type === "form") {
       const formId = typeof block.props?.formId === "string" ? block.props.formId : "";
