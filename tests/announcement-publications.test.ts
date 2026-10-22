@@ -94,4 +94,40 @@ describe("announcement publications", () => {
     expect(parsed?.elements.map((element) => element.type === "rect" ? element.shape : undefined)).toEqual(["star", "hexagon", "arrowRight", "heart", "flowchartDecision"]);
     expect(announcementDocumentToHtml(parsed!)).toContain("clip-path:polygon");
   });
+
+  it("preserves table and grid layout metadata across parsing", () => {
+    const document = {
+      ...defaultAnnouncementDocument("Layouts"),
+      elements: [
+        {
+          id: "grid-cell",
+          type: "rect" as const,
+          x: 24,
+          y: 24,
+          width: 400,
+          height: 300,
+          fill: "#fff",
+          cornerRadius: 12,
+          container: "grid" as const,
+          cellId: "grid-cell-1",
+          layoutId: "grid-1",
+          layoutType: "grid" as const,
+          layoutGap: 18,
+          layoutRows: 2,
+          layoutColumns: 3,
+          cellRow: 1,
+          cellColumn: 2
+        }
+      ]
+    };
+    const parsed = parseAnnouncementDocument(document);
+    expect(parsed?.elements[0]).toMatchObject({
+      layoutId: "grid-1",
+      layoutRows: 2,
+      layoutColumns: 3,
+      cellRow: 1,
+      cellColumn: 2,
+      layoutGap: 18
+    });
+  });
 });
