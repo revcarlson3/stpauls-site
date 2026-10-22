@@ -34,9 +34,12 @@ describe("announcement publications", () => {
 
   it("accepts a visual document as the canonical publication payload", () => {
     const document = defaultAnnouncementDocument("Christmas service");
+    const title = document.elements.find((element) => element.id === "title");
+    if (title?.type === "text") title.underline = true;
     const publication = parsePublicationInput({ title: "Christmas service", documentJson: document });
     expect(publication.documentJson).toEqual(parseAnnouncementDocument(document));
     expect(publication.bodyHtml).toContain("Christmas service");
+    expect(publication.bodyHtml).toContain("text-decoration:underline");
     expect(publication.bodyHtml).toContain("announcement-document");
   });
 
