@@ -74,4 +74,11 @@ describe("page editor site preview target", () => {
     expect(login).toContain("Send new code");
     expect(login).toContain("mfaChannels.map");
   });
+
+  it("offers enabled site-wide email and SMS MFA to verified contacts", () => {
+    const auth = fs.readFileSync(path.resolve(process.cwd(), "lib/auth-options.ts"), "utf8");
+
+    expect(auth).toContain('settings.emailMfaEnabled && user.emailVerifiedAt ? "email" : ""');
+    expect(auth).toContain('settings.smsMfaEnabled && user.phoneVerifiedAt && user.phoneNumber ? "sms" : ""');
+  });
 });

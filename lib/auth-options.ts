@@ -63,8 +63,8 @@ export const authOptions: NextAuthOptions = {
         const access = canAccessAdmin(groupPermissions.map(({ permission }) => permission));
         const trusted = settings.mfaChallengePolicy === "trusted-device" && await isTrustedDevice(req.headers?.cookie, user.id);
         const availableChannels = [
-          settings.emailMfaEnabled && user.emailMfaEnabled && user.emailVerifiedAt ? "email" : "",
-          settings.smsMfaEnabled && user.smsMfaEnabled && user.phoneVerifiedAt && user.phoneNumber ? "sms" : ""
+          settings.emailMfaEnabled && user.emailVerifiedAt ? "email" : "",
+          settings.smsMfaEnabled && user.phoneVerifiedAt && user.phoneNumber ? "sms" : ""
         ].filter(Boolean) as Array<"email" | "sms">;
         const authenticatorAvailable = Boolean(user.isPlatformAdmin && user.mfaEnabled && user.mfaSecretEncrypted || settings.authenticatorMfaEnabled && user.mfaEnabled && user.mfaSecretEncrypted);
         const mfaRequired = Boolean(bridgeRequested || (!trusted && (authenticatorAvailable || availableChannels.length)));
