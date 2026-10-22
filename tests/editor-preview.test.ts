@@ -68,7 +68,8 @@ describe("page editor site preview target", () => {
   it("preserves the password during the MFA step and exposes delivery methods", () => {
     const login = fs.readFileSync(path.resolve(process.cwd(), "app/admin/login/page.tsx"), "utf8");
 
-    expect(login).toContain('mfaCode: mfaChallenge ? mfaCode : undefined');
+    expect(login).toContain('/api/auth/callback/credentials');
+    expect(login).toContain('mfaCode: code');
     expect(login).toContain("password,");
     expect(login).toContain("Verification method");
     expect(login).toContain("Send new code");

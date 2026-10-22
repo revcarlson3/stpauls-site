@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Image from "next/image";
-import { getSession, signIn } from "next-auth/react";
+import { getSession } from "next-auth/react";
 import { Button, Card, Container } from "@/components/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -28,20 +28,39 @@ export default function AdminLoginPage() {
     window.location.href = typeof value.destination === "string" ? value.destination : "/account";
   }
 
+  async function submitCredentials(channel: "authenticator" | "email" | "sms", code = "") {
+    const csrfResponse = await fetch("/api/auth/csrf");
+    const csrfBody = await csrfResponse.json().catch(() => ({})) as { csrfToken?: string };
+    if (!csrfResponse.ok || !csrfBody.csrfToken) throw new Error("Unable to start sign-in. Refresh the page and try again.");
+    const callbackResponse = await fetch("/api/auth/callback/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        csrfToken: csrfBody.csrfToken,
+        email,
+        password,
+        rememberMe: String(rememberMe),
+        mfaCode: code,
+        mfaChannel: channel,
+        captchaToken: captcha?.token ?? "",
+        captchaAnswer,
+        callbackUrl: "/admin",
+        json: "true"
+      })
+    });
+    const callback = await callbackResponse.json().catch(() => ({})) as { error?: string; url?: string };
+    if (!callbackResponse.ok || callback.error || (typeof callback.url === "string" && callback.url.includes("error="))) {
+      throw new Error(callback.error || "CredentialsSignin");
+    }
+  }
+
   async function requestMfaCode(channel: "authenticator" | "email" | "sms") {
     setError("");
-    const result = await signIn("credentials", {
-      email,
-      password,
-      rememberMe: String(rememberMe),
-      mfaChannel: channel,
-      captchaToken: captcha?.token,
-      captchaAnswer,
-      callbackUrl: "/admin",
-      redirect: false
-    });
-    if (result?.error) {
-      setError(result.error === "The email verification code could not be sent. Check the email delivery settings or use another verification method." ? result.error : "The verification code could not be sent. Please try another method.");
+    try {
+      await submitCredentials(channel);
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : "";
+      setError(message === "The email verification code could not be sent. Check the email delivery settings or use another verification method." ? message : "The verification code could not be sent. Please try another method.");
       return;
     }
     const session = await getSession();
@@ -55,30 +74,23 @@ export default function AdminLoginPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    const result = await signIn("credentials", {
-      email,
-      password,
-      rememberMe: String(rememberMe),
-      mfaCode: mfaChallenge ? mfaCode : undefined,
-      mfaChannel: mfaChallenge ? mfaChannel : undefined,
-      captchaToken: captcha?.token,
-      captchaAnswer,
-      callbackUrl: "/admin",
-      redirect: false
-    });
-    if (result?.error) {
+    try {
+      await submitCredentials(mfaChallenge ? mfaChannel : "authenticator", mfaChallenge ? mfaCode : "");
+    } catch (reason) {
+      const resultError = reason instanceof Error ? reason.message : "";
       const knownErrors = [
         "Human verification was not accepted. Please solve it again.",
         "This account is temporarily locked. Please try again later.",
         "The email verification code could not be sent. Check the email delivery settings or use another verification method.",
         "That verification code was not accepted."
       ];
-      setError(knownErrors.includes(result.error) ? result.error : mfaChallenge ? "That verification code was not accepted." : "Email or password was not accepted.");
+      setError(knownErrors.includes(resultError) ? resultError : mfaChallenge ? "That verification code was not accepted." : "Email or password was not accepted.");
+      return;
     }
-    else if (mfaChallenge && trustDevice) {
+    if (mfaChallenge && trustDevice) {
       await fetch("/api/account/mfa/trusted-device", { method: "POST" });
       await redirectAfterLogin();
-    } else if (result?.url) {
+    } else {
       const session = await getSession();
       if (session?.user.mfaPending) {
         setMfaChallenge(true);
