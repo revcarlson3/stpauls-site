@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
-import { Canvas, FabricImage, Line, Rect, Shadow, Textbox, type FabricObject } from "fabric";
+import { Canvas, Ellipse, FabricImage, Line, Polygon, Rect, Shadow, Textbox, type FabricObject } from "fabric";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui";
@@ -111,6 +111,13 @@ function googleFontUrl(font: string) {
 
 function shapeObject(element: Extract<AnnouncementElement, { type: "rect" }>) {
   const common = { left: element.x, top: element.y, originX: "left" as const, originY: "top" as const, fill: element.fill, stroke: element.stroke, strokeWidth: element.strokeWidth ?? 0, transparentCorners: false, cornerColor: "#e66f51" };
+  if (element.shape === "circle") {
+    return new Ellipse({ ...common, rx: element.width / 2, ry: element.height / 2 });
+  }
+  const points = announcementShapePoints(element.shape ?? "rect");
+  if (points.length) {
+    return new Polygon(points.map(([x, y]) => ({ x: element.width * x / 100, y: element.height * y / 100 })), common);
+  }
   return new Rect({ ...common, width: element.width, height: element.height, rx: element.cornerRadius, ry: element.cornerRadius });
 }
 
@@ -786,16 +793,43 @@ export function AnnouncementCanvasEditor({ value, onChange }: { value: Announcem
 
   function updateSelected(patch: Record<string, unknown>) {
     const canvas = fabricRef.current;
-    const object = canvas?.getActiveObject();
-    if (!canvas || !object) return;
-    const item = canvasObject(object);
+    const activeObject = canvas?.getActiveObject();
+    if (!canvas || !activeObject) return;
+    let object = activeObject;
+    let item = canvasObject(object);
     const nextPatch = { ...patch };
     if (item.announcementType === "rect" && object.originX === "center" && object.originY === "center") {
       if ("left" in nextPatch) nextPatch.left = Number(nextPatch.left) + object.getScaledWidth() / 2;
       if ("top" in nextPatch) nextPatch.top = Number(nextPatch.top) + object.getScaledHeight() / 2;
     }
+    if (item.announcementType === "rect" && "announcementShape" in patch && patch.announcementShape !== item.announcementShape) {
+      const shape = patch.announcementShape as AnnouncementShape;
+      const replacementElement: Extract<AnnouncementElement, { type: "rect" }> = {
+        id: item.announcementId ?? `shape-${Date.now()}`,
+        type: "rect",
+        x: numberValue(object.left, 0),
+        y: numberValue(object.top, 0),
+        width: numberValue(item.announcementWidth, objectDimension(object, "width")),
+        height: numberValue(item.announcementHeight, objectDimension(object, "height")),
+        fill: typeof object.fill === "string" ? object.fill : "#e66f51",
+        cornerRadius: item.announcementCornerRadius ?? 0,
+        shape,
+        stroke: item.announcementStroke,
+        strokeWidth: item.announcementStrokeWidth
+      };
+      const index = canvas.getObjects().indexOf(object);
+      const replacement = shapeObject(replacementElement);
+      positionShapeObject(replacement, replacementElement);
+      replacement.set({ opacity: numberValue(object.opacity, 1), angle: numberValue(object.angle, 0) });
+      setCanvasObjectMetadata(replacement, replacementElement);
+      canvas.remove(object);
+      canvas.insertAt(index, replacement);
+      canvas.setActiveObject(replacement);
+      object = replacement;
+      item = canvasObject(object);
+      delete nextPatch.announcementShape;
+    }
     if ("announcementLink" in patch) item.announcementLink = String(patch.announcementLink ?? "");
-    if ("announcementShape" in patch) item.announcementShape = patch.announcementShape as CanvasObject["announcementShape"];
     if ("shadowOptions" in patch) {
       const options = patch.shadowOptions as { color: string; blur: number; offsetX: number; offsetY: number } | null;
       object.set({ shadow: options ? new Shadow(options) : undefined });
