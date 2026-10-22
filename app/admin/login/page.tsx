@@ -28,6 +28,30 @@ export default function AdminLoginPage() {
     window.location.href = typeof value.destination === "string" ? value.destination : "/account";
   }
 
+  async function requestMfaCode(channel: "authenticator" | "email" | "sms") {
+    setError("");
+    const result = await signIn("credentials", {
+      email,
+      password,
+      rememberMe: String(rememberMe),
+      mfaChannel: channel,
+      captchaToken: captcha?.token,
+      captchaAnswer,
+      callbackUrl: "/admin",
+      redirect: false
+    });
+    if (result?.error) {
+      setError(result.error === "The email verification code could not be sent. Check the email delivery settings or use another verification method." ? result.error : "The verification code could not be sent. Please try another method.");
+      return;
+    }
+    const session = await getSession();
+    if (session?.user.mfaPending) {
+      setMfaChannel(session.user.mfaPendingChannel ?? channel);
+      setMfaChannels(session.user.mfaAvailableChannels ?? [channel]);
+      setMfaCode("");
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -49,7 +73,7 @@ export default function AdminLoginPage() {
         "The email verification code could not be sent. Check the email delivery settings or use another verification method.",
         "That verification code was not accepted."
       ];
-      setError(mfaChallenge ? "That verification code was not accepted." : knownErrors.includes(result.error) ? result.error : "Email or password was not accepted.");
+      setError(knownErrors.includes(result.error) ? result.error : mfaChallenge ? "That verification code was not accepted." : "Email or password was not accepted.");
     }
     else if (mfaChallenge && trustDevice) {
       await fetch("/api/account/mfa/trusted-device", { method: "POST" });
@@ -78,7 +102,7 @@ export default function AdminLoginPage() {
             <label className="grid gap-1 text-sm font-semibold">Email<input required type="email" autoComplete="email" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
             {!mfaChallenge && <label className="grid gap-1 text-sm font-semibold">Password<input required type="password" autoComplete="current-password" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" value={password} onChange={(event) => setPassword(event.target.value)} /></label>}
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} /> Remember me for 60 days</label>
-            {mfaChallenge && <><label className="grid gap-1 text-sm font-semibold">Verification code<input required inputMode="numeric" autoComplete="one-time-code" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} /></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={trustDevice} onChange={(event) => setTrustDevice(event.target.checked)} /> Trust this device when allowed by site policy</label></>}
+            {mfaChallenge && <><label className="grid gap-1 text-sm font-semibold">Verification method<select className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" value={mfaChannel} onChange={(event) => setMfaChannel(event.target.value as typeof mfaChannel)}>{mfaChannels.map((channel) => <option key={channel} value={channel}>{channel === "authenticator" ? "Authenticator app or recovery code" : channel === "email" ? "Email" : "Text message"}</option>)}</select></label><div className="flex items-end gap-2"><label className="grid min-w-0 flex-1 gap-1 text-sm font-semibold">Verification code<input required inputMode="numeric" autoComplete="one-time-code" className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} /></label>{mfaChannel !== "authenticator" && <button type="button" className="focus-ring rounded-lg border border-ink/20 px-3 py-2 text-sm font-semibold text-ink/70" onClick={() => void requestMfaCode(mfaChannel)}>Send new code</button>}</div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={trustDevice} onChange={(event) => setTrustDevice(event.target.checked)} /> Trust this device when allowed by site policy</label></>}
             {captcha && <label className="grid gap-1 text-sm font-semibold">Human check: {captcha.question}<input required inputMode="numeric" value={captchaAnswer} onChange={(event) => setCaptchaAnswer(event.target.value)} className="focus-ring rounded-lg border border-ink/15 px-3 py-2 font-normal" /></label>}
             {error && <p role="alert" className="text-sm font-semibold text-coral">{error}</p>}
             <div className="flex items-center justify-between gap-4"><Button type="submit">Sign in</Button><button type="button" onClick={() => router.back()} className="focus-ring rounded-full border border-ink/20 px-5 py-3 text-sm font-semibold text-ink/70">Cancel</button></div>
