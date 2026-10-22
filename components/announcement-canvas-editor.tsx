@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
-import { Canvas, Circle, FabricImage, Line, Point, Polygon, Rect, Shadow, Textbox, Triangle, type FabricObject } from "fabric";
+import { Canvas, FabricImage, Line, Polygon, Rect, Shadow, Textbox, type FabricObject } from "fabric";
 import JSZip from "jszip";
 import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui";
@@ -109,16 +109,20 @@ function googleFontUrl(font: string) {
 
 function shapeObject(element: Extract<AnnouncementElement, { type: "rect" }>) {
   const common = { left: element.x, top: element.y, originX: "left" as const, originY: "top" as const, fill: element.fill, stroke: element.stroke, strokeWidth: element.strokeWidth, transparentCorners: false, cornerColor: "#e66f51" };
-  if (element.shape === "circle") return new Circle({ ...common, radius: 50, scaleX: element.width / 100, scaleY: element.height / 100 });
-  if (element.shape === "triangle") return new Triangle({ ...common, width: element.width, height: element.height });
+  if (element.shape === "circle") {
+    const points = Array.from({ length: 32 }, (_, index) => {
+      const angle = (Math.PI * 2 * index) / 32;
+      return { x: element.width / 2 + (element.width / 2) * Math.cos(angle), y: element.height / 2 + (element.height / 2) * Math.sin(angle) };
+    });
+    return new Polygon(points, common);
+  }
   const points = announcementShapePoints(element.shape ?? "rect");
-  if (points.length) return new Polygon(points.map(([x, y]) => ({ x, y })), { ...common, scaleX: element.width / 100, scaleY: element.height / 100 });
+  if (points.length) return new Polygon(points.map(([x, y]) => ({ x: x * element.width / 100, y: y * element.height / 100 })), common);
   return new Rect({ ...common, width: element.width, height: element.height, rx: element.cornerRadius, ry: element.cornerRadius });
 }
 
 function positionShapeObject(object: FabricObject, element: Extract<AnnouncementElement, { type: "rect" }>) {
-  object.set({ originX: "center", originY: "center" });
-  object.setPositionByOrigin(new Point(element.x + element.width / 2, element.y + element.height / 2), "center", "center");
+  object.set({ originX: "left", originY: "top", left: element.x, top: element.y });
   object.setCoords();
 }
 
