@@ -110,7 +110,7 @@ function googleFontUrl(font: string) {
 }
 
 function shapeObject(element: Extract<AnnouncementElement, { type: "rect" }>) {
-  const common = { left: element.x, top: element.y, originX: "left" as const, originY: "top" as const, fill: element.fill, stroke: element.stroke, strokeWidth: element.strokeWidth, transparentCorners: false, cornerColor: "#e66f51" };
+  const common = { left: element.x, top: element.y, originX: "left" as const, originY: "top" as const, fill: element.fill, stroke: element.stroke, strokeWidth: element.strokeWidth ?? 0, transparentCorners: false, cornerColor: "#e66f51" };
   return new Rect({ ...common, width: element.width, height: element.height, rx: element.cornerRadius, ry: element.cornerRadius });
 }
 
