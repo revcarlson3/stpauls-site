@@ -95,13 +95,17 @@ export default function AdminLayout({ children, restrictPublicContent = false }:
         value.enabled === true && value.tithelyEnvironment === "live",
       );
     }).catch(() => undefined);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!isPlatformAdmin || pathname === "/admin/login") return;
     void fetch("/api/view-as").then(async (response) => {
       if (!response.ok) return;
       const value = await response.json();
       setViewAsGroups(value.groups ?? []);
       setViewAsGroupId(value.activeGroupId ?? "");
     }).catch(() => undefined);
-  }, [pathname]);
+  }, [isPlatformAdmin, pathname]);
 
   useEffect(() => {
     if (!editorPageMatch) {
