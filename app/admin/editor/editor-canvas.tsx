@@ -1190,7 +1190,7 @@ function SortableLayerRow({ block, path, selected, onClick }: { block: Block; pa
 function LayerInsertZone({ parentPath, index, active, dragging }: { parentPath: number[]; index: number; active: boolean; dragging: boolean }) {
   const id = `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${index}`;
   const { setNodeRef } = useDroppable({ id, data: { kind: "layer-insert", parentPath, index } });
-  return <div ref={setNodeRef} aria-hidden="true" className={`relative transition-[height,margin,background-color,border-color] duration-150 ${dragging ? "my-0.5 min-h-4 rounded border-2 border-dashed border-ink/20 bg-ink/[.02]" : "h-1"} ${active && dragging ? "border-coral bg-coral/10 shadow-[inset_0_0_0_1px_rgba(226,91,74,0.18)]" : ""}`} />;
+  return <div ref={setNodeRef} aria-hidden="true" className={`relative h-1 ${active && dragging ? "rounded bg-coral/10 outline outline-2 outline-coral shadow-[0_0_0_2px_rgba(226,91,74,0.12)]" : ""}`} />;
 }
 
 function BlockInsertZone({ parentPath, index, active, draggedType }: { parentPath: number[]; index: number; active: boolean; draggedType: BlockType | null }) {
@@ -1204,7 +1204,7 @@ function BlockInsertZone({ parentPath, index, active, draggedType }: { parentPat
 function GridCellDropZone({ gridPath, childIndex, active, children }: { gridPath: number[]; childIndex: number; active: boolean; children: ReactNode }) {
   const id = `grid-cell:${gridPath.join(".")}:${childIndex}`;
   const { setNodeRef } = useDroppable({ id, data: { kind: "grid-cell", gridPath, childIndex } });
-  return <div ref={setNodeRef} className={`min-w-0 rounded-lg ${active ? "ring-2 ring-coral/50" : ""}`}>{children}</div>;
+  return <div ref={setNodeRef} className={`relative z-40 min-w-0 rounded-lg ${active ? "ring-2 ring-coral/50" : ""}`}>{children}</div>;
 }
 
 function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, draggedType, activeDropPath, previewDevice, onSelect, onUpdate, onDropChild, onDropTargetChange, onContextMenu, widgets, menuPreviews, forms }: { block: Block; path: number[]; parentType?: BlockType; selectedPath: number[] | null; draggedType: BlockType | null; activeDropPath: string | null; previewDevice: ResponsiveDevice; onSelect: (path: number[]) => void; onUpdate: (path: number[], changes: Partial<Block>) => void; onDropChild: (path: number[], type: BlockType) => void; onDropTargetChange: (path: number[] | null) => void; onContextMenu: (event: ReactMouseEvent, path: number[]) => void; widgets: WidgetOption[]; menuPreviews: MenuPreview[]; forms: FormOption[] }) {
@@ -1286,7 +1286,7 @@ function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, dragg
           {selected && <div className="text-xs font-semibold uppercase tracking-wider text-ink/55">{block.children?.length ? `${block.children.length} block${block.children.length === 1 ? "" : "s"} placed` : "Empty drop zone"}</div>}
           <div className="relative mt-3 min-h-16 gap-3" style={childLayoutStyle}>{block.type === "grid" && <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ backgroundImage: "repeating-linear-gradient(to right, rgba(23, 50, 77, 0.18) 0, rgba(23, 50, 77, 0.18) 1px, transparent 1px, transparent calc(100% / 12))", backgroundSize: `${100 / gridColumns * 12}% 100%` }} />}{block.children?.map((child, childIndex) => {
             const childEditor = <BlockEditor block={child} parentType={block.type} path={[...path, childIndex]} selectedPath={selectedPath} draggedType={draggedType} activeDropPath={activeDropPath} previewDevice={previewDevice} onSelect={onSelect} onUpdate={onUpdate} onDropChild={onDropChild} onDropTargetChange={onDropTargetChange} onContextMenu={onContextMenu} widgets={widgets} menuPreviews={menuPreviews} forms={forms} />;
-            return <div key={child.id}><BlockInsertZone parentPath={path} index={childIndex} active={activeDropPath === `insert:${path.join(".")}:${childIndex}`} draggedType={draggedType} />{block.type === "grid" ? <GridCellDropZone gridPath={path} childIndex={childIndex} active={activeDropPath === `grid-cell:${path.join(".")}:${childIndex}`}>{childEditor}</GridCellDropZone> : childEditor}</div>;
+            return <div key={child.id} className="min-w-0" style={block.type === "grid" ? { gridColumn: (childIndex % gridColumns) + 1 } : undefined}><BlockInsertZone parentPath={path} index={childIndex} active={activeDropPath === `insert:${path.join(".")}:${childIndex}`} draggedType={draggedType} />{block.type === "grid" ? <GridCellDropZone gridPath={path} childIndex={childIndex} active={activeDropPath === `grid-cell:${path.join(".")}:${childIndex}`}>{childEditor}</GridCellDropZone> : childEditor}</div>;
           })}<BlockInsertZone parentPath={path} index={block.children?.length ?? 0} active={activeDropPath === `insert:${path.join(".")}:${block.children?.length ?? 0}`} draggedType={draggedType} /></div>
         </div>}
       </div>
