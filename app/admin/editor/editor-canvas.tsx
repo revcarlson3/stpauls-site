@@ -11,6 +11,7 @@ import { blockDefinitions, defaultTableConfig, parseTableConfig, tableConfigCont
 import type { CarouselSlide } from "@/components/carousel";
 import { MediaPicker } from "@/components/media-picker";
 import { TableBlock } from "@/components/table-block";
+import { moveBlockToInsertion as moveTreeBlockToInsertion } from "@/lib/editor-tree";
 
 type Block = {
   id: string;
@@ -435,11 +436,19 @@ const editorCollisionDetection: CollisionDetection = (args) => {
   const activeKind = args.active.data.current?.kind;
   const nonInsertionTargets = args.droppableContainers.filter((container) => !["insert", "layer-insert"].includes(String(container.data.current?.kind ?? "")));
   if (activeKind === "layer") {
-    const layerInsertTargets = args.droppableContainers.filter((container) => container.data.current?.kind === "layer-insert");
+    const activePath = Array.isArray(args.active.data.current?.path) ? args.active.data.current.path as number[] : [];
+    const layerInsertTargets = args.droppableContainers.filter((container) => {
+      if (container.data.current?.kind !== "layer-insert") return false;
+      const parentPath = Array.isArray(container.data.current?.parentPath) ? container.data.current.parentPath as number[] : [];
+      return !(parentPath.length > activePath.length && activePath.every((value, index) => parentPath[index] === value));
+    });
     const layerInsertHits = pointerWithin({ ...args, droppableContainers: layerInsertTargets });
     if (layerInsertHits.length) return layerInsertHits;
   }
   if (activeKind === "palette") {
+    const gridCellTargets = args.droppableContainers.filter((container) => container.data.current?.kind === "grid-cell");
+    const gridCellHits = pointerWithin({ ...args, droppableContainers: gridCellTargets });
+    if (gridCellHits.length) return gridCellHits;
     const insertTargets = args.droppableContainers.filter((container) => container.data.current?.kind === "insert");
     const insertHits = pointerWithin({ ...args, droppableContainers: insertTargets });
     if (insertHits.length) return insertHits;
@@ -584,6 +593,29 @@ function insertBlockAtPath(blocks: Block[], parentPath: number[], index: number,
   };
   if (!parentPath.length) return insert(blocks);
   return updateAtPath(blocks, parentPath, (parent) => ({ ...parent, children: insert(parent.children ?? []) }));
+}
+
+function addBlockToGridCell(blocks: Block[], gridPath: number[], childIndex: number, type: BlockType) {
+  return updateAtPath(blocks, gridPath, (grid) => {
+    if (grid.type !== "grid") return grid;
+    const children = [...(grid.children ?? [])];
+    const added = createBlock(type);
+    const current = children[childIndex];
+    if (current && structuralTypes.includes(current.type)) {
+      children[childIndex] = { ...current, children: [...(current.children ?? []), added] };
+    } else if (current) {
+      const cell = createBlock("container");
+      cell.padding = "none";
+      cell.children = [current, added];
+      children[childIndex] = cell;
+    } else {
+      const cell = createBlock("container");
+      cell.padding = "none";
+      cell.children = [added];
+      children.splice(Math.min(childIndex, children.length), 0, cell);
+    }
+    return { ...grid, children };
+  });
 }
 
 function serialize(block: Block): { id: string; type: BlockType; props: Record<string, unknown> } {
@@ -1158,7 +1190,7 @@ function SortableLayerRow({ block, path, selected, onClick }: { block: Block; pa
 function LayerInsertZone({ parentPath, index, active, dragging }: { parentPath: number[]; index: number; active: boolean; dragging: boolean }) {
   const id = `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${index}`;
   const { setNodeRef } = useDroppable({ id, data: { kind: "layer-insert", parentPath, index } });
-  return <div ref={setNodeRef} aria-hidden="true" className={`relative transition-[height,margin,background-color,border-color] duration-150 ${dragging ? "my-1 min-h-8 rounded border-2 border-dashed border-ink/20 bg-ink/[.02]" : "h-1"} ${active && dragging ? "border-coral bg-coral/10 shadow-[inset_0_0_0_1px_rgba(226,91,74,0.18)]" : ""}`} />;
+  return <div ref={setNodeRef} aria-hidden="true" className={`relative transition-[height,margin,background-color,border-color] duration-150 ${dragging ? "my-0.5 min-h-4 rounded border-2 border-dashed border-ink/20 bg-ink/[.02]" : "h-1"} ${active && dragging ? "border-coral bg-coral/10 shadow-[inset_0_0_0_1px_rgba(226,91,74,0.18)]" : ""}`} />;
 }
 
 function BlockInsertZone({ parentPath, index, active, draggedType }: { parentPath: number[]; index: number; active: boolean; draggedType: BlockType | null }) {
@@ -1167,6 +1199,12 @@ function BlockInsertZone({ parentPath, index, active, draggedType }: { parentPat
   return <div ref={setNodeRef} aria-hidden="true" className={`relative z-30 w-full transition-[min-height,margin,background-color,border-color] duration-150 ${draggedType ? "my-1 min-h-24 rounded-lg border-2 border-dashed border-ink/25 bg-ink/[.02]" : "h-0"} ${active && draggedType ? "border-coral bg-coral/10 shadow-[inset_0_0_0_1px_rgba(226,91,74,0.18)]" : ""}`} style={{ gridColumn: "1 / -1" }}>
     {draggedType && <span className={`pointer-events-none absolute inset-0 flex items-center justify-center text-xs font-semibold ${active ? "text-coral" : "text-ink/45"}`}>{active ? `Place ${blockDefinitions[draggedType].label} here` : "Drop here"}</span>}
   </div>;
+}
+
+function GridCellDropZone({ gridPath, childIndex, active, children }: { gridPath: number[]; childIndex: number; active: boolean; children: ReactNode }) {
+  const id = `grid-cell:${gridPath.join(".")}:${childIndex}`;
+  const { setNodeRef } = useDroppable({ id, data: { kind: "grid-cell", gridPath, childIndex } });
+  return <div ref={setNodeRef} className={`min-w-0 rounded-lg ${active ? "ring-2 ring-coral/50" : ""}`}>{children}</div>;
 }
 
 function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, draggedType, activeDropPath, previewDevice, onSelect, onUpdate, onDropChild, onDropTargetChange, onContextMenu, widgets, menuPreviews, forms }: { block: Block; path: number[]; parentType?: BlockType; selectedPath: number[] | null; draggedType: BlockType | null; activeDropPath: string | null; previewDevice: ResponsiveDevice; onSelect: (path: number[]) => void; onUpdate: (path: number[], changes: Partial<Block>) => void; onDropChild: (path: number[], type: BlockType) => void; onDropTargetChange: (path: number[] | null) => void; onContextMenu: (event: ReactMouseEvent, path: number[]) => void; widgets: WidgetOption[]; menuPreviews: MenuPreview[]; forms: FormOption[] }) {
@@ -1246,7 +1284,10 @@ function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, dragg
         {isStructural && <div ref={setNodeRef} className={`relative mt-4 rounded-lg border border-dashed p-3 transition-[min-height,background-color,border-color,box-shadow] duration-150 ${activeDropPath === path.join(".") && draggedType ? "border-2 border-coral bg-coral/10 shadow-[inset_0_0_0_1px_rgba(226,91,74,0.18)]" : selected ? "border-ink/20 bg-sand/40" : "border-transparent bg-transparent"}`} style={{ height: "calc(100% - 1rem)", minHeight: activeDropPath === path.join(".") && draggedType ? "12rem" : undefined, boxSizing: "border-box" }}>
           {activeDropPath === path.join(".") && draggedType && <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"><span className="flex items-center gap-2 rounded-full border-2 border-coral bg-white/95 px-4 py-2 text-sm font-semibold text-coral shadow-lg"><span className="text-3xl font-light leading-none">+</span>Drop {blockDefinitions[draggedType].label} inside {blockDefinitions[block.type].label}</span></div>}
           {selected && <div className="text-xs font-semibold uppercase tracking-wider text-ink/55">{block.children?.length ? `${block.children.length} block${block.children.length === 1 ? "" : "s"} placed` : "Empty drop zone"}</div>}
-          <div className="relative mt-3 min-h-16 gap-3" style={childLayoutStyle}>{block.type === "grid" && <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ backgroundImage: "repeating-linear-gradient(to right, rgba(23, 50, 77, 0.18) 0, rgba(23, 50, 77, 0.18) 1px, transparent 1px, transparent calc(100% / 12))", backgroundSize: `${100 / gridColumns * 12}% 100%` }} />}{block.children?.map((child, childIndex) => <div key={child.id}><BlockInsertZone parentPath={path} index={childIndex} active={activeDropPath === `insert:${path.join(".")}:${childIndex}`} draggedType={draggedType} /><BlockEditor block={child} parentType={block.type} path={[...path, childIndex]} selectedPath={selectedPath} draggedType={draggedType} activeDropPath={activeDropPath} previewDevice={previewDevice} onSelect={onSelect} onUpdate={onUpdate} onDropChild={onDropChild} onDropTargetChange={onDropTargetChange} onContextMenu={onContextMenu} widgets={widgets} menuPreviews={menuPreviews} forms={forms} /></div>)}<BlockInsertZone parentPath={path} index={block.children?.length ?? 0} active={activeDropPath === `insert:${path.join(".")}:${block.children?.length ?? 0}`} draggedType={draggedType} /></div>
+          <div className="relative mt-3 min-h-16 gap-3" style={childLayoutStyle}>{block.type === "grid" && <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ backgroundImage: "repeating-linear-gradient(to right, rgba(23, 50, 77, 0.18) 0, rgba(23, 50, 77, 0.18) 1px, transparent 1px, transparent calc(100% / 12))", backgroundSize: `${100 / gridColumns * 12}% 100%` }} />}{block.children?.map((child, childIndex) => {
+            const childEditor = <BlockEditor block={child} parentType={block.type} path={[...path, childIndex]} selectedPath={selectedPath} draggedType={draggedType} activeDropPath={activeDropPath} previewDevice={previewDevice} onSelect={onSelect} onUpdate={onUpdate} onDropChild={onDropChild} onDropTargetChange={onDropTargetChange} onContextMenu={onContextMenu} widgets={widgets} menuPreviews={menuPreviews} forms={forms} />;
+            return <div key={child.id}><BlockInsertZone parentPath={path} index={childIndex} active={activeDropPath === `insert:${path.join(".")}:${childIndex}`} draggedType={draggedType} />{block.type === "grid" ? <GridCellDropZone gridPath={path} childIndex={childIndex} active={activeDropPath === `grid-cell:${path.join(".")}:${childIndex}`}>{childEditor}</GridCellDropZone> : childEditor}</div>;
+          })}<BlockInsertZone parentPath={path} index={block.children?.length ?? 0} active={activeDropPath === `insert:${path.join(".")}:${block.children?.length ?? 0}`} draggedType={draggedType} /></div>
         </div>}
       </div>
     </div>
@@ -1688,6 +1729,11 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     commitBlocks((current) => {
       if (structuralTypes.includes(type)) return [...current, createBlock(type)];
       const selected = selectedPath ? blockAtPath(current, selectedPath) : null;
+      const selectedParentPath = selectedPath?.slice(0, -1) ?? [];
+      const selectedParent = selectedPath?.length ? blockAtPath(current, selectedParentPath) : null;
+      if (selected && selectedParent?.type === "grid" && selectedPath) {
+        return addBlockToGridCell(current, selectedParentPath, selectedPath[selectedPath.length - 1], type);
+      }
       const selectedContainer = selected && structuralTypes.includes(selected.type) ? selectedPath : null;
       const lastContainerIndex = current.map((block, index) => structuralTypes.includes(block.type) ? index : -1).filter((index) => index >= 0).pop();
       const targetPath = selectedContainer ?? (lastContainerIndex === undefined ? null : [lastContainerIndex]);
@@ -1737,16 +1783,10 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   };
   const moveLayerToInsertion = (parentPath: number[], index: number, sourcePath = draggedLayerPath) => {
     if (!sourcePath || sourcePath.length === 0) return;
-    const sourceParent = sourcePath.slice(0, -1);
-    if (sourceParent.join(".") !== parentPath.join(".")) {
-      setMessage("Layers can be reordered within the same container.");
-      return;
-    }
-    const from = sourcePath[sourcePath.length - 1];
-    const to = from < index ? index - 1 : index;
-    if (from === to) return;
-    commitBlocks((current) => reorderChildrenAtPath(current, sourceParent, from, to));
-    setSelectedPath([...parentPath, to]);
+    const moved = moveTreeBlockToInsertion(blocks, sourcePath, parentPath, index, structuralTypes);
+    if (moved.blocks === blocks) return;
+    commitBlocks(() => moved.blocks);
+    setSelectedPath(moved.path);
   };
   const renderLayer = (block: Block, path: number[]) => <div key={block.id} className="grid gap-1">
     <SortableLayerRow block={block} path={path} selected={selectedPath?.join(".") === path.join(".")} onClick={() => setSelectedPath(path)} />
@@ -1761,7 +1801,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   };
   const handleDragOver = ({ over }: DragOverEvent) => {
     const overId = String(over?.id ?? "");
-    setActiveDropPath(overId.startsWith("drop:") ? overId.slice(5) : overId.startsWith("insert:") || overId.startsWith("layer-insert:") ? overId : null);
+    setActiveDropPath(overId.startsWith("drop:") ? overId.slice(5) : overId.startsWith("insert:") || overId.startsWith("layer-insert:") || overId.startsWith("grid-cell:") ? overId : null);
   };
   const cancelDragOutsideEditor = () => {
     if (!draggedType && !draggedLayerPath) return;
@@ -1770,7 +1810,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   };
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     const activeData = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined;
-    const overData = over?.data.current as { kind?: string; path?: number[]; parentPath?: number[]; index?: number } | undefined;
+    const overData = over?.data.current as { kind?: string; path?: number[]; parentPath?: number[]; index?: number; gridPath?: number[]; childIndex?: number } | undefined;
     if (dragCancelledRef.current) {
       dragCancelledRef.current = false;
       setDraggedType(null);
@@ -1779,7 +1819,9 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
       return;
     }
     if (activeData?.kind === "palette" && activeData.type) {
-      if (overData?.kind === "drop" && overData.path) dropChild(overData.path, activeData.type);
+      if (overData?.kind === "grid-cell" && overData.gridPath && typeof overData.childIndex === "number") {
+        commitBlocks((current) => addBlockToGridCell(current, overData.gridPath!, overData.childIndex!, activeData.type!));
+      } else if (overData?.kind === "drop" && overData.path) dropChild(overData.path, activeData.type);
       else if (overData?.kind === "insert" && overData.parentPath && typeof overData.index === "number") dropAtInsertion(overData.parentPath, overData.index, activeData.type);
       else if (overData?.kind === "root") addBlock(activeData.type);
     } else if (activeData?.kind === "layer" && overData?.kind === "layer-insert" && overData.parentPath && typeof overData.index === "number") {
