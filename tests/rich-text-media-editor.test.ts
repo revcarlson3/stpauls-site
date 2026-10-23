@@ -13,6 +13,15 @@ describe("rich text media controls", () => {
     expect(source).toContain("resize.media.style.width");
   });
 
+  it("clears the WYSIWYG to plain text instead of relying on partial browser formatting removal", () => {
+    const source = fs.readFileSync("app/admin/editor/editor-canvas.tsx", "utf8");
+
+    expect(source).toContain('command === "clearFormatting"');
+    expect(source).toContain("template.content.textContent");
+    expect(source).toContain('["clearFormatting", "clear", "Clear formatting"]');
+    expect(source).not.toContain('["removeFormat", "clear", "Clear formatting"]');
+  });
+
   it("supports video media in the widget picker", () => {
     const source = fs.readFileSync("app/admin/pages/widgets/page.tsx", "utf8");
 

@@ -876,6 +876,14 @@ export function RichTextField({ value, onChange, style, toolbarExtras }: { value
     };
   }, [hoveredMedia, selectedMedia]);
   const apply = (command: string, commandValue?: string) => {
+    if (command === "clearFormatting") {
+      const template = document.createElement("template");
+      template.innerHTML = editorRef.current?.innerHTML ?? value;
+      const plainText = template.content.textContent ?? "";
+      if (editorRef.current) editorRef.current.textContent = plainText;
+      onChange(plainText);
+      return;
+    }
     restoreSelection();
     document.execCommand(command, false, commandValue);
     if (command === "fontName" && editorRef.current) {
@@ -951,7 +959,7 @@ export function RichTextField({ value, onChange, style, toolbarExtras }: { value
   const symbols = ["©", "®", "™", "§", "†", "‡", "•", "→", "←", "★", "✓", "∞"];
   return <div className="mt-3 min-w-0 overflow-hidden rounded-lg border border-ink/10 bg-white">
     <div className="flex flex-wrap gap-1 rounded-t-lg border-b border-ink/15 bg-mist/60 p-2 shadow-[inset_0_-1px_0_rgb(23_50_77_/_0.04)]" onMouseDownCapture={saveSelection}>
-      {([["bold", "bold", "Bold"], ["italic", "italic", "Italic"], ["underline", "underline", "Underline"], ["strikeThrough", "strike", "Strikethrough"], ["insertUnorderedList", "unordered", "Bulleted list"], ["insertOrderedList", "ordered", "Numbered list"], ["justifyLeft", "left", "Align left"], ["justifyCenter", "center", "Align center"], ["justifyRight", "right", "Align right"], ["removeFormat", "clear", "Clear formatting"]] as const).map(([command, icon, label]) => <button key={command} type="button" aria-label={label} title={label} className="focus-ring inline-flex h-7 min-w-7 items-center justify-center rounded px-2 text-xs font-semibold hover:bg-mist" onMouseDown={(event) => { event.preventDefault(); apply(command); }}><ToolbarIcon name={icon} /></button>)}
+      {([["bold", "bold", "Bold"], ["italic", "italic", "Italic"], ["underline", "underline", "Underline"], ["strikeThrough", "strike", "Strikethrough"], ["insertUnorderedList", "unordered", "Bulleted list"], ["insertOrderedList", "ordered", "Numbered list"], ["justifyLeft", "left", "Align left"], ["justifyCenter", "center", "Align center"], ["justifyRight", "right", "Align right"], ["clearFormatting", "clear", "Clear formatting"]] as const).map(([command, icon, label]) => <button key={command} type="button" aria-label={label} title={label} className="focus-ring inline-flex h-7 min-w-7 items-center justify-center rounded px-2 text-xs font-semibold hover:bg-mist" onMouseDown={(event) => { event.preventDefault(); apply(command); }}><ToolbarIcon name={icon} /></button>)}
       <select aria-label="Text style" className="focus-ring max-w-full rounded border border-ink/15 px-1 py-1 text-xs" defaultValue="" onMouseDownCapture={saveSelection} onChange={(event) => { if (event.target.value) apply("formatBlock", event.target.value); event.target.value = ""; }}><option value="">Style</option><option value="p">Paragraph</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="h4">Heading 4</option><option value="h5">Heading 5</option><option value="h6">Heading 6</option><option value="blockquote">Quote</option></select>
       <select aria-label="Font size" className="focus-ring max-w-full rounded border border-ink/15 px-1 py-1 text-xs" defaultValue="" onMouseDownCapture={saveSelection} onChange={(event) => { if (event.target.value) applyFontSize(event.target.value); event.target.value = ""; }}><option value="">Size</option>{Array.from({ length: 65 }, (_, index) => index + 8).map((size) => <option key={size} value={size}>{size}px</option>)}</select>
       <select aria-label="Google font" className="focus-ring max-w-full rounded border border-ink/15 px-1 py-1 text-xs" defaultValue="" onMouseDownCapture={saveSelection} onChange={(event) => { if (event.target.value) { const family = event.target.value; const linkId = `font-${family.replace(/\W/g, "-")}`; if (!document.getElementById(linkId)) { const link = document.createElement("link"); link.id = linkId; link.rel = "stylesheet"; link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, "+")}:wght@400;600;700&display=swap`; document.head.appendChild(link); } apply("fontName", family); } }}><option value="">Font</option>{fontOptions.map((font) => <option key={font} value={font}>{font}</option>)}</select>
