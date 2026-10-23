@@ -83,11 +83,11 @@ export async function optimizeImageBuffer(buffer: Buffer, mimeType: string) {
   const image = sharp(buffer);
   let optimized: Buffer;
   if (mimeType === "image/jpeg") {
-    optimized = await image.jpeg({ quality: 84, progressive: true, mozjpeg: true }).toBuffer();
+    optimized = await image.jpeg({ quality: 78, progressive: true, mozjpeg: true }).toBuffer();
   } else if (mimeType === "image/png") {
-    optimized = await image.png({ compressionLevel: 9, adaptiveFiltering: true, palette: false }).toBuffer();
+    optimized = await image.png({ compressionLevel: 9, adaptiveFiltering: true, palette: true, quality: 90, effort: 10 }).toBuffer();
   } else if (mimeType === "image/webp") {
-    optimized = await image.webp({ quality: 84, effort: 5 }).toBuffer();
+    optimized = await image.webp({ quality: 78, effort: 6 }).toBuffer();
   } else {
     return null;
   }
