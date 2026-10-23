@@ -14,17 +14,18 @@ describe("stylistic header scroll treatment", () => {
 
   it("uses the configured main-header height and keeps the sticky pre-header in flow", () => {
     const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8").replace(/\r\n/g, "\n");
+    const header = fs.readFileSync(path.resolve(process.cwd(), "components/site-header.tsx"), "utf8");
     expect(css).toContain(".site-header-main {\n  min-height: var(--site-header-min-height);\n}");
     expect(css).not.toContain(".site-header.is-sticky.is-scrolled .site-header-preheader {\n  max-height: 0;");
+    expect(header).toContain("site-header-primary");
+    expect(header).toContain('header.sticky ? "is-sticky sticky top-0 z-40"');
   });
 
   it("keeps mobile page content below the full top chrome", () => {
     const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8").replace(/\r\n/g, "\n");
     expect(css).toContain("@media (max-width: 1023px)");
-    expect(css).toContain(".site-header.is-sticky {\n    position: relative !important;");
+    expect(css).toContain(".site-header-primary.is-sticky {\n    position: relative !important;");
     expect(css).toContain("top: auto !important;");
-    expect(css).toContain(".site-header.is-sticky.is-scrolled .site-header-preheader {\n    max-height: none;");
-    expect(css).toContain("transform: none;");
   });
 
   it("preserves desktop block height when no mobile height override exists", () => {

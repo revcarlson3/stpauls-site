@@ -41,18 +41,20 @@ export async function SiteHeader({ menuId = null, menuLocationId = null, user, i
           {preHeaderMenu && <div className={`hidden min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 lg:flex ${preHeaderMenuAlignment}`}><MenuLinks items={preHeaderMenu.items} className="flex flex-wrap items-center gap-x-4 gap-y-1" /><AuthenticatedPublicNav authenticated={Boolean(user)} menuId={preHeaderMenu.id} isMainNavigation={false} accountMenuIds={header.accountMenuIds} membershipMenuIds={header.membershipMenuIds} logoutMenuIds={header.logoutMenuIds} notificationMenuIds={header.notificationMenuIds} compact /></div>}
         </Container>
       </div>}
-      <Container className="site-header-container site-header-main flex items-center gap-6 px-0" style={{ "--site-header-min-height": headerHeight } as CSSProperties}>
-        <div className="site-header-identity flex shrink-0 items-center gap-3">
-          {identity.showLogo && logoUrl && <img src={logoUrl} alt="" className="h-10 w-auto object-contain" />}
-          {(identity.showTitle || identity.showTagline) && <Link href="/" className="focus-ring">
-            {identity.showTitle && <span className="block font-serif text-xl font-bold tracking-tight">{identity.name}</span>}
-            {identity.showTagline && <span className="block text-xs text-ink/60">{identity.tagline}</span>}
-          </Link>}
-        </div>
-        <div className="site-header-navigation min-w-0 flex-1">
-          <ResponsivePublicNav items={menu?.items ?? []} authenticated={Boolean(user)} menuId={mainMenuId} accountMenuIds={header.accountMenuIds} membershipMenuIds={header.membershipMenuIds} logoutMenuIds={header.logoutMenuIds} notificationMenuIds={header.notificationMenuIds} />
-        </div>
-      </Container>
+      <div className={`site-header-primary border-b border-black/10 ${header.sticky ? "is-sticky sticky top-0 z-40" : ""}`} style={{ backgroundColor: header.background, color: header.textColor }}>
+        <Container className="site-header-container site-header-main flex items-center gap-6 px-0" style={{ "--site-header-min-height": headerHeight } as CSSProperties}>
+          <div className="site-header-identity flex shrink-0 items-center gap-3">
+            {identity.showLogo && logoUrl && <img src={logoUrl} alt="" className="h-10 w-auto object-contain" />}
+            {(identity.showTitle || identity.showTagline) && <Link href="/" className="focus-ring">
+              {identity.showTitle && <span className="block font-serif text-xl font-bold tracking-tight">{identity.name}</span>}
+              {identity.showTagline && <span className="block text-xs text-ink/60">{identity.tagline}</span>}
+            </Link>}
+          </div>
+          <div className="site-header-navigation min-w-0 flex-1">
+            <ResponsivePublicNav items={menu?.items ?? []} authenticated={Boolean(user)} menuId={mainMenuId} accountMenuIds={header.accountMenuIds} membershipMenuIds={header.membershipMenuIds} logoutMenuIds={header.logoutMenuIds} notificationMenuIds={header.notificationMenuIds} />
+          </div>
+        </Container>
+      </div>
     </SiteHeaderFrame>
   );
 }

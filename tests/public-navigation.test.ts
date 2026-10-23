@@ -47,12 +47,13 @@ describe("public navigation styling and interaction", () => {
     expect(navigation).not.toContain(">Menu</button>");
   });
 
-  it("keeps pre-header dropdowns above the main header and page content", () => {
+  it("keeps pre-header dropdowns above page content while the primary header sticks", () => {
     const source = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8");
+    const header = fs.readFileSync(path.resolve(process.cwd(), "components/site-header.tsx"), "utf8");
     expect(source).toContain(".site-header-preheader {");
     expect(source).toContain("overflow: visible;");
     expect(source).toContain("z-index: 60;");
-    expect(source).toContain(".site-header.is-sticky.is-scrolled .site-header-preheader");
-    expect(source).toContain("overflow: hidden;");
+    expect(header).toContain("site-header-primary");
+    expect(header).toContain('header.sticky ? "is-sticky sticky top-0 z-40"');
   });
 });

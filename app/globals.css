@@ -748,17 +748,11 @@ body[data-theme-radius="soft"] {
 }
 
 @media (max-width: 1023px) {
-  .site-header.is-sticky {
+  .site-header-primary.is-sticky {
     position: relative !important;
     top: auto !important;
   }
 
-  .site-header.is-sticky.is-scrolled .site-header-preheader {
-    max-height: none;
-    opacity: 1;
-    overflow: visible;
-    transform: none;
-  }
 }
 
 .site-card {
