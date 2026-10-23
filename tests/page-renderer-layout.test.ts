@@ -32,6 +32,15 @@ describe("public page headline layout", () => {
     expect(markup).toContain("align-content:start");
   });
 
+  it("uses responsive grid column variables so mobile layouts collapse to one column", () => {
+    const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8").replace(/\r\n/g, "\n");
+    const renderer = fs.readFileSync(path.resolve(process.cwd(), "components/page-renderer.tsx"), "utf8");
+    expect(renderer).toContain('"--desktop-columns": String(Math.max(1, Math.min(12, Math.round(columns))))');
+    expect(css).toContain(".responsive-grid-content > .site-block-stack {\n  grid-template-columns: repeat(var(--desktop-columns, 1), minmax(0, 1fr));\n}");
+    expect(css).toContain("grid-template-columns: repeat(var(--tablet-columns, 1), minmax(0, 1fr)) !important;");
+    expect(css).toContain("grid-template-columns: repeat(var(--mobile-columns, 1), minmax(0, 1fr)) !important;");
+  });
+
   it("does not add live-only padding to a zero-padding full-width container", () => {
     const className = structuralBlockClassName("container", "p-0", "text-left", "");
 
@@ -78,6 +87,25 @@ describe("public page headline layout", () => {
     expect(markup).toContain("responsive-image-container");
     expect(markup).toContain("--desktop-width:75%");
     expect(markup).toContain("--desktop-height:240px");
+  });
+
+  it("keeps images fluid when only a responsive width is configured", async () => {
+    const markup = renderToStaticMarkup(await PageRenderer({
+      blocks: [
+        {
+          id: "image-2",
+          type: "image",
+          props: {
+            imageUrl: "/images/example.png",
+            responsive: { mobile: { widthValue: "100", widthUnit: "%" } },
+          },
+        },
+      ],
+    }));
+
+    expect(markup).toContain("--mobile-width:100%");
+    expect(markup).toContain("width:100%");
+    expect(markup).toContain("max-width:100%");
   });
 
   it("keeps map height changes when the saved unit is omitted", async () => {

@@ -402,8 +402,17 @@ img[class*="w-[calc(100%+2rem)]"] {
   height: var(--desktop-height, auto);
 }
 
+.responsive-image-container > div,
+.responsive-image-container img {
+  max-width: 100%;
+}
+
 .responsive-content-variant {
   display: none;
+}
+
+.responsive-grid-content > .site-block-stack {
+  grid-template-columns: repeat(var(--desktop-columns, 1), minmax(0, 1fr));
 }
 
 .responsive-background-variant {

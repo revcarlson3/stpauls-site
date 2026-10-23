@@ -431,8 +431,9 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
       ...(block.props?.borderStyle && block.props.borderStyle !== "none" ? { borderStyle: block.props.borderStyle as CSSProperties["borderStyle"], borderWidth: `${typeof block.props.borderWidth === "string" ? block.props.borderWidth : "1"}px`, borderColor: typeof block.props.borderColor === "string" ? block.props.borderColor : undefined } : {})
     };
     const imageStyle: CSSProperties = {
-      ...(width ? { width: "100%" } : {}),
-      ...(height ? { height: "100%" } : {}),
+      width: "100%",
+      height: height ? "100%" : "auto",
+      maxWidth: "100%",
       ...(typeof block.props?.borderRadius === "string" ? { borderRadius: `${block.props.borderRadius}px` } : {})
     };
     const animation = typeof block.props?.animation === "string" && block.props.animation !== "none" ? `block-animation-${block.props.animation}` : "";
@@ -565,7 +566,7 @@ export async function PageRenderer({ blocks, columns }: { blocks: unknown; colum
   }));
 
   return (
-    <div className="site-block-stack grid" style={{ display: "grid", gridAutoRows: "max-content", alignContent: "start", ...(columns ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: "1.5rem" } : { gap: 0 }) }}>
+    <div className="site-block-stack grid" style={{ display: "grid", gridAutoRows: "max-content", alignContent: "start", ...(columns ? { "--desktop-columns": String(Math.max(1, Math.min(12, Math.round(columns)))) } : {}), gap: columns ? "1.5rem" : 0 } as CSSProperties}>
       {renderedBlocks}
     </div>
   );
