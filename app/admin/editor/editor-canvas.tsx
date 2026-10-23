@@ -1405,6 +1405,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   const saveGenerationRef = useRef(0);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const lastDragOverRef = useRef<DragOverEvent["over"]>(null);
+  const activeDropPathRef = useRef<string | null>(null);
   const canvasRef = useRef<HTMLElement | null>(null);
   const dragStartScrollTopRef = useRef<number | null>(null);
   const { setNodeRef: setRootDropRef } = useDroppable({ id: "drop:root", data: { kind: "root" } });
@@ -1425,24 +1426,19 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
 
   useEffect(() => {
     if (!draggedType && !draggedLayerPath) return;
-    const handlePointerMove = (event: PointerEvent) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const edge = Math.min(96, Math.max(48, rect.height * 0.16));
-      const distance = event.clientY < rect.top + edge
-        ? event.clientY - (rect.top + edge)
-        : event.clientY > rect.bottom - edge
-          ? event.clientY - (rect.bottom - edge)
-          : 0;
-      if (!distance) return;
-      const direction = distance < 0 ? -1 : 1;
-      const intensity = Math.min(24, Math.max(2, Math.ceil(Math.abs(distance) / edge * 24)));
-      const nextScrollTop = Math.max(0, Math.min(canvas.scrollHeight - canvas.clientHeight, canvas.scrollTop + direction * intensity));
-      if (nextScrollTop !== canvas.scrollTop) canvas.scrollTop = nextScrollTop;
+    const canvas = canvasRef.current;
+    const lockedScrollTop = dragStartScrollTopRef.current;
+    if (!canvas || lockedScrollTop === null) return;
+    const restoreScrollPosition = () => {
+      if (canvas.scrollTop !== lockedScrollTop) canvas.scrollTop = lockedScrollTop;
     };
-    window.addEventListener("pointermove", handlePointerMove);
-    return () => window.removeEventListener("pointermove", handlePointerMove);
+    canvas.addEventListener("scroll", restoreScrollPosition, { passive: true });
+    window.addEventListener("scroll", restoreScrollPosition, { passive: true });
+    restoreScrollPosition();
+    return () => {
+      canvas.removeEventListener("scroll", restoreScrollPosition);
+      window.removeEventListener("scroll", restoreScrollPosition);
+    };
   }, [draggedLayerPath, draggedType]);
 
   useEffect(() => {
@@ -1913,9 +1909,11 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     setMessage(`Recommended ${previewDevice} layout applied. Use Undo to revert it.`);
   };
   const handleDragOver = ({ over }: DragOverEvent) => {
-    lastDragOverRef.current = over;
+    if (over) lastDragOverRef.current = over;
     const overId = String(over?.id ?? "");
-    setActiveDropPath(overId.startsWith("drop:") ? overId.slice(5) : overId.startsWith("insert:") || overId.startsWith("layer-insert:") || overId.startsWith("grid-cell:") ? overId : null);
+    const nextDropPath = overId.startsWith("drop:") ? overId.slice(5) : overId.startsWith("insert:") || overId.startsWith("layer-insert:") || overId.startsWith("grid-cell:") ? overId : null;
+    activeDropPathRef.current = nextDropPath;
+    setActiveDropPath(nextDropPath);
   };
   const cancelDragOutsideEditor = () => {
     if (!draggedType && !draggedLayerPath) return;
@@ -1929,13 +1927,24 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     if (dragCancelledRef.current) {
       dragCancelledRef.current = false;
       lastDragOverRef.current = null;
+      activeDropPathRef.current = null;
       setDraggedType(null);
       setDraggedLayerPath(null);
       setActiveDropPath(null);
       return;
     }
     if (activeData?.kind === "palette" && activeData.type) {
-      if (overData?.kind === "grid-cell" && overData.gridPath && typeof overData.childIndex === "number") {
+      const highlightedTarget = activeDropPathRef.current;
+      const insertionMatch = highlightedTarget?.match(/^insert:(root|[\d.]+):(\d+)$/);
+      const gridCellMatch = highlightedTarget?.match(/^grid-cell:([\d.]+):(\d+)$/);
+      if (gridCellMatch) {
+        const gridPath = gridCellMatch[1].split(".").map(Number);
+        const childIndex = Number(gridCellMatch[2]);
+        commitBlocks((current) => addBlockToGridCell(current, gridPath, childIndex, activeData.type!));
+      } else if (insertionMatch) {
+        const parentPath = insertionMatch[1] === "root" ? [] : insertionMatch[1].split(".").map(Number);
+        dropAtInsertion(parentPath, Number(insertionMatch[2]), activeData.type);
+      } else if (overData?.kind === "grid-cell" && overData.gridPath && typeof overData.childIndex === "number") {
         commitBlocks((current) => addBlockToGridCell(current, overData.gridPath!, overData.childIndex!, activeData.type!));
       } else if (overData?.kind === "drop" && overData.path) dropChild(overData.path, activeData.type);
       else if (overData?.kind === "insert" && overData.parentPath && typeof overData.index === "number") dropAtInsertion(overData.parentPath, overData.index, activeData.type);
@@ -1948,10 +1957,11 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     setDraggedType(null);
     setDraggedLayerPath(null);
     lastDragOverRef.current = null;
+    activeDropPathRef.current = null;
     setActiveDropPath(null);
   };
 
-  return   <DndContext autoScroll={false} sensors={sensors} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }} collisionDetection={editorCollisionDetection} onDragStart={({ active }) => { dragCancelledRef.current = false; lastDragOverRef.current = null; dragStartScrollTopRef.current = canvasRef.current?.scrollTop ?? 0; const data = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); setDraggedLayerPath(data?.kind === "layer" ? data.path ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { dragCancelledRef.current = false; lastDragOverRef.current = null; dragStartScrollTopRef.current = null; setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
+  return   <DndContext autoScroll={false} sensors={sensors} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }} collisionDetection={editorCollisionDetection} onDragStart={({ active }) => { dragCancelledRef.current = false; lastDragOverRef.current = null; activeDropPathRef.current = null; dragStartScrollTopRef.current = canvasRef.current?.scrollTop ?? 0; const data = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); setDraggedLayerPath(data?.kind === "layer" ? data.path ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { dragCancelledRef.current = false; lastDragOverRef.current = null; activeDropPathRef.current = null; dragStartScrollTopRef.current = null; setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
     {message && <p role="status" aria-live="polite" className="lg:col-span-2 rounded-lg border border-emerald-600/20 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{message}</p>}
     {recoveryOffer && <div role="alert" className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/25 bg-amber-50 px-4 py-3 text-sm text-amber-950"><div><p className="font-bold">A newer local draft is available.</p><p className="mt-1 text-amber-950/75">Recovered from {new Date(recoveryOffer.savedAt).toLocaleString()}.</p></div><div className="flex gap-2"><button type="button" className="focus-ring rounded-lg bg-ink px-3 py-2 text-xs font-bold text-white hover:bg-ink/90" onClick={restoreRecovery}>Restore draft</button><button type="button" className="focus-ring rounded-lg border border-amber-900/25 px-3 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-100" onClick={discardRecovery}>Discard</button></div></div>}
     <div className="flex flex-wrap items-center gap-2 lg:col-span-2">
