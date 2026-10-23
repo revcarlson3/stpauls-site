@@ -145,6 +145,7 @@ type Block = {
   carouselControls?: boolean;
   carouselIndicators?: boolean;
   responsive?: ResponsiveOverrides;
+  gridCell?: boolean;
 };
 
 type CtaPanel = {
@@ -455,6 +456,23 @@ const editorCollisionDetection: CollisionDetection = (args) => {
   }
   return closestCenter({ ...args, droppableContainers: nonInsertionTargets });
 };
+
+function createGridCell(label: string): Block {
+  const cell = createBlock("container");
+  return { ...cell, id: `${cell.id}-cell`, title: label, padding: "none", gridCell: true, children: [] };
+}
+
+function normalizeGridTree(block: Block): Block {
+  const children = block.children?.map(normalizeGridTree);
+  if (block.type !== "grid") return { ...block, children };
+  const columnCount = Math.max(1, Math.min(12, Math.round(block.columns ?? 2)));
+  const existing = children ?? [];
+  const cells: Block[] = existing.length && existing.every((child) => child.type === "container")
+    ? existing.map((child, index) => ({ ...child, title: child.title || `Column ${index + 1}`, gridCell: true, padding: child.padding ?? "none" }))
+    : existing.map((child, index) => ({ ...createGridCell(`Column ${index + 1}`), children: [child] }));
+  while (cells.length < columnCount) cells.push(createGridCell(`Column ${cells.length + 1}`));
+  return { ...block, children: cells };
+}
 
 function updateAtPath(blocks: Block[], path: number[], update: (block: Block) => Block): Block[] {
   if (!path.length) return blocks;
@@ -1181,10 +1199,10 @@ function PaletteElement({ type, onClick }: { type: BlockType; onClick: () => voi
   return <div ref={setNodeRef} className={isDragging ? "opacity-40" : ""}><Button {...attributes} {...listeners} type="button" variant="default" aria-label={`Add ${blockDefinitions[type].label}`} className="aspect-square w-full flex-col justify-center gap-2 rounded-xl !border-ink/40 !bg-white !text-ink px-2 py-3 text-center hover:!bg-mist disabled:cursor-not-allowed disabled:opacity-50" onClick={onClick}><BlockIcon type={type} /><span className="text-xs leading-tight">{blockDefinitions[type].label}</span></Button></div>;
 }
 
-function SortableLayerRow({ block, path, selected, onClick }: { block: Block; path: number[]; selected: boolean; onClick: () => void }) {
+function SortableLayerRow({ block, path, label, selected, onClick }: { block: Block; path: number[]; label?: string; selected: boolean; onClick: () => void }) {
   const id = `layer:${path.join(".")}`;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, data: { kind: "layer", path } });
-  return <button ref={setNodeRef} type="button" {...attributes} {...listeners} onClick={onClick} style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined }} className={`focus-ring flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-xs ${isDragging ? "bg-white shadow-xl ring-2 ring-coral/20" : selected ? "bg-coral/10 font-bold text-coral" : "text-ink hover:bg-mist"}`}><span className="cursor-grab text-ink/35" aria-hidden="true">⋮⋮</span><span className="min-w-0 flex-1 truncate">{block.title || blockDefinitions[block.type].label}</span><span className="shrink-0 text-[10px] uppercase text-ink/40">{blockDefinitions[block.type].label}</span></button>;
+  return <button ref={setNodeRef} type="button" {...attributes} {...listeners} onClick={onClick} style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined }} className={`focus-ring flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left text-xs ${isDragging ? "bg-white shadow-xl ring-2 ring-coral/20" : selected ? "bg-coral/10 font-bold text-coral" : "text-ink hover:bg-mist"}`}><span className="cursor-grab text-ink/35" aria-hidden="true">⋮⋮</span><span className="min-w-0 flex-1 truncate">{label ? label : (block.title || blockDefinitions[block.type].label)}</span><span className="shrink-0 text-[10px] uppercase text-ink/40">{label ? "GRID CELL" : blockDefinitions[block.type].label}</span></button>;
 }
 
 function LayerInsertZone({ parentPath, index, active, dragging }: { parentPath: number[]; index: number; active: boolean; dragging: boolean }) {
@@ -1211,6 +1229,7 @@ function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, dragg
   const { setNodeRef } = useDroppable({ id: `drop:${path.join(".")}`, data: { kind: "drop", path } });
   const block = editorBlockForDevice(sourceBlock, previewDevice);
   const isStructural = structuralTypes.includes(block.type);
+  const isGridCell = parentType === "grid" && block.gridCell === true;
   const isVisualMedia = ["youtube", "image", "map", "carousel"].includes(block.type);
   const blockPadding = block.padding === "none" ? "p-0" : block.padding === "sm" ? "p-3" : block.padding === "md" ? "p-5" : block.padding === "lg" ? "p-10" : "p-0";
   const blockAlignment = block.alignment === "center" ? "text-center" : block.alignment === "right" ? "text-right" : "text-left";
@@ -1239,7 +1258,7 @@ function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, dragg
     ...(!["image", "map"].includes(block.type) && (block.marginTop || block.marginRight || block.marginBottom || block.marginLeft) ? { marginTop: block.marginTop ? `${block.marginTop}px` : undefined, marginRight: block.marginRight ? `${block.marginRight}px` : undefined, marginBottom: block.marginBottom ? `${block.marginBottom}px` : undefined, marginLeft: block.marginLeft ? `${block.marginLeft}px` : undefined } : {}),
     ...(!["image", "map"].includes(block.type) && block.borderRadius ? { borderRadius: `${block.borderRadius}px` } : {}),
     ...(!["image", "map"].includes(block.type) && block.borderStyle && block.borderStyle !== "none" ? { borderStyle: block.borderStyle, borderWidth: `${block.borderWidth ?? "1"}px`, borderColor: block.borderColor ?? "#1f2933" } : {}),
-    ...(isStructural ? { minHeight: "14rem" } : {}),
+    ...(isStructural && !isGridCell ? { minHeight: "14rem" } : {}),
     ...(block.justify === "center" ? { marginLeft: "auto", marginRight: "auto" } : block.justify === "right" ? { marginLeft: "auto" } : {})
   };
   const imageStyle: CSSProperties = {
@@ -1259,7 +1278,7 @@ function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, dragg
     : block.type === "flex"
       ? { display: "flex", flexDirection: block.flexDirection === "column" ? "column" : "row", flexWrap: block.flexWrap === "nowrap" ? "nowrap" : "wrap", gap: `${Number(block.flexGap) || 16}px`, justifyContent: block.flexJustify === "center" ? "center" : block.flexJustify === "end" ? "flex-end" : block.flexJustify === "between" ? "space-between" : block.flexJustify === "around" ? "space-around" : "flex-start", alignItems: block.flexAlign === "center" ? "center" : block.flexAlign === "end" ? "flex-end" : block.flexAlign === "start" ? "flex-start" : "stretch", backgroundColor: "transparent", minHeight: "14rem", height: "100%" }
       : isStructural
-      ? { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gridAutoRows: "max-content", alignContent: block.verticalAlign === "center" ? "center" : block.verticalAlign === "bottom" ? "end" : "start", gap: 0, backgroundColor: "transparent", minHeight: "14rem", height: "100%" }
+      ? { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gridAutoRows: "max-content", alignContent: block.verticalAlign === "center" ? "center" : block.verticalAlign === "bottom" ? "end" : "start", gap: 0, backgroundColor: "transparent", minHeight: isGridCell ? undefined : "14rem", height: "100%" }
       : undefined;
   return <article className={`group relative min-w-0 overflow-hidden rounded-xl border transition ${blockPadding} ${blockAlignment} ${blockAnimation} ${block.hidden ? "opacity-45 outline outline-2 outline-dashed outline-coral/50" : ""} ${selected ? "border-coral ring-2 ring-coral/20" : "border-transparent"}`} style={blockStyle} onClick={(event) => { event.stopPropagation(); if (event.target instanceof HTMLElement && (event.target.closest("[contenteditable='true']") || event.target.closest("input, textarea, select, button"))) return; onSelect(path); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onSelect(path); onContextMenu(event, path); }}>
     {block.backgroundType === "image" && block.backgroundUrl && !block.backgroundHidden && <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url("${block.backgroundUrl}")` }} />}
@@ -1386,7 +1405,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
       serverUpdatedAtRef.current = typeof page.updatedAt === "string" ? page.updatedAt : null;
       setPageReady(true);
       setPageTitle(page.title); setSlug(page.slug); setSeoTitle(page.seoTitle ?? ""); setSeoDescription(page.seoDescription ?? ""); setSeoKeywords(page.seoKeywords ?? ""); setPublishAt(page.publishAt ? new Date(page.publishAt).toISOString().slice(0, 16) : ""); setPageThemeFamily(page.pageThemeFamily ?? ""); setPageThemeWidth(page.pageThemeWidth ?? ""); setShowHeader(page.showHeader !== false); setShowFooter(page.showFooter !== false); setFullScreen(page.fullScreen === true); setPasswordProtected(page.passwordProtected === true); setPasswordChanged(false); setAccessPassword(""); setPageStatus(page.status === "PUBLISHED" || page.status === "ARCHIVED" ? page.status : "DRAFT");
-      setBlocks((page.blocks as Array<{ id: string; type: BlockType; props: Record<string, unknown> }>).flatMap((block) => { const hydrated = hydrateBlock(block); return hydrated ? [hydrated] : []; }));
+      setBlocks((page.blocks as Array<{ id: string; type: BlockType; props: Record<string, unknown> }>).flatMap((block) => { const hydrated = hydrateBlock(block); return hydrated ? [normalizeGridTree(hydrated)] : []; }));
       setPastBlocks([]);
       setFutureBlocks([]);
       try {
@@ -1631,7 +1650,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     if (!recoveryOffer) return;
     const input = recoveryOffer.input;
     setPageTitle(input.title); setSlug(input.slug); setSeoTitle(input.seoTitle ?? ""); setSeoDescription(input.seoDescription ?? ""); setSeoKeywords(input.seoKeywords ?? ""); setPublishAt(input.publishAt ? new Date(input.publishAt).toISOString().slice(0, 16) : ""); setPageThemeFamily(input.pageThemeFamily ?? ""); setPageThemeWidth(input.pageThemeWidth ?? ""); setShowHeader(input.showHeader !== false); setShowFooter(input.showFooter !== false); setFullScreen(input.fullScreen === true);
-    setBlocks(input.blocks.flatMap((block) => { const hydrated = hydrateBlock(block); return hydrated ? [hydrated] : []; }));
+    setBlocks(input.blocks.flatMap((block) => { const hydrated = hydrateBlock(block); return hydrated ? [normalizeGridTree(hydrated)] : []; }));
     editorDirtyRef.current = true;
     draftVersionRef.current += 1;
     setRecoveryOffer(null);
@@ -1719,7 +1738,16 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     const menuHeight = blockAtPath(blocks, path)?.type === "table" ? 460 : 280;
     setContextMenu({ x: Math.min(event.clientX, window.innerWidth - 220), y: Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8)), path });
   }
-  function addChild(path: number[], type: BlockType) { commitBlocks((current) => updateAtPath(current, path, (block) => ({ ...block, children: [...(block.children ?? []), createBlock(type)] }))); }
+  function addChild(path: number[], type: BlockType) {
+    commitBlocks((current) => {
+      const target = blockAtPath(current, path);
+      if (target?.type === "grid") {
+        const targetIndex = (target.children ?? []).findIndex((child) => !child.children?.length);
+        return addBlockToGridCell(current, path, targetIndex >= 0 ? targetIndex : 0, type);
+      }
+      return updateAtPath(current, path, (block) => ({ ...block, children: [...(block.children ?? []), createBlock(type)] }));
+    });
+  }
   function dropChild(path: number[], type: BlockType) { addChild(path, type); setDraggedType(null); }
   function dropAtInsertion(parentPath: number[], index: number, type: BlockType) {
     commitBlocks((current) => insertBlockAtPath(current, parentPath, index, createBlock(type)));
@@ -1727,12 +1755,19 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   }
   function addBlock(type: BlockType) {
     commitBlocks((current) => {
-      if (structuralTypes.includes(type)) return [...current, createBlock(type)];
+      if (structuralTypes.includes(type)) {
+        const created = createBlock(type);
+        return [...current, type === "grid" ? normalizeGridTree(created) : created];
+      }
       const selected = selectedPath ? blockAtPath(current, selectedPath) : null;
       const selectedParentPath = selectedPath?.slice(0, -1) ?? [];
       const selectedParent = selectedPath?.length ? blockAtPath(current, selectedParentPath) : null;
       if (selected && selectedParent?.type === "grid" && selectedPath) {
         return addBlockToGridCell(current, selectedParentPath, selectedPath[selectedPath.length - 1], type);
+      }
+      if (selected?.type === "grid" && selectedPath) {
+        const targetIndex = (selected.children ?? []).findIndex((child) => !child.children?.length);
+        return addBlockToGridCell(current, selectedPath, targetIndex >= 0 ? targetIndex : 0, type);
       }
       const selectedContainer = selected && structuralTypes.includes(selected.type) ? selectedPath : null;
       const lastContainerIndex = current.map((block, index) => structuralTypes.includes(block.type) ? index : -1).filter((index) => index >= 0).pop();
@@ -1788,11 +1823,14 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     commitBlocks(() => moved.blocks);
     setSelectedPath(moved.path);
   };
-  const renderLayer = (block: Block, path: number[]) => <div key={block.id} className="grid gap-1">
-    <SortableLayerRow block={block} path={path} selected={selectedPath?.join(".") === path.join(".")} onClick={() => setSelectedPath(path)} />
+  const renderLayer = (block: Block, path: number[], label?: string) => <div key={block.id} className="grid gap-1">
+    <SortableLayerRow block={block} path={path} label={label} selected={selectedPath?.join(".") === path.join(".")} onClick={() => setSelectedPath(path)} />
     {block.children?.length ? renderLayerCollection(block.children, path, true) : null}
   </div>;
-  const renderLayerCollection = (items: Block[], parentPath: number[], nested = false) => <SortableContext items={items.map((_, index) => `layer:${[...parentPath, index].join(".")}`)} strategy={verticalListSortingStrategy}><div className={`${nested ? "ml-4 border-l border-ink/10 pl-2" : ""} grid gap-1`}>{items.map((block, index) => <div key={block.id}><LayerInsertZone parentPath={parentPath} index={index} active={activeDropPath === `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${index}`} dragging={draggedLayerPath !== null} />{renderLayer(block, [...parentPath, index])}</div>)}<LayerInsertZone parentPath={parentPath} index={items.length} active={activeDropPath === `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${items.length}`} dragging={draggedLayerPath !== null} /></div></SortableContext>;
+  const renderLayerCollection = (items: Block[], parentPath: number[], nested = false) => {
+    const parent = blockAtPath(blocks, parentPath);
+    return <SortableContext items={items.map((_, index) => `layer:${[...parentPath, index].join(".")}`)} strategy={verticalListSortingStrategy}><div className={`${nested ? "ml-4 border-l border-ink/10 pl-2" : ""} grid gap-1`}>{items.map((block, index) => <div key={block.id}><LayerInsertZone parentPath={parentPath} index={index} active={activeDropPath === `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${index}`} dragging={draggedLayerPath !== null} />{renderLayer(block, [...parentPath, index], parent?.type === "grid" ? `Column ${index + 1}` : undefined)}</div>)}<LayerInsertZone parentPath={parentPath} index={items.length} active={activeDropPath === `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${items.length}`} dragging={draggedLayerPath !== null} /></div></SortableContext>;
+  };
   const elementButton = (type: BlockType) => <PaletteElement key={type} type={type} onClick={() => addBlock(type)} />;
   const applyAutoLayout = () => {
     if (previewDevice === "desktop") return;
