@@ -211,14 +211,14 @@ function formatListNumber(value: number, style: RenderListConfig["numberStyle"])
 function backgroundMediaLayers(props: Record<string, unknown>) {
   const baseUrl = typeof props.backgroundUrl === "string" ? props.backgroundUrl : "";
   return <>
-    {props.backgroundType === "image" && baseUrl && <div aria-hidden="true" className="responsive-background-base responsive-background-image pointer-events-none absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url("${baseUrl}")` }} />}
+    {props.backgroundType === "image" && baseUrl && <div aria-hidden="true" className="responsive-background-base responsive-background-image pointer-events-none absolute inset-0 z-0 bg-cover" style={{ backgroundImage: `url("${baseUrl}")`, backgroundPosition: "center top" }} />}
     {props.backgroundType === "video" && baseUrl && <LazyBackgroundVideo className="responsive-background-base responsive-background-video pointer-events-none absolute inset-0 z-0 h-full w-full object-cover" src={baseUrl} controls={props.videoControls === true} />}
     {responsiveDevices.map((device) => {
       const item = responsiveSettings(props, device);
       const url = typeof item?.backgroundUrl === "string" ? item.backgroundUrl : "";
       if (!url || (item?.backgroundType !== "image" && item?.backgroundType !== "video")) return null;
       return item.backgroundType === "image"
-        ? <div key={`${device}-background`} aria-hidden="true" className={`responsive-background-variant responsive-background-${device} pointer-events-none absolute inset-0 z-0 bg-cover bg-center`} style={{ backgroundImage: `url("${url}")` }} />
+        ? <div key={`${device}-background`} aria-hidden="true" className={`responsive-background-variant responsive-background-${device} pointer-events-none absolute inset-0 z-0 bg-cover`} style={{ backgroundImage: `url("${url}")`, backgroundPosition: "center top" }} />
         : <LazyBackgroundVideo key={`${device}-background`} className={`responsive-background-variant responsive-background-${device} pointer-events-none absolute inset-0 z-0 h-full w-full object-cover`} src={url} mediaQuery={device === "tablet" ? "(min-width: 768px) and (max-width: 1023px)" : "(max-width: 767px)"} />;
     })}
   </>;

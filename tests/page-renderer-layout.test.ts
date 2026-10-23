@@ -61,6 +61,12 @@ describe("public page headline layout", () => {
     expect(css).toContain("padding-top: var(--desktop-padding-top, var(--desktop-padding, 0));");
   });
 
+  it("anchors container background images at the top while centering them horizontally", () => {
+    const renderer = fs.readFileSync(path.resolve(process.cwd(), "components/page-renderer.tsx"), "utf8");
+    expect(renderer).toContain('backgroundPosition: "center top"');
+    expect(renderer).not.toContain("responsive-background-base responsive-background-image pointer-events-none absolute inset-0 z-0 bg-cover bg-center");
+  });
+
   it("keeps image dimensions and margins on the live block wrapper", async () => {
     const markup = renderToStaticMarkup(await PageRenderer({
       blocks: [
