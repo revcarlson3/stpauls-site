@@ -273,6 +273,7 @@ model Church {
   updatedAt                            DateTime                              @updatedAt
   publicSiteEnabled                    Boolean                               @default(true)
   maintenanceMode                      Boolean                               @default(false)
+  mediaOptimizationEnabled             Boolean                               @default(false)
   siteIdentity                         SiteIdentity?
   mediaAssets                          MediaAsset[]
   pages                                Page[]

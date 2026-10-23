@@ -78,6 +78,73 @@ export async function ensureMediaThumbnail(filename: string, churchId: string, a
   }
 }
 
+export async function optimizeImageBuffer(buffer: Buffer, mimeType: string) {
+  if (mimeType === "image/gif") return null;
+  const image = sharp(buffer);
+  let optimized: Buffer;
+  if (mimeType === "image/jpeg") {
+    optimized = await image.jpeg({ quality: 84, progressive: true, mozjpeg: true }).toBuffer();
+  } else if (mimeType === "image/png") {
+    optimized = await image.png({ compressionLevel: 9, adaptiveFiltering: true, palette: false }).toBuffer();
+  } else if (mimeType === "image/webp") {
+    optimized = await image.webp({ quality: 84, effort: 5 }).toBuffer();
+  } else {
+    return null;
+  }
+  return optimized.length < buffer.length ? optimized : null;
+}
+
+export async function optimizeMediaAssetFile(input: { filename: string; churchId: string; mimeType: string; allowLegacy?: boolean }) {
+  const source = await readMediaFile(input.filename, input.churchId, input.allowLegacy ?? false);
+  const optimized = await optimizeImageBuffer(source, input.mimeType);
+  if (!optimized) return { optimized: false, originalBytes: source.length, optimizedBytes: source.length };
+  await writeFile(mediaAbsolutePath(input.filename, input.churchId), optimized);
+  return { optimized: true, originalBytes: source.length, optimizedBytes: optimized.length };
+}
+
+export async function getMediaOptimizationSetting() {
+  const user = await requirePermission("EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const church = await db.church.findUnique({ where: { id: user.churchId }, select: { mediaOptimizationEnabled: true } });
+  return { enabled: church?.mediaOptimizationEnabled === true };
+}
+
+export async function setMediaOptimizationSetting(enabled: boolean) {
+  const user = await requirePermission("EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  await db.church.update({ where: { id: user.churchId }, data: { mediaOptimizationEnabled: enabled } });
+  return { enabled };
+}
+
+export async function optimizeExistingMediaAssets() {
+  const user = await requirePermission("EDIT_PAGES");
+  if (!user.churchId) throw new Error("The authenticated user is not assigned to an active church.");
+  const assets = await db.mediaAsset.findMany({
+    where: { churchId: user.churchId, mimeType: { startsWith: "image/" } },
+    select: { id: true, storedFilename: true, mimeType: true, sizeBytes: true, url: true }
+  });
+  let optimized = 0;
+  let savedBytes = 0;
+  let failed = 0;
+  for (const asset of assets) {
+    try {
+      const result = await optimizeMediaAssetFile({
+        filename: asset.storedFilename,
+        churchId: user.churchId,
+        mimeType: asset.mimeType,
+        allowLegacy: isLegacyMediaUrl(asset.url)
+      });
+      if (!result.optimized) continue;
+      await db.mediaAsset.update({ where: { id: asset.id }, data: { sizeBytes: result.optimizedBytes } });
+      optimized += 1;
+      savedBytes += result.originalBytes - result.optimizedBytes;
+    } catch {
+      failed += 1;
+    }
+  }
+  return { scanned: assets.length, optimized, failed, savedBytes };
+}
+
 function isLegacyMediaUrl(url: string) {
   return url.startsWith("/api/media/upload?file=");
 }
@@ -285,14 +352,19 @@ export async function saveUploadedMediaFile(input: {
   const buffer = Buffer.from(await input.asset.arrayBuffer());
   await mkdir(path.join(mediaDirectory, churchId), { recursive: true });
   const storedFilename = input.filename;
-  await writeFile(mediaAbsolutePath(storedFilename, churchId), buffer);
+  const church = await db.church.findUnique({ where: { id: churchId }, select: { mediaOptimizationEnabled: true } });
+  const optimized = input.asset.type.startsWith("image/") && church?.mediaOptimizationEnabled
+    ? await optimizeImageBuffer(buffer, input.asset.type)
+    : null;
+  const storedBuffer = optimized ?? buffer;
+  await writeFile(mediaAbsolutePath(storedFilename, churchId), storedBuffer);
   try {
     return await createUploadedMediaAsset({
       originalName: input.asset.name,
       churchId,
       storedFilename,
       mimeType: input.asset.type,
-      sizeBytes: input.asset.size,
+      sizeBytes: storedBuffer.length,
       uploaderId: input.uploader?.id ?? null,
       altText: input.altText ?? null,
       title: input.title ?? null,

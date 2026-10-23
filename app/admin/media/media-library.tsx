@@ -69,6 +69,9 @@ export function MediaLibrary() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [generating, setGenerating] = useState(false);
   const [backfillingMetadata, setBackfillingMetadata] = useState(false);
+  const [optimizingImages, setOptimizingImages] = useState(false);
+  const [mediaOptimizationEnabled, setMediaOptimizationEnabled] = useState(false);
+  const [loadingOptimizationSetting, setLoadingOptimizationSetting] = useState(true);
   const [mergingFolders, setMergingFolders] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiSize, setAiSize] = useState("landscape");
@@ -117,6 +120,17 @@ export function MediaLibrary() {
   }, [loadAssets]);
 
   useEffect(() => { void loadFolders(); }, [loadFolders]);
+
+  useEffect(() => {
+    void fetch("/api/media/optimization").then(async (response) => {
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error ?? "Unable to load image optimization settings.");
+      setMediaOptimizationEnabled(body.enabled === true);
+    }).catch((error) => {
+      setMessageVariant("danger");
+      setMessage(error instanceof Error ? error.message : "Unable to load image optimization settings.");
+    }).finally(() => setLoadingOptimizationSetting(false));
+  }, []);
 
   useEffect(() => {
     if (!assets.length) {
@@ -224,6 +238,46 @@ export function MediaLibrary() {
       setMessage(error instanceof Error ? error.message : "Unable to scan existing media.");
     } finally {
       setBackfillingMetadata(false);
+    }
+  }
+
+  async function updateMediaOptimization(enabled: boolean) {
+    setMediaOptimizationEnabled(enabled);
+    try {
+      const response = await fetch("/api/media/optimization", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error ?? "Unable to save image optimization settings.");
+      setMessageVariant("success");
+      setMessage(enabled ? "Automatic image optimization is on for new uploads." : "Automatic image optimization is off.");
+    } catch (error) {
+      setMediaOptimizationEnabled(!enabled);
+      setMessageVariant("danger");
+      setMessage(error instanceof Error ? error.message : "Unable to save image optimization settings.");
+    }
+  }
+
+  async function optimizeImages() {
+    setOptimizingImages(true);
+    try {
+      const response = await fetch("/api/media", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "optimize-images" })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error ?? "Unable to optimize existing images.");
+      setMessageVariant(body.failed ? "info" : "success");
+      setMessage(`Image optimization complete: optimized ${body.optimized} of ${body.scanned} images and saved ${formatBytes(body.savedBytes)}.${body.failed ? ` ${body.failed} could not be processed.` : ""}`);
+      await loadAssets(selectedId);
+    } catch (error) {
+      setMessageVariant("danger");
+      setMessage(error instanceof Error ? error.message : "Unable to optimize existing images.");
+    } finally {
+      setOptimizingImages(false);
     }
   }
 
@@ -511,6 +565,22 @@ export function MediaLibrary() {
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-ink/10 pt-4">
                     <p className="text-sm text-ink/60">Scan older images to add missing embedded captions and attribution without replacing existing details.</p>
                     <button type="button" className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50" disabled={backfillingMetadata} onClick={() => void backfillMetadata()}>{backfillingMetadata ? "Scanning..." : "Scan existing metadata"}</button>
+                  </div>
+                  <div className="mt-4 grid gap-3 border-t border-ink/10 pt-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-ink">Image optimization</p>
+                        <p className="mt-1 max-w-2xl text-sm text-ink/60">Recompress supported PNG, JPG, and WebP files without changing their URLs. Images are replaced only when the optimized file is smaller.</p>
+                      </div>
+                      <label className="inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-ink">
+                        <input type="checkbox" className="h-5 w-5 accent-coral" checked={mediaOptimizationEnabled} disabled={loadingOptimizationSetting} onChange={(event) => void updateMediaOptimization(event.target.checked)} />
+                        Optimize new uploads automatically
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs text-ink/50">Existing images are not changed unless you run the optimization action.</p>
+                      <button type="button" className="focus-ring rounded-full border border-coral px-4 py-2 text-sm font-semibold text-coral disabled:cursor-not-allowed disabled:opacity-50" disabled={optimizingImages} onClick={() => void optimizeImages()}>{optimizingImages ? "Optimizing images..." : "Optimize current images"}</button>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -80,6 +80,21 @@ describe("public page headline layout", () => {
     expect(markup).toContain("--desktop-height:240px");
   });
 
+  it("keeps map height changes when the saved unit is omitted", async () => {
+    const markup = renderToStaticMarkup(await PageRenderer({
+      blocks: [
+        {
+          id: "map-1",
+          type: "map",
+          props: { mapAddress: "1 Main Street", mapProvider: "google", heightValue: "480" },
+        },
+      ],
+    }));
+
+    expect(markup).toContain("height:480px");
+    expect(markup).toContain("display:block");
+  });
+
   it("renders divider shapes and responsive spacer heights", async () => {
     const markup = renderToStaticMarkup(await PageRenderer({
       blocks: [

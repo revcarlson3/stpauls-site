@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { backfillEmbeddedMediaMetadata, listMediaAssets } from "@/lib/media";
+import { backfillEmbeddedMediaMetadata, listMediaAssets, optimizeExistingMediaAssets } from "@/lib/media";
 import { parseMediaFilter, parseMediaLinkedFilter } from "@/lib/media-input";
 
 export async function GET(request: Request) {
@@ -21,8 +21,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const input = await request.json();
-    if (input?.action !== "backfill-metadata") return NextResponse.json({ error: "Invalid media action." }, { status: 400 });
-    return NextResponse.json(await backfillEmbeddedMediaMetadata());
+    if (input?.action === "backfill-metadata") return NextResponse.json(await backfillEmbeddedMediaMetadata());
+    if (input?.action === "optimize-images") return NextResponse.json(await optimizeExistingMediaAssets());
+    return NextResponse.json({ error: "Invalid media action." }, { status: 400 });
   } catch (error) {
     return unauthorizedResponse(error);
   }
