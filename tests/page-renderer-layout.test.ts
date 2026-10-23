@@ -6,7 +6,7 @@ import path from "node:path";
 
 describe("public page headline layout", () => {
   it("does not add page-shell padding between the header and first page block", () => {
-    const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8");
+    const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8").replace(/\r\n/g, "\n");
     expect(css.replace(/\r\n/g, "\n")).toContain(".site-public-content.site-section {\n  padding-block: 0;\n}");
     expect(css.replace(/\r\n/g, "\n")).toContain(".site-block-stack {\n  gap: 0;\n}");
   });
@@ -36,9 +36,11 @@ describe("public page headline layout", () => {
     const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8").replace(/\r\n/g, "\n");
     const renderer = fs.readFileSync(path.resolve(process.cwd(), "components/page-renderer.tsx"), "utf8");
     expect(renderer).toContain('"--desktop-columns": String(Math.max(1, Math.min(12, Math.round(columns))))');
-    expect(css).toContain(".responsive-grid-content > .site-block-stack {\n  grid-template-columns: repeat(var(--desktop-columns, 1), minmax(0, 1fr));\n}");
+    expect(css).toContain(".responsive-grid-content > .site-block-stack {\n  grid-template-columns: repeat(var(--desktop-columns, 1), minmax(0, 1fr));\n  gap: var(--desktop-grid-gap, 1.5rem);\n}");
     expect(css).toContain("grid-template-columns: repeat(var(--tablet-columns, 1), minmax(0, 1fr)) !important;");
     expect(css).toContain("grid-template-columns: repeat(var(--mobile-columns, 1), minmax(0, 1fr)) !important;");
+    expect(css).toContain("gap: var(--tablet-grid-gap, 0.75rem) !important;");
+    expect(css).toContain("gap: var(--mobile-grid-gap, 0.5rem) !important;");
   });
 
   it("does not add live-only padding to a zero-padding full-width container", () => {
@@ -106,6 +108,14 @@ describe("public page headline layout", () => {
     expect(markup).toContain("--mobile-width:100%");
     expect(markup).toContain("width:100%");
     expect(markup).toContain("max-width:100%");
+  });
+
+  it("removes default image top spacing and fills grid cells when no explicit image width is set", () => {
+    const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8").replace(/\r\n/g, "\n");
+    const renderer = fs.readFileSync(path.resolve(process.cwd(), "components/page-renderer.tsx"), "utf8");
+    expect(renderer).toContain("withinGrid && !width ? { width: \"100%\" } : {}");
+    expect(renderer).toContain("grid-image-no-default-margin");
+    expect(css).toContain(".grid-image-no-default-margin {\n  margin-top: 0;\n}");
   });
 
   it("keeps map height changes when the saved unit is omitted", async () => {

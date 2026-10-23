@@ -413,6 +413,11 @@ img[class*="w-[calc(100%+2rem)]"] {
 
 .responsive-grid-content > .site-block-stack {
   grid-template-columns: repeat(var(--desktop-columns, 1), minmax(0, 1fr));
+  gap: var(--desktop-grid-gap, 1.5rem);
+}
+
+.grid-image-no-default-margin {
+  margin-top: 0;
 }
 
 .responsive-background-variant {
@@ -458,7 +463,7 @@ img[class*="w-[calc(100%+2rem)]"] {
   .responsive-background-variant { display: none; }
   .responsive-background-tablet { display: var(--tablet-background-display, block); }
   .responsive-overlay { display: var(--tablet-overlay-display, block); }
-  .responsive-grid-content > .site-block-stack { grid-template-columns: repeat(var(--tablet-columns, 1), minmax(0, 1fr)) !important; }
+  .responsive-grid-content > .site-block-stack { grid-template-columns: repeat(var(--tablet-columns, 1), minmax(0, 1fr)) !important; gap: var(--tablet-grid-gap, 0.75rem) !important; }
   .responsive-flex-content { flex-direction: var(--tablet-flex-direction, row) !important; flex-wrap: var(--tablet-flex-wrap, wrap) !important; gap: var(--tablet-flex-gap, 16px) !important; justify-content: var(--tablet-flex-justify, flex-start) !important; align-items: var(--tablet-flex-align, stretch) !important; }
   .responsive-content-has-tablet > .responsive-content-base { display: none; }
   .responsive-content-tablet { display: revert; }
@@ -502,7 +507,7 @@ img[class*="w-[calc(100%+2rem)]"] {
   .responsive-background-variant { display: none; }
   .responsive-background-mobile { display: var(--mobile-background-display, block); }
   .responsive-overlay { display: var(--mobile-overlay-display, block); }
-  .responsive-grid-content > .site-block-stack { grid-template-columns: repeat(var(--mobile-columns, 1), minmax(0, 1fr)) !important; }
+  .responsive-grid-content > .site-block-stack { grid-template-columns: repeat(var(--mobile-columns, 1), minmax(0, 1fr)) !important; gap: var(--mobile-grid-gap, 0.5rem) !important; }
   .responsive-flex-content { flex-direction: var(--mobile-flex-direction, row) !important; flex-wrap: var(--mobile-flex-wrap, wrap) !important; gap: var(--mobile-flex-gap, 16px) !important; justify-content: var(--mobile-flex-justify, flex-start) !important; align-items: var(--mobile-flex-align, stretch) !important; }
   .responsive-content-has-mobile > .responsive-content-base { display: none; }
   .responsive-content-mobile { display: revert; }
