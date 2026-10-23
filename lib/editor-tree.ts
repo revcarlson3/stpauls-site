@@ -3,6 +3,11 @@ export type EditorTreeNode = {
   children?: EditorTreeNode[];
 };
 
+export function gridCellLabel(index: number, columns: number) {
+  const safeColumns = Math.max(1, Math.round(columns));
+  return `Row ${Math.floor(Math.max(0, index) / safeColumns) + 1}, Column ${(Math.max(0, index) % safeColumns) + 1}`;
+}
+
 function blockAtPath<T extends EditorTreeNode>(blocks: T[], path: number[]) {
   let current: T | undefined;
   let children = blocks;

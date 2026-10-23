@@ -11,7 +11,7 @@ import { blockDefinitions, defaultTableConfig, parseTableConfig, tableConfigCont
 import type { CarouselSlide } from "@/components/carousel";
 import { MediaPicker } from "@/components/media-picker";
 import { TableBlock } from "@/components/table-block";
-import { moveBlockToInsertion as moveTreeBlockToInsertion } from "@/lib/editor-tree";
+import { gridCellLabel, moveBlockToInsertion as moveTreeBlockToInsertion } from "@/lib/editor-tree";
 
 type Block = {
   id: string;
@@ -1852,7 +1852,8 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   </div>;
   const renderLayerCollection = (items: Block[], parentPath: number[], nested = false) => {
     const parent = blockAtPath(blocks, parentPath);
-    return <SortableContext items={items.map((_, index) => `layer:${[...parentPath, index].join(".")}`)} strategy={verticalListSortingStrategy}><div className={`${nested ? "ml-4 border-l border-ink/10 pl-2" : ""} grid gap-1`}>{items.map((block, index) => <div key={block.id}><LayerInsertZone parentPath={parentPath} index={index} active={activeDropPath === `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${index}`} dragging={draggedLayerPath !== null} />{renderLayer(block, [...parentPath, index], parent?.type === "grid" ? `Column ${index + 1}` : undefined)}</div>)}<LayerInsertZone parentPath={parentPath} index={items.length} active={activeDropPath === `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${items.length}`} dragging={draggedLayerPath !== null} /></div></SortableContext>;
+    const gridColumns = parent?.type === "grid" ? Math.max(1, Math.min(12, Math.round(parent.columns ?? 2))) : 0;
+    return <SortableContext items={items.map((_, index) => `layer:${[...parentPath, index].join(".")}`)} strategy={verticalListSortingStrategy}><div className={`${nested ? "ml-4 border-l border-ink/10 pl-2" : ""} grid gap-1`}>{items.map((block, index) => <div key={block.id}><LayerInsertZone parentPath={parentPath} index={index} active={activeDropPath === `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${index}`} dragging={draggedLayerPath !== null} />{renderLayer(block, [...parentPath, index], gridColumns ? gridCellLabel(index, gridColumns) : undefined)}</div>)}<LayerInsertZone parentPath={parentPath} index={items.length} active={activeDropPath === `layer-insert:${parentPath.length ? parentPath.join(".") : "root"}:${items.length}`} dragging={draggedLayerPath !== null} /></div></SortableContext>;
   };
   const elementButton = (type: BlockType) => <PaletteElement key={type} type={type} onClick={() => addBlock(type)} />;
   const applyAutoLayout = () => {

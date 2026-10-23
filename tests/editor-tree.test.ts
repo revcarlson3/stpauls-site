@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveBlockToInsertion, type EditorTreeNode } from "@/lib/editor-tree";
+import { gridCellLabel, moveBlockToInsertion, type EditorTreeNode } from "@/lib/editor-tree";
 
 type Node = EditorTreeNode & { id: string };
 
@@ -19,6 +19,18 @@ describe("moveBlockToInsertion", () => {
     expect(result.path).toEqual([1, 0]);
     expect(result.blocks[0].children).toEqual([]);
     expect((result.blocks[1].children as Node[]).map((item) => item.id)).toEqual(["headline"]);
+  });
+
+  describe("gridCellLabel", () => {
+    it("identifies both row and column for grid cells", () => {
+      expect([0, 1, 2, 3, 4].map((index) => gridCellLabel(index, 2))).toEqual([
+        "Row 1, Column 1",
+        "Row 1, Column 2",
+        "Row 2, Column 1",
+        "Row 2, Column 2",
+        "Row 3, Column 1",
+      ]);
+    });
   });
 
   it("moves a nested layer to the root without changing unrelated paths", () => {
