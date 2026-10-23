@@ -704,7 +704,15 @@ body[data-theme-radius="soft"] {
   backdrop-filter: blur(12px);
   background-color: var(--site-header-background);
   color: var(--site-header-text);
+  isolation: isolate;
+  overflow: visible;
   transition: opacity 180ms ease, background-color 180ms ease;
+}
+
+.site-header-navigation,
+.site-primary-nav,
+.site-header-container {
+  overflow: visible;
 }
 
 .footer-column-dividers > section + section {
@@ -740,19 +748,32 @@ body[data-theme-radius="soft"] {
   overflow: visible;
   position: relative;
   transition: max-height 180ms ease, opacity 180ms ease, transform 180ms ease;
-  z-index: 60;
+  z-index: 110;
 }
 
 .site-header-preheader-container {
   min-height: var(--site-preheader-min-height);
 }
 
+.site-header.is-sticky.is-scrolled .site-header-preheader {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateY(-100%);
+}
+
 @media (max-width: 1023px) {
-  .site-header-primary.is-sticky {
+  .site-header.is-sticky {
     position: relative !important;
     top: auto !important;
   }
 
+  .site-header.is-sticky.is-scrolled .site-header-preheader {
+    max-height: none;
+    opacity: 1;
+    overflow: visible;
+    transform: none;
+  }
 }
 
 .site-card {

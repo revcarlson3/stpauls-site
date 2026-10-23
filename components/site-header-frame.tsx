@@ -20,5 +20,5 @@ export function SiteHeaderFrame({ sticky, stylistic, style, children }: { sticky
     return () => window.removeEventListener("scroll", onScroll);
   }, [sticky]);
 
-  return <header className={`site-header ${stylistic && scrolled ? "is-stylistic is-scrolled" : ""} ${scrollingUp ? "is-scrolling-up" : ""}`} style={style}>{children}</header>;
+  return <header className={`site-header border-b border-black/10 ${sticky ? "is-sticky sticky top-0 z-[1000]" : ""} ${stylistic && scrolled ? "is-stylistic is-scrolled" : ""} ${scrollingUp ? "is-scrolling-up" : ""}`} style={style}>{children}</header>;
 }
