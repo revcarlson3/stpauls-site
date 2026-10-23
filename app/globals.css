@@ -754,6 +754,20 @@ body[data-theme-radius="soft"] {
   transform: translateY(-100%);
 }
 
+@media (max-width: 1023px) {
+  .site-header.is-sticky {
+    position: relative !important;
+    top: auto !important;
+  }
+
+  .site-header.is-sticky.is-scrolled .site-header-preheader {
+    max-height: none;
+    opacity: 1;
+    overflow: visible;
+    transform: none;
+  }
+}
+
 .site-card {
   padding: var(--site-card-padding);
 }
