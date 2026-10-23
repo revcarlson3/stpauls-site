@@ -123,7 +123,7 @@ function responsiveContentClass(props: Record<string, unknown>, key: string) {
 
 function responsiveText({ props, name, fallback, className = "", id }: { props: Record<string, unknown>; name: string; fallback: string; className?: string; id?: string }) {
   return <div id={id} className={`${className} ${responsiveContentClass(props, name)}`}>
-    <div className="responsive-content-base" style={textDecorationStyle(props)} dangerouslySetInnerHTML={{ __html: safeRichText(props[name]) || fallback }} />
+    <div className="responsive-content-base" style={{ ...textDecorationStyle(props), fontFamily: typeof props.fontFamily === "string" && props.fontFamily ? `"${props.fontFamily}", sans-serif` : undefined }} dangerouslySetInnerHTML={{ __html: safeRichText(props[name]) || fallback }} />
     {responsiveDevices.map((device) => {
       const value = responsiveString(props, name, device);
       return value === undefined ? null : <div key={device} className={`responsive-content-variant responsive-content-${device}`} style={textDecorationStyle({ ...props, ...(props.responsive as Record<string, unknown> | undefined)?.[device] as Record<string, unknown> | undefined })} dangerouslySetInnerHTML={{ __html: safeRichText(value) }} />;

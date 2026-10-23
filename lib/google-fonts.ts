@@ -21,11 +21,11 @@ async function loadFonts() {
   })).filter((font) => font.family);
 }
 
-export async function searchGoogleFonts(query: string) {
+export async function searchGoogleFonts(query: string, limit = 200) {
   fontsPromise ??= loadFonts();
   const fonts = await fontsPromise;
   const normalized = query.trim().toLowerCase();
   return fonts
     .filter((font) => !normalized || [font.family, font.category, ...font.subsets, ...font.axes, ...font.tags].join(" ").toLowerCase().includes(normalized))
-    .slice(0, 40);
+    .slice(0, limit);
 }

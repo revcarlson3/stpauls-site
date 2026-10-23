@@ -1158,12 +1158,12 @@ body:has(.page-chrome-hide-footer) > div > footer {
   font-weight: 700;
 }
 
-.rich-text-content h1 { font-size: 2.25rem; line-height: 2.5rem; }
-.rich-text-content h2 { font-size: 1.875rem; line-height: 2.25rem; }
-.rich-text-content h3 { font-size: 1.5rem; line-height: 2rem; }
-.rich-text-content h4 { font-size: 1.25rem; line-height: 1.75rem; }
-.rich-text-content h5 { font-size: 1.125rem; line-height: 1.75rem; }
-.rich-text-content h6 { font-size: 1rem; line-height: 1.5rem; }
+.rich-text-content h1 { font-size: var(--desktop-font-size, 2.25rem); line-height: var(--desktop-line-height, 2.5rem); }
+.rich-text-content h2 { font-size: var(--desktop-font-size, 1.875rem); line-height: var(--desktop-line-height, 2.25rem); }
+.rich-text-content h3 { font-size: var(--desktop-font-size, 1.5rem); line-height: var(--desktop-line-height, 2rem); }
+.rich-text-content h4 { font-size: var(--desktop-font-size, 1.25rem); line-height: var(--desktop-line-height, 1.75rem); }
+.rich-text-content h5 { font-size: var(--desktop-font-size, 1.125rem); line-height: var(--desktop-line-height, 1.75rem); }
+.rich-text-content h6 { font-size: var(--desktop-font-size, 1rem); line-height: var(--desktop-line-height, 1.5rem); }
 
 .rich-text-editor p {
   margin: 0.75rem 0;

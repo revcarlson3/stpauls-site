@@ -95,6 +95,28 @@ describe("public page headline layout", () => {
     expect(markup).toContain("display:block");
   });
 
+  it("applies block typography to rich text headings without removing inline formatting", async () => {
+    const markup = renderToStaticMarkup(await PageRenderer({
+      blocks: [
+        {
+          id: "body-1",
+          type: "body",
+          props: {
+            content: "<h1><strong>Welcome</strong></h1><p><em>Details</em></p>",
+            fontSize: "32px",
+            fontWeight: "600",
+            lineHeight: "1.2",
+            textItalic: false,
+          },
+        },
+      ],
+    }));
+
+    expect(markup).toContain("font-size:32px");
+    expect(markup).toContain("<strong>Welcome</strong>");
+    expect(markup).toContain("<em>Details</em>");
+  });
+
   it("renders divider shapes and responsive spacer heights", async () => {
     const markup = renderToStaticMarkup(await PageRenderer({
       blocks: [
