@@ -455,6 +455,10 @@ const editorCollisionDetection: CollisionDetection = (args) => {
     const insertTargets = args.droppableContainers.filter((container) => container.data.current?.kind === "insert");
     const insertHits = pointerWithin({ ...args, droppableContainers: insertTargets });
     if (insertHits.length) return insertHits;
+    const dropHits = pointerWithin({ ...args, droppableContainers: nonInsertionTargets });
+    if (dropHits.length) return dropHits;
+    const nearestInsert = closestCenter({ ...args, droppableContainers: insertTargets });
+    if (nearestInsert.length) return nearestInsert;
   }
   return closestCenter({ ...args, droppableContainers: nonInsertionTargets });
 };
