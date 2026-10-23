@@ -24,6 +24,8 @@ describe("page editor site preview target", () => {
     expect(editor).toContain("className=\"pointer-events-none absolute left-1/2 top-1 z-30");
     expect(editor).toContain("const highlightedTarget = activeDropPathRef.current;");
     expect(editor).toContain("const insertionMatch = highlightedTarget?.match(/^insert:(root|[\\d.]+):(\\d+)$/);");
+    expect(editor).toContain("next.type === \"grid\" ? normalizeGridTree(next) : next");
+    expect(editor).toContain("h-full min-h-32 min-w-0 rounded-lg");
     expect(editor).toContain("const dropHits = pointerWithin({ ...args, droppableContainers: nonInsertionTargets });");
     expect(editor).toContain("const nearestInsert = closestCenter({ ...args, droppableContainers: insertTargets });");
     expect(editor).toContain("const resolvedOver = lastDragOverRef.current ?? over;");

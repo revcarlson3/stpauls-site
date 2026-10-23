@@ -1257,7 +1257,7 @@ function BlockInsertZone({ parentPath, index, active, draggedType }: { parentPat
 function GridCellDropZone({ gridPath, childIndex, active, children }: { gridPath: number[]; childIndex: number; active: boolean; children: ReactNode }) {
   const id = `grid-cell:${gridPath.join(".")}:${childIndex}`;
   const { setNodeRef } = useDroppable({ id, data: { kind: "grid-cell", gridPath, childIndex } });
-  return <div ref={setNodeRef} className={`relative z-40 min-w-0 rounded-lg ${active ? "ring-2 ring-coral/50" : ""}`}>{children}</div>;
+  return <div ref={setNodeRef} className={`relative z-40 h-full min-h-32 min-w-0 rounded-lg ${active ? "ring-2 ring-coral/50" : ""}`}>{children}</div>;
 }
 
 function BlockEditor({ block: sourceBlock, path, parentType, selectedPath, draggedType, activeDropPath, previewDevice, onSelect, onUpdate, onDropChild, onDropTargetChange, onContextMenu, widgets, menuPreviews, forms }: { block: Block; path: number[]; parentType?: BlockType; selectedPath: number[] | null; draggedType: BlockType | null; activeDropPath: string | null; previewDevice: ResponsiveDevice; onSelect: (path: number[]) => void; onUpdate: (path: number[], changes: Partial<Block>) => void; onDropChild: (path: number[], type: BlockType) => void; onDropTargetChange: (path: number[] | null) => void; onContextMenu: (event: ReactMouseEvent, path: number[]) => void; widgets: WidgetOption[]; menuPreviews: MenuPreview[]; forms: FormOption[] }) {
@@ -1718,7 +1718,10 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
 
   function updateBlock(path: number[], changes: Partial<Block>) {
     commitBlocks((current) => updateAtPath(current, path, (block) => {
-      if (previewDevice === "desktop" || "responsive" in changes) return { ...block, ...changes };
+      if (previewDevice === "desktop" || "responsive" in changes) {
+        const next = { ...block, ...changes };
+        return next.type === "grid" ? normalizeGridTree(next) : next;
+      }
       const currentResponsive = block.responsive?.[previewDevice] ?? {};
       const responsiveChanges = Object.fromEntries(Object.entries(changes).filter(([key, value]) => key !== "children" && value !== undefined)) as Partial<ResponsiveSettings>;
       return { ...block, responsive: { ...block.responsive, [previewDevice]: { ...currentResponsive, ...responsiveChanges } } };
