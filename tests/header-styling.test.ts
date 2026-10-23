@@ -26,4 +26,10 @@ describe("stylistic header scroll treatment", () => {
     expect(css).toContain(".site-header.is-sticky.is-scrolled .site-header-preheader {\n    max-height: none;");
     expect(css).toContain("transform: none;");
   });
+
+  it("preserves desktop block height when no mobile height override exists", () => {
+    const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8").replace(/\r\n/g, "\n");
+    expect(css).toContain("height: var(--tablet-height, var(--desktop-height, auto)) !important;");
+    expect(css).toContain("height: var(--mobile-height, var(--desktop-height, auto)) !important;");
+  });
 });

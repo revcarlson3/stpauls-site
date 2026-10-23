@@ -46,7 +46,7 @@ export function ImageDisplay({
   const imageRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const inView = useInView(imageRef, { amount: 0.65, once: false });
+  const inView = useInView(imageRef, { amount: 0.1, once: false });
   const safeLinkUrl = linkUrl.trim() && (/^https?:\/\//i.test(linkUrl.trim()) || (linkUrl.trim().startsWith("/") && !linkUrl.trim().startsWith("//"))) ? linkUrl.trim() : "";
   const canInteract = lightbox && !safeLinkUrl;
   const isVisible = animationTrigger === "load" || inView;

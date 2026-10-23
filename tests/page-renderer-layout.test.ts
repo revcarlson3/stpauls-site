@@ -110,12 +110,23 @@ describe("public page headline layout", () => {
     expect(markup).toContain("max-width:100%");
   });
 
+  it("preserves desktop block height on mobile without a mobile override", () => {
+    const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8").replace(/\r\n/g, "\n");
+    expect(css).toContain("height: var(--tablet-height, var(--desktop-height, auto)) !important;");
+    expect(css).toContain("height: var(--mobile-height, var(--desktop-height, auto)) !important;");
+  });
+
   it("removes default image top spacing and fills grid cells when no explicit image width is set", () => {
     const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8").replace(/\r\n/g, "\n");
     const renderer = fs.readFileSync(path.resolve(process.cwd(), "components/page-renderer.tsx"), "utf8");
     expect(renderer).toContain("withinGrid && !width ? { width: \"100%\" } : {}");
     expect(renderer).toContain("grid-image-no-default-margin");
     expect(css).toContain(".grid-image-no-default-margin {\n  margin-top: 0;\n}");
+  });
+
+  it("allows viewport-triggered images to appear when only part of the image is visible", () => {
+    const source = fs.readFileSync(path.resolve(process.cwd(), "components/image-display.tsx"), "utf8");
+    expect(source).toContain("useInView(imageRef, { amount: 0.1, once: false })");
   });
 
   it("keeps map height changes when the saved unit is omitted", async () => {
