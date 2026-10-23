@@ -1405,7 +1405,45 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   const saveGenerationRef = useRef(0);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const lastDragOverRef = useRef<DragOverEvent["over"]>(null);
+  const canvasRef = useRef<HTMLElement | null>(null);
+  const dragStartScrollTopRef = useRef<number | null>(null);
   const { setNodeRef: setRootDropRef } = useDroppable({ id: "drop:root", data: { kind: "root" } });
+  const setCanvasRef = (node: HTMLElement | null) => {
+    canvasRef.current = node;
+    setRootDropRef(node);
+  };
+
+  useLayoutEffect(() => {
+    if (!draggedType && !draggedLayerPath) {
+      dragStartScrollTopRef.current = null;
+      return;
+    }
+    if (dragStartScrollTopRef.current !== null && canvasRef.current) {
+      canvasRef.current.scrollTop = dragStartScrollTopRef.current;
+    }
+  }, [draggedType, draggedLayerPath]);
+
+  useEffect(() => {
+    if (!draggedType && !draggedLayerPath) return;
+    const handlePointerMove = (event: PointerEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const edge = Math.min(96, Math.max(48, rect.height * 0.16));
+      const distance = event.clientY < rect.top + edge
+        ? event.clientY - (rect.top + edge)
+        : event.clientY > rect.bottom - edge
+          ? event.clientY - (rect.bottom - edge)
+          : 0;
+      if (!distance) return;
+      const direction = distance < 0 ? -1 : 1;
+      const intensity = Math.min(24, Math.max(2, Math.ceil(Math.abs(distance) / edge * 24)));
+      const nextScrollTop = Math.max(0, Math.min(canvas.scrollHeight - canvas.clientHeight, canvas.scrollTop + direction * intensity));
+      if (nextScrollTop !== canvas.scrollTop) canvas.scrollTop = nextScrollTop;
+    };
+    window.addEventListener("pointermove", handlePointerMove);
+    return () => window.removeEventListener("pointermove", handlePointerMove);
+  }, [draggedLayerPath, draggedType]);
 
   useEffect(() => {
     if (message !== "Saved successfully." && message !== "Page created successfully.") return;
@@ -1913,7 +1951,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     setActiveDropPath(null);
   };
 
-  return   <DndContext autoScroll={false} sensors={sensors} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }} collisionDetection={editorCollisionDetection} onDragStart={({ active }) => { dragCancelledRef.current = false; lastDragOverRef.current = null; const data = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); setDraggedLayerPath(data?.kind === "layer" ? data.path ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { dragCancelledRef.current = false; lastDragOverRef.current = null; setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
+  return   <DndContext autoScroll={false} sensors={sensors} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }} collisionDetection={editorCollisionDetection} onDragStart={({ active }) => { dragCancelledRef.current = false; lastDragOverRef.current = null; dragStartScrollTopRef.current = canvasRef.current?.scrollTop ?? 0; const data = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); setDraggedLayerPath(data?.kind === "layer" ? data.path ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { dragCancelledRef.current = false; lastDragOverRef.current = null; dragStartScrollTopRef.current = null; setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
     {message && <p role="status" aria-live="polite" className="lg:col-span-2 rounded-lg border border-emerald-600/20 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{message}</p>}
     {recoveryOffer && <div role="alert" className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/25 bg-amber-50 px-4 py-3 text-sm text-amber-950"><div><p className="font-bold">A newer local draft is available.</p><p className="mt-1 text-amber-950/75">Recovered from {new Date(recoveryOffer.savedAt).toLocaleString()}.</p></div><div className="flex gap-2"><button type="button" className="focus-ring rounded-lg bg-ink px-3 py-2 text-xs font-bold text-white hover:bg-ink/90" onClick={restoreRecovery}>Restore draft</button><button type="button" className="focus-ring rounded-lg border border-amber-900/25 px-3 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-100" onClick={discardRecovery}>Discard</button></div></div>}
     <div className="flex flex-wrap items-center gap-2 lg:col-span-2">
@@ -1951,7 +1989,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
       {previewDevice !== "desktop" && <button type="button" className="focus-ring rounded-lg border border-coral px-3 py-2 text-xs font-semibold text-coral hover:bg-coral/10" onClick={applyAutoLayout}>Auto layout</button>}
     </div>
     <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <section ref={setRootDropRef} aria-label={`${previewDevice} page canvas`} className={`admin-editor-canvas min-h-0 overflow-y-auto rounded-2xl border border-dashed bg-white/70 px-1 py-3 transition-[border-color,background-color,box-shadow] duration-150 sm:px-2 sm:py-5 ${pageThemeFamily ? `page-theme-${pageThemeFamily}` : ""} ${pageThemeWidth ? `page-width-${pageThemeWidth}` : ""} ${activeDropPath === "root" && draggedType ? "border-2 border-coral bg-coral/5 shadow-[inset_0_0_0_2px_rgba(226,91,74,0.12)]" : "border-ink/20"}`} style={{ width: previewDevice === "desktop" ? "100%" : previewDevice === "tablet" ? "768px" : "390px", maxWidth: previewDevice === "desktop" && pageThemeWidth === "contained" ? "78rem" : "100%", marginInline: "auto" }} onClick={() => setSelectedPath(null)} onPointerLeave={cancelDragOutsideEditor}>
+      <section ref={setCanvasRef} aria-label={`${previewDevice} page canvas`} className={`admin-editor-canvas min-h-0 overflow-y-auto rounded-2xl border border-dashed bg-white/70 px-1 py-3 transition-[border-color,background-color,box-shadow] duration-150 sm:px-2 sm:py-5 ${pageThemeFamily ? `page-theme-${pageThemeFamily}` : ""} ${pageThemeWidth ? `page-width-${pageThemeWidth}` : ""} ${activeDropPath === "root" && draggedType ? "border-2 border-coral bg-coral/5 shadow-[inset_0_0_0_2px_rgba(226,91,74,0.12)]" : "border-ink/20"}`} style={{ width: previewDevice === "desktop" ? "100%" : previewDevice === "tablet" ? "768px" : "390px", maxWidth: previewDevice === "desktop" && pageThemeWidth === "contained" ? "78rem" : "100%", marginInline: "auto", overflowAnchor: draggedType || draggedLayerPath ? "none" : undefined }} onClick={() => setSelectedPath(null)} onPointerLeave={cancelDragOutsideEditor}>
         {activeDropPath === "root" && draggedType && <div aria-hidden="true" className="pointer-events-none sticky top-1 z-30 flex justify-center"><span className="flex items-center gap-2 rounded-full border-2 border-coral bg-white/95 px-4 py-2 text-sm font-semibold text-coral shadow-lg"><span className="text-2xl font-light leading-none">+</span>Drop {blockDefinitions[draggedType].label} here</span></div>}
       <div className="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-ink/45"><span>12-column grid</span><span>{blocks.length} elements</span></div>
       <div className="grid grid-cols-12 gap-0">{blocks.map((block, index) => <div key={block.id} className="col-span-12"><BlockInsertZone parentPath={[]} index={index} active={activeDropPath === `insert:root:${index}`} draggedType={draggedType} /><BlockEditor block={block} path={[index]} selectedPath={selectedPath} activeDropPath={activeDropPath} draggedType={draggedType} previewDevice={previewDevice} onSelect={setSelectedPath} onUpdate={updateBlock} onDropChild={dropChild} onDropTargetChange={(path) => setActiveDropPath(path ? path.join(".") : null)} onContextMenu={openContextMenu} widgets={widgets} menuPreviews={menuPreviews} forms={forms} /></div>)}<BlockInsertZone parentPath={[]} index={blocks.length} active={activeDropPath === `insert:root:${blocks.length}`} draggedType={draggedType} /></div>
