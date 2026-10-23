@@ -12,10 +12,10 @@ describe("stylistic header scroll treatment", () => {
     expect(frame).toContain("setScrolled(window.scrollY > 8)");
   });
 
-  it("uses the configured main-header height and collapses a sticky pre-header", () => {
+  it("uses the configured main-header height and keeps the sticky pre-header in flow", () => {
     const css = fs.readFileSync(path.resolve(process.cwd(), "app/globals.css"), "utf8").replace(/\r\n/g, "\n");
     expect(css).toContain(".site-header-main {\n  min-height: var(--site-header-min-height);\n}");
-    expect(css).toContain(".site-header.is-sticky.is-scrolled .site-header-preheader");
+    expect(css).not.toContain(".site-header.is-sticky.is-scrolled .site-header-preheader {\n  max-height: 0;");
   });
 
   it("keeps mobile page content below the full top chrome", () => {

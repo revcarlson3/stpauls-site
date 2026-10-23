@@ -747,13 +747,6 @@ body[data-theme-radius="soft"] {
   min-height: var(--site-preheader-min-height);
 }
 
-.site-header.is-sticky.is-scrolled .site-header-preheader {
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  transform: translateY(-100%);
-}
-
 @media (max-width: 1023px) {
   .site-header.is-sticky {
     position: relative !important;
