@@ -1425,23 +1425,6 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   }, [draggedType, draggedLayerPath]);
 
   useEffect(() => {
-    if (!draggedType && !draggedLayerPath) return;
-    const canvas = canvasRef.current;
-    const lockedScrollTop = dragStartScrollTopRef.current;
-    if (!canvas || lockedScrollTop === null) return;
-    const restoreScrollPosition = () => {
-      if (canvas.scrollTop !== lockedScrollTop) canvas.scrollTop = lockedScrollTop;
-    };
-    canvas.addEventListener("scroll", restoreScrollPosition, { passive: true });
-    window.addEventListener("scroll", restoreScrollPosition, { passive: true });
-    restoreScrollPosition();
-    return () => {
-      canvas.removeEventListener("scroll", restoreScrollPosition);
-      window.removeEventListener("scroll", restoreScrollPosition);
-    };
-  }, [draggedLayerPath, draggedType]);
-
-  useEffect(() => {
     if (message !== "Saved successfully." && message !== "Page created successfully.") return;
     const timer = window.setTimeout(() => setMessage(""), 4000);
     return () => window.clearTimeout(timer);

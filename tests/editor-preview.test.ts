@@ -19,7 +19,6 @@ describe("page editor site preview target", () => {
     expect(editor).toContain("measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}");
     expect(editor).toContain("<DndContext autoScroll={false}");
     expect(editor).toContain("dragStartScrollTopRef.current = canvasRef.current?.scrollTop ?? 0;");
-    expect(editor).toContain("canvas.addEventListener(\"scroll\", restoreScrollPosition");
     expect(editor).toContain("overflowAnchor: draggedType || draggedLayerPath ? \"none\" : undefined");
     expect(editor).toContain("className={`relative z-30 h-1 w-full rounded");
     expect(editor).toContain("className=\"pointer-events-none absolute left-1/2 top-1 z-30");
