@@ -33,9 +33,18 @@ describe("public navigation styling and interaction", () => {
 
   it("keeps pre-header text separate from secondary-menu alignment", () => {
     const source = fs.readFileSync(path.resolve(process.cwd(), "components/site-header.tsx"), "utf8");
-    expect(source).toContain("site-header-preheader-content min-w-0 flex-1");
+    expect(source).toContain("site-header-preheader-content min-w-0 flex-1 break-words leading-relaxed");
     expect(source).toContain("preHeaderMenuAlignment");
-    expect(source).toContain("flex min-w-0 flex-1 flex-wrap items-center");
+    expect(source).toContain("hidden min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 lg:flex");
+  });
+
+  it("does not render a primary or secondary menu below the desktop breakpoint", () => {
+    const header = fs.readFileSync(path.resolve(process.cwd(), "components/site-header.tsx"), "utf8");
+    const navigation = fs.readFileSync(path.resolve(process.cwd(), "components/responsive-public-nav.tsx"), "utf8");
+    expect(header).toContain("hidden min-w-0 flex-1 flex-wrap items-center");
+    expect(navigation).toContain('className="hidden lg:block lg:min-w-0 lg:flex-1 lg:overflow-visible"');
+    expect(navigation).not.toContain('aria-expanded={open}');
+    expect(navigation).not.toContain(">Menu</button>");
   });
 
   it("keeps pre-header dropdowns above the main header and page content", () => {
