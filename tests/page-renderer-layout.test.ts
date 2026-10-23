@@ -113,6 +113,7 @@ describe("public page headline layout", () => {
     }));
 
     expect(markup).toContain("font-size:32px");
+    expect(markup).toMatch(/responsive-content-base[^>]*font-size:32px/);
     expect(markup).toContain("<strong>Welcome</strong>");
     expect(markup).toContain("<em>Details</em>");
   });

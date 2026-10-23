@@ -38,6 +38,21 @@ function textDecorationStyle(props: Record<string, unknown>): CSSProperties {
           : {};
 }
 
+function richTextTypographyStyle(props: Record<string, unknown>): CSSProperties {
+  const style: CSSProperties = {};
+  const fontSize = cssFontSize(props.fontSize);
+  const letterSpacing = cssPixel(props.letterSpacing);
+  if (fontSize) style.fontSize = fontSize;
+  if (typeof props.fontWeight === "string" && props.fontWeight) style.fontWeight = props.fontWeight;
+  if (typeof props.lineHeight === "string" && props.lineHeight) style.lineHeight = props.lineHeight;
+  if (letterSpacing) style.letterSpacing = letterSpacing;
+  if (typeof props.fontColor === "string" && props.fontColor) style.color = props.fontColor;
+  if (props.textItalic === true) style.fontStyle = "italic";
+  if (typeof props.fontFamily === "string" && props.fontFamily) style.fontFamily = `"${props.fontFamily}", sans-serif`;
+  if (typeof props.textTransform === "string" && props.textTransform !== "none") style.textTransform = props.textTransform;
+  return style;
+}
+
 function childBlocks(block: RenderBlock) {
   return Array.isArray(block.props?.children) ? block.props.children : [];
 }
@@ -123,10 +138,11 @@ function responsiveContentClass(props: Record<string, unknown>, key: string) {
 
 function responsiveText({ props, name, fallback, className = "", id }: { props: Record<string, unknown>; name: string; fallback: string; className?: string; id?: string }) {
   return <div id={id} className={`${className} ${responsiveContentClass(props, name)}`}>
-    <div className="responsive-content-base" style={{ ...textDecorationStyle(props), fontFamily: typeof props.fontFamily === "string" && props.fontFamily ? `"${props.fontFamily}", sans-serif` : undefined }} dangerouslySetInnerHTML={{ __html: safeRichText(props[name]) || fallback }} />
+    <div className="responsive-content-base" style={{ ...richTextTypographyStyle(props), ...textDecorationStyle(props) }} dangerouslySetInnerHTML={{ __html: safeRichText(props[name]) || fallback }} />
     {responsiveDevices.map((device) => {
       const value = responsiveString(props, name, device);
-      return value === undefined ? null : <div key={device} className={`responsive-content-variant responsive-content-${device}`} style={textDecorationStyle({ ...props, ...(props.responsive as Record<string, unknown> | undefined)?.[device] as Record<string, unknown> | undefined })} dangerouslySetInnerHTML={{ __html: safeRichText(value) }} />;
+      const variantProps = { ...props, ...(props.responsive as Record<string, unknown> | undefined)?.[device] as Record<string, unknown> | undefined };
+      return value === undefined ? null : <div key={device} className={`responsive-content-variant responsive-content-${device}`} style={{ ...richTextTypographyStyle(variantProps), ...textDecorationStyle(variantProps) }} dangerouslySetInnerHTML={{ __html: safeRichText(value) }} />;
     })}
   </div>;
 }
