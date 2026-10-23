@@ -1404,6 +1404,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
   const draftVersionRef = useRef(0);
   const saveGenerationRef = useRef(0);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const lastDragOverRef = useRef<DragOverEvent["over"]>(null);
   const { setNodeRef: setRootDropRef } = useDroppable({ id: "drop:root", data: { kind: "root" } });
 
   useEffect(() => {
@@ -1874,6 +1875,7 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     setMessage(`Recommended ${previewDevice} layout applied. Use Undo to revert it.`);
   };
   const handleDragOver = ({ over }: DragOverEvent) => {
+    lastDragOverRef.current = over;
     const overId = String(over?.id ?? "");
     setActiveDropPath(overId.startsWith("drop:") ? overId.slice(5) : overId.startsWith("insert:") || overId.startsWith("layer-insert:") || overId.startsWith("grid-cell:") ? overId : null);
   };
@@ -1883,10 +1885,12 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     setActiveDropPath(null);
   };
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    const resolvedOver = lastDragOverRef.current ?? over;
     const activeData = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined;
-    const overData = over?.data.current as { kind?: string; path?: number[]; parentPath?: number[]; index?: number; gridPath?: number[]; childIndex?: number } | undefined;
+    const overData = resolvedOver?.data.current as { kind?: string; path?: number[]; parentPath?: number[]; index?: number; gridPath?: number[]; childIndex?: number } | undefined;
     if (dragCancelledRef.current) {
       dragCancelledRef.current = false;
+      lastDragOverRef.current = null;
       setDraggedType(null);
       setDraggedLayerPath(null);
       setActiveDropPath(null);
@@ -1905,10 +1909,11 @@ export default function EditorCanvas({ pageId, empty = false }: { pageId?: strin
     }
     setDraggedType(null);
     setDraggedLayerPath(null);
+    lastDragOverRef.current = null;
     setActiveDropPath(null);
   };
 
-  return   <DndContext sensors={sensors} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }} collisionDetection={editorCollisionDetection} onDragStart={({ active }) => { dragCancelledRef.current = false; const data = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); setDraggedLayerPath(data?.kind === "layer" ? data.path ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { dragCancelledRef.current = false; setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
+  return   <DndContext autoScroll={false} sensors={sensors} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }} collisionDetection={editorCollisionDetection} onDragStart={({ active }) => { dragCancelledRef.current = false; lastDragOverRef.current = null; const data = active.data.current as { kind?: string; type?: BlockType; path?: number[] } | undefined; setDraggedType(data?.kind === "palette" ? data.type ?? null : null); setDraggedLayerPath(data?.kind === "layer" ? data.path ?? null : null); }} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { dragCancelledRef.current = false; lastDragOverRef.current = null; setDraggedType(null); setDraggedLayerPath(null); setActiveDropPath(null); }}><div className="flex h-full min-h-0 flex-col gap-4">
     {message && <p role="status" aria-live="polite" className="lg:col-span-2 rounded-lg border border-emerald-600/20 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{message}</p>}
     {recoveryOffer && <div role="alert" className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/25 bg-amber-50 px-4 py-3 text-sm text-amber-950"><div><p className="font-bold">A newer local draft is available.</p><p className="mt-1 text-amber-950/75">Recovered from {new Date(recoveryOffer.savedAt).toLocaleString()}.</p></div><div className="flex gap-2"><button type="button" className="focus-ring rounded-lg bg-ink px-3 py-2 text-xs font-bold text-white hover:bg-ink/90" onClick={restoreRecovery}>Restore draft</button><button type="button" className="focus-ring rounded-lg border border-amber-900/25 px-3 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-100" onClick={discardRecovery}>Discard</button></div></div>}
     <div className="flex flex-wrap items-center gap-2 lg:col-span-2">

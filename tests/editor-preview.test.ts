@@ -17,8 +17,10 @@ describe("page editor site preview target", () => {
     const editor = fs.readFileSync(path.resolve(process.cwd(), "app/admin/editor/editor-canvas.tsx"), "utf8");
 
     expect(editor).toContain("measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}");
+    expect(editor).toContain("<DndContext autoScroll={false}");
     expect(editor).toContain("const dropHits = pointerWithin({ ...args, droppableContainers: nonInsertionTargets });");
     expect(editor).toContain("const nearestInsert = closestCenter({ ...args, droppableContainers: insertTargets });");
+    expect(editor).toContain("const resolvedOver = lastDragOverRef.current ?? over;");
   });
 
   it("persists image links and exposes expanded image animations", () => {
