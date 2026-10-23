@@ -9,7 +9,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     if (!user.churchId) throw new Error("Unauthorized: a church membership is required.");
     const existing = await db.globalAnnouncement.findFirst({ where: { id: params.id, churchId: user.churchId, audience: "TENANT" }, select: { id: true } });
     if (!existing) return NextResponse.json({ error: "Announcement not found." }, { status: 404 });
-    const data = parseAnnouncementInput({ ...(await request.json()), audience: "TENANT", churchId: user.churchId, placement: "AUTHENTICATED" }, { allowTenant: true });
+    const data = parseAnnouncementInput({ ...(await request.json()), audience: "TENANT", churchId: user.churchId, placement: "PUBLIC_TICKER" }, { allowTenant: true });
     return NextResponse.json({ announcement: await db.globalAnnouncement.update({ where: { id: params.id }, data, select: { id: true } }) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";

@@ -70,7 +70,7 @@ export default function SiteAnnouncementsPage() {
     <Container className="py-10 sm:py-14">
       <p className="text-sm font-semibold uppercase tracking-[0.2em] text-coral">Site Settings</p>
       <h1 className="mt-2 font-serif text-4xl">Site Announcements</h1>
-      <p className="mt-3 max-w-2xl text-sm text-ink/60">Publish important announcements for people signed in to this site.</p>
+      <p className="mt-3 max-w-2xl text-sm text-ink/60">Publish important announcements in the ticker at the top of your public website.</p>
       {error && <Notification variant="danger" className="mt-6">{error}</Notification>}
       {message && <Notification variant="success" className="mt-6">{message}</Notification>}
       <div className="mt-8 grid gap-6 lg:grid-cols-2">

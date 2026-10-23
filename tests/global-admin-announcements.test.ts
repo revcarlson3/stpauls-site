@@ -13,6 +13,10 @@ describe("global announcement dashboard placement", () => {
     expect(() => parseAnnouncementInput({ title: "Notice", body: "Message", audience: "TENANT", churchId: "church-1", placement: "ADMIN_DASHBOARD" }, { allowTenant: true })).toThrow("Admin Dashboard announcements must be global.");
   });
 
+  it("allows tenant announcements in the public ticker", () => {
+    expect(parseAnnouncementInput({ title: "Notice", body: "Message", audience: "TENANT", churchId: "church-1", placement: "PUBLIC_TICKER" }, { allowTenant: true }).placement).toBe("PUBLIC_TICKER");
+  });
+
   it("accepts signed image bytes and rejects spoofed uploads", () => {
     expect(validateGlobalAnnouncementImage("notice.png", "image/png", new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]))).toEqual({ extension: "png", originalName: "notice.png" });
     expect(() => validateGlobalAnnouncementImage("notice.png", "image/png", new Uint8Array([1, 2, 3]))).toThrow("valid");

@@ -84,7 +84,6 @@ export function parseAnnouncementInput(input: Record<string, unknown>, options: 
   if (audience === "GLOBAL" && churchId) throw new Error("Global announcements cannot target a tenant.");
   if (audience === "TENANT" && !options.allowTenant) throw new Error("Tenant announcements are not allowed here.");
   if (placement === "ADMIN_DASHBOARD" && audience !== "GLOBAL") throw new Error("Admin Dashboard announcements must be global.");
-  if (placement !== "AUTHENTICATED" && audience === "TENANT") throw new Error("Tenant announcements can only target authenticated users.");
   if (Number.isNaN(startsAt.getTime()) || (endsAt && Number.isNaN(endsAt.getTime()))) throw new Error("Announcement dates are invalid.");
   if (endsAt && endsAt <= startsAt) throw new Error("The end date must be after the start date.");
   return { title, body, severity, audience, placement, churchId, startsAt, endsAt, isActive };

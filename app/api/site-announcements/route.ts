@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const user = await requirePermission("MANAGE_SETTINGS");
     if (!user.churchId) return NextResponse.json({ error: "A church membership is required." }, { status: 400 });
-    const data = parseAnnouncementInput({ ...(await request.json()), audience: "TENANT", churchId: user.churchId, placement: "AUTHENTICATED" }, { allowTenant: true });
+    const data = parseAnnouncementInput({ ...(await request.json()), audience: "TENANT", churchId: user.churchId, placement: "PUBLIC_TICKER" }, { allowTenant: true });
     const announcement = await db.globalAnnouncement.create({ data, select: { id: true } });
     await db.globalAnnouncementDelivery.create({ data: { announcementId: announcement.id, churchId: user.churchId } });
     return NextResponse.json({ announcement }, { status: 201 });
