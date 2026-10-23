@@ -21,6 +21,8 @@ describe("page editor site preview target", () => {
     expect(editor).toContain("dragStartScrollTopRef.current = canvasRef.current?.scrollTop ?? 0;");
     expect(editor).toContain("canvas.addEventListener(\"scroll\", restoreScrollPosition");
     expect(editor).toContain("overflowAnchor: draggedType || draggedLayerPath ? \"none\" : undefined");
+    expect(editor).toContain("className={`relative z-30 h-1 w-full rounded");
+    expect(editor).toContain("className=\"pointer-events-none absolute left-1/2 top-1 z-30");
     expect(editor).toContain("const highlightedTarget = activeDropPathRef.current;");
     expect(editor).toContain("const insertionMatch = highlightedTarget?.match(/^insert:(root|[\\d.]+):(\\d+)$/);");
     expect(editor).toContain("const dropHits = pointerWithin({ ...args, droppableContainers: nonInsertionTargets });");
