@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { blockDefinitions } from "@/lib/blocks";
 import { parsePublicationInput } from "@/lib/announcement-publications";
 import { ANNOUNCEMENT_SHAPES, announcementCanvasDropPoint, announcementDocumentToHtml, centeredAnnouncementPosition, defaultAnnouncementDocument, parseAnnouncementDocument, parseOrMigrateAnnouncementDocument } from "@/lib/announcement-document";
+import fs from "node:fs";
+import path from "node:path";
 
 describe("announcement publications", () => {
   it("starts blank announcements without implicit layers", () => {
@@ -38,6 +40,14 @@ describe("announcement publications", () => {
       description: "Latest publication with links to the announcement archive",
       defaultSpan: 12
     });
+  });
+
+  it("routes the public announcements URL through the editable page shell", () => {
+    const source = fs.readFileSync(path.resolve(process.cwd(), "app/(public)/announcements/page.tsx"), "utf8");
+    expect(source).toContain("ensurePublicAnnouncementsPage");
+    expect(source).toContain("PublishedPageShell");
+    expect(source).not.toContain("listPublicAnnouncementData");
+    expect(source).not.toContain("AnnouncementPublicationContent");
   });
 
   it("accepts a visual document as the canonical publication payload", () => {

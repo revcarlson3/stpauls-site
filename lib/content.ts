@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { orderPagesByMenus, type MenuItemInput } from "@/lib/menu-input";
 import { requirePermission, type User } from "@/lib/auth";
 import bcrypt from "bcryptjs";
@@ -42,6 +42,42 @@ export async function listPages() {
   const pages = await db.page.findMany({ where: user.churchId ? { churchId: user.churchId } : undefined });
   const menus = await db.menu.findMany({ select: { id: true, items: { select: { id: true, label: true, href: true, parentId: true, position: true } } }, orderBy: { name: "asc" } });
   return orderPagesByMenus(pages, menus).map(({ page, depth, inMenu }) => ({ ...page, menuDepth: depth, menuLinked: inMenu }));
+}
+
+export async function ensurePublicAnnouncementsPage(churchId: string) {
+  const existing = await db.page.findUnique({ where: { slug: "announcements" } });
+  if (existing) return existing;
+
+  try {
+    return await db.page.create({
+      data: {
+        churchId,
+        slug: "announcements",
+        title: "Announcements",
+        status: "PUBLISHED",
+        publishedAt: new Date(),
+        blocks: [{
+          id: "announcements-1",
+          type: "announcements",
+          props: {
+            announcementArchive: true,
+            alignment: "left",
+            padding: "none",
+            backgroundType: "none",
+            overlayType: "none",
+          },
+        }],
+        showHeader: true,
+        showFooter: true,
+        fullScreen: false,
+      }
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return db.page.findUniqueOrThrow({ where: { slug: "announcements" } });
+    }
+    throw error;
+  }
 }
 
 export async function listPageOptions() {
