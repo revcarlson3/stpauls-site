@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { sanitizeClergyBiographyHtml } from "@/lib/clergy-biography";
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
@@ -20,7 +21,7 @@ describe("services clergy foundation", () => {
     expect(route).toContain('requirePermission("MANAGE_SERVICES")');
     expect(route).toContain('requireEnabledModule("services", user.id, "MANAGE_SERVICES")');
     expect(route).toContain("membershipIndividualId");
-    expect(route).toContain("membershipIndividual: { select:");
+    expect(route).toContain("profileInclude");
     expect(route).toContain("Independent clergy records require first name, last name, and email address.");
   });
 
@@ -30,6 +31,41 @@ describe("services clergy foundation", () => {
     expect(page).toContain('setMode("independent")');
     expect(page).toContain('name="membershipIndividualId"');
     expect(page).toContain('name="biography"');
-    expect(page).toContain('name="photographUrl"');
+    expect(page).toContain('name="photo"');
+    expect(page).toContain("Custom photos override a linked membership photo.");
+  });
+
+  it("keeps clergy uploads isolated and validates type, size, and dimensions", () => {
+    const route = read("app/api/services/clergy/route.ts");
+    const photoRoute = read("app/api/services/clergy/[id]/photo/route.ts");
+    const helper = read("lib/clergy-photo.ts");
+    expect(helper).toContain('["image/jpeg", "image/png"]');
+    expect(helper).toContain("CLERGY_PHOTO_MAX_BYTES");
+    expect(helper).toContain("sharp(contents).metadata()");
+    expect(helper).toContain('storage", "services", "clergy"');
+    expect(photoRoute).toContain('requirePermission("MANAGE_SERVICES")');
+  });
+
+  it("keeps biography markup limited to the requested formatting", () => {
+    const sanitized = sanitizeClergyBiographyHtml('<strong>Bold</strong><em>Italic</em><u>Underline</u><a href="https://example.com" onclick="bad()">Link</a><font size="5">Large</font><script>alert(1)</script><img src="bad">');
+    expect(sanitized).toContain("<strong>Bold</strong>");
+    expect(sanitized).toContain("<em>Italic</em>");
+    expect(sanitized).toContain("<u>Underline</u>");
+    expect(sanitized).toContain('<a href="https://example.com">Link</a>');
+    expect(sanitized).toContain('<span style="font-size: 1.25rem">Large</span>');
+    expect(sanitized).not.toContain("<script");
+    expect(sanitized).not.toContain("<img");
+    expect(sanitized).not.toContain("onclick");
+  });
+
+  it("supports expandable management with soft deletion", () => {
+    const page = read("app/admin/services/preachers-clergy/clergy-manager.tsx");
+    const route = read("app/api/services/clergy/[id]/route.ts");
+    expect(page).toContain("setExpandedId");
+    expect(page).toContain("ProfileDetails");
+    expect(page).toContain('fetch(`/api/services/clergy/${profile.id}`, { method: "PATCH"');
+    expect(page).toContain('fetch(`/api/services/clergy/${profile.id}`, { method: "DELETE"');
+    expect(route).toContain('data: { status: "INACTIVE" }');
+    expect(page).toContain("These name and contact values are clergy-specific overrides.");
   });
 });
