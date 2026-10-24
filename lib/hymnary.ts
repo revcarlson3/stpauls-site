@@ -9,6 +9,15 @@ export type HymnaryHymn = {
   copyrightInfo: string | null;
   sourceUrl: string;
 };
+export type PublicHymnContent = {
+  lyricsText: string;
+  lyricsRights: "PUBLIC_DOMAIN";
+  musicRights: "PUBLIC_DOMAIN" | "UNKNOWN";
+  arrangementRights: "PUBLIC_DOMAIN" | "UNKNOWN";
+  musicImageUrl: string | null;
+  rightsSourceUrl: string;
+  rightsNotes: string;
+};
 
 const baseUrl = "https://hymnary.org";
 const fallbackHymnals: HymnaryHymnal[] = [
@@ -31,6 +40,43 @@ const fallbackHymnals: HymnaryHymnal[] = [
 
 function decode(value: string) {
   return value.replace(/&amp;/g, "&").replace(/&#039;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, " ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+}
+
+function htmlText(value: string) {
+  return value.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n\n").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#039;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, " ").replace(/[ \t]+\n/g, "\n").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function publicDomainScan(html: string) {
+  const scans = Array.from(html.matchAll(/data-img-src=["']\/page\/fetch\/([A-Za-z0-9_-]+)\/(\d+)\/thumbnail["']/gi));
+  for (const scan of scans) {
+    const yearMatch = scan[1].match(/(?:19|20)\d{2}$/);
+    if (yearMatch && Number(yearMatch[0]) <= 1930) {
+      return { imageUrl: `${baseUrl}/page/fetch/${scan[1]}/${scan[2]}/low`, sourceUrl: `${baseUrl}/hymn/${scan[1]}/page/${scan[2]}` };
+    }
+  }
+  return null;
+}
+
+export async function fetchPublicHymnContent(sourceUrl: string): Promise<PublicHymnContent | null> {
+  const hymnHtml = await fetchText(sourceUrl);
+  const textPath = hymnHtml.match(/href=["'](\/text\/[^"']+)["']/i)?.[1];
+  if (!textPath) return null;
+  const textUrl = `${baseUrl}${textPath}`;
+  const textHtml = await fetchText(textUrl);
+  if (!/<span[^>]+class=["']hy_infoItem["'][^>]*>\s*Public Domain\s*<\/span>/i.test(textHtml)) return null;
+  const lyricsMatch = textHtml.match(/<div[^>]+property=["']text["'][^>]*>([\s\S]*?)<\/div>\s*<div[^>]+class=["']authority_bottom_bar/i);
+  const lyricsText = lyricsMatch ? htmlText(lyricsMatch[1]) : "";
+  if (!lyricsText) return null;
+  const scan = publicDomainScan(textHtml);
+  return {
+    lyricsText,
+    lyricsRights: "PUBLIC_DOMAIN",
+    musicRights: scan ? "PUBLIC_DOMAIN" : "UNKNOWN",
+    arrangementRights: scan ? "PUBLIC_DOMAIN" : "UNKNOWN",
+    musicImageUrl: scan?.imageUrl ?? null,
+    rightsSourceUrl: textUrl,
+    rightsNotes: scan ? `Hymnary marks the text public domain; score image linked from the pre-1931 ${scan.sourceUrl.split("/hymn/")[1].split("/")[0]} source scan.` : "Hymnary marks the text public domain. No qualifying pre-1931 score scan was available.",
+  };
 }
 
 export function parseHymnalList(html: string) {

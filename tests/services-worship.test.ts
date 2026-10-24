@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BIBLE_BOOKS, LSB_LITURGIES } from "@/lib/worship-service";
-import { importHymnal, parseHymnalCsv, parseHymnalHymns, parseHymnalList } from "@/lib/hymnary";
+import { fetchPublicHymnContent, importHymnal, parseHymnalCsv, parseHymnalHymns, parseHymnalList } from "@/lib/hymnary";
 
 const root = path.resolve(process.cwd());
 const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
@@ -79,6 +79,14 @@ describe("worship services", () => {
     expect(publicPage).toContain('hymn.lyricsRights === "PUBLIC_DOMAIN"');
     expect(publicPage).toContain('hymn.arrangementRights === "PUBLIC_DOMAIN"');
     expect(publicPage).toContain("Words and music are not available for public display.");
+  });
+
+  it("hydrates only Hymnary resources explicitly marked public domain", async () => {
+    const hymnPage = '<a href="/text/public-hymn">Text</a>';
+    const textPage = '<div id="at_fulltext"><div property="text"><p>Verse one<br>Verse two</p></div><div class="authority_bottom_bar"></div></div><div id="textinfo"><table><tr><td>Copyright:</td><td><span class="hy_infoItem">Public Domain</span></td></tr></table></div><img data-img-src="/page/fetch/HOoS1926/222/thumbnail">';
+    const fetchMock = vi.fn(async (input: string) => new Response(input.endsWith("/text/public-hymn") ? textPage : hymnPage, { headers: { "content-type": "text/html" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchPublicHymnContent("https://hymnary.org/hymn/PD/1")).resolves.toMatchObject({ lyricsText: "Verse one\nVerse two", lyricsRights: "PUBLIC_DOMAIN", musicRights: "PUBLIC_DOMAIN", arrangementRights: "PUBLIC_DOMAIN", musicImageUrl: "https://hymnary.org/page/fetch/HOoS1926/222/low" });
   });
 
   it("parses hymnal and hymn metadata without importing copyrighted content", () => {

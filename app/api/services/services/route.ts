@@ -8,6 +8,7 @@ import { requireEnabledModule } from "@/lib/modules";
 import { requireTenantScope } from "@/lib/tenant";
 import { DEFAULT_EVENT_TYPES, resolveEventType } from "@/lib/event-validation";
 import { BIBLE_BOOKS, LSB_LITURGIES, formatLessonReference, safeVideoUrl, type WorshipServiceHymnInput, type WorshipServiceLessonInput } from "@/lib/worship-service";
+import { fetchPublicHymnContent } from "@/lib/hymnary";
 
 const include = {
   clergy: { orderBy: { sortOrder: "asc" as const }, include: { clergy: { select: { id: true, title: true, firstName: true, lastName: true } } } },
@@ -126,6 +127,15 @@ export async function POST(request: Request) {
       : [];
     if (selectedHymnIds.length !== savedHymns.length) return NextResponse.json({ error: "One or more selected hymns are not in the primary hymnal." }, { status: 400 });
     const savedHymnById = new Map(savedHymns.map((hymn) => [hymn.id, hymn]));
+    const publicContentById = new Map<string, Awaited<ReturnType<typeof fetchPublicHymnContent>>>();
+    await Promise.all(savedHymns.map(async (hymn) => {
+      try {
+        const content = await fetchPublicHymnContent(hymn.sourceUrl);
+        if (content) publicContentById.set(hymn.id, content);
+      } catch (error) {
+        console.warn(`Unable to enrich hymn ${hymn.id} with Hymnary public-domain content.`, error);
+      }
+    }));
     const normalizedHymns = hymns.map((hymn) => {
       if (hymn.hymnId) {
         const saved = savedHymnById.get(hymn.hymnId);
@@ -154,6 +164,10 @@ export async function POST(request: Request) {
       assetUrls[asset.kind === "bulletin" ? "bulletinUrl" : "featuredImageUrl"] = `/api/services/services/assets/${filename}`;
     }
     const service = await db.$transaction(async (transaction) => {
+      for (const [hymnId, content] of Array.from(publicContentById.entries())) {
+        if (!content) continue;
+        await transaction.worshipHymn.update({ where: { id: hymnId }, data: content });
+      }
       if (addToCalendar) {
         const event = await transaction.membershipEvent.create({
           data: { churchId: scope.church.id, title, description: text(payload.description, 5000) || null, eventType: eventType ?? "Other", category, location, startsAt, endsAt, allDay: false, published: status === "PUBLISHED", timeZone: settings?.timeZone ?? "America/Chicago", createdById: user.id },
