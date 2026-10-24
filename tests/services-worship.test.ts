@@ -3,6 +3,11 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BIBLE_BOOKS, churchYearStartYear, LSB_LITURGIES } from "@/lib/worship-service";
 import { fetchPublicHymnContent, importHymnal, parseHymnalCsv, parseHymnalHymns, parseHymnalList } from "@/lib/hymnary";
+import { GET as getLectionary } from "@/app/api/services/lectionary/route";
+
+vi.mock("@/lib/auth", () => ({ requirePermission: vi.fn(async () => ({ id: "user-1" })) }));
+vi.mock("@/lib/modules", () => ({ requireEnabledModule: vi.fn(async () => undefined) }));
+vi.mock("@/lib/tenant", () => ({ requireTenantScope: vi.fn(async () => ({ churchId: "church-1" })) }));
 
 const root = path.resolve(process.cwd());
 const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
@@ -67,6 +72,11 @@ describe("worship services", () => {
     expect(serviceApi).toContain("validatePericopes");
     expect(settingsApi).toContain("lectionaryEnabled");
     expect(lectionaryApi).toContain("lectionary.collver.biz/api/calendar");
+    expect(lectionaryApi).toContain("lectionary.collver.biz/api/day");
+    expect(lectionaryApi).toContain("[10, 31]");
+    expect(lectionaryApi).toContain("[11, 1]");
+    expect(lectionaryApi).toContain("readings_parsed");
+    expect(lectionaryApi).toContain("const identity = `${event.date}:${event.key}`");
     expect(lectionaryApi).toContain("Common Service Book");
     expect(lectionaryApi).toContain('typeof event.date === "string"');
     expect(schema).toContain("pericopes");
@@ -95,6 +105,46 @@ describe("worship services", () => {
     expect(publicPage).toContain("Words and music are not available for public display.");
     expect(rightsRoute).toContain("fetchPublicHymnContent");
     expect(settingsPage).toContain("Checking Hymnary for verified public-domain content");
+  });
+
+  it("adds weekday festivals and keeps same-date Sunday and festival choices", async () => {
+    const ordinary = {
+      slot: "ordinary-22-pentecost",
+      name: "Twenty-second Sunday after Pentecost",
+      date: "2026-10-31",
+      readings: { ot: "Isaiah 1:10-18", ps: "Psalm 32", ep: "Philippians 1:1-11", go: "Matthew 18:21-35" },
+    };
+    const reformation = {
+      slot: "reformation",
+      name: "Reformation Day",
+      date: "2026-10-31",
+      source: "Common Service Book of the Lutheran Church (Philadelphia, 1917)",
+      readings_parsed: [
+        { label: "First Reading", ref: "Revelation 14:6-7" },
+        { label: "Psalm", ref: "Psalm 46" },
+        { label: "Epistle", ref: "Romans 3:19-28" },
+        { label: "Gospel", ref: "John 8:31-36" },
+      ],
+    };
+    const allSaints = {
+      slot: "all_saints",
+      name: "All Saints' Day",
+      date: "2025-11-01",
+      readings_parsed: [{ label: "Gospel", ref: "Matthew 5:1-12" }],
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+      if (input.includes("/calendar/2025?")) return Response.json({ church_year: "2025–2026", events: [ordinary] });
+      if (input.includes("2026-10-31")) return Response.json(reformation);
+      if (input.includes("2025-11-01")) return Response.json(allSaints);
+      return new Response(null, { status: 404 });
+    }));
+
+    const response = await getLectionary(new Request("http://localhost/api/services/lectionary?lectionary=THREE_YEAR&year=2025"));
+    const body = await response.json() as { events: Array<{ key: string; name: string; date: string; readings: { gospel: string | null } }> };
+    const sameDate = body.events.filter((event) => event.date === "2026-10-31");
+    expect(sameDate.map((event) => event.key)).toEqual(expect.arrayContaining(["ordinary-22-pentecost", "reformation"]));
+    expect(body.events.find((event) => event.key === "all_saints")).toMatchObject({ name: "All Saints' Day", date: "2025-11-01" });
+    expect(body.events.find((event) => event.key === "reformation")?.readings.gospel).toBe("John 8:31-36");
   });
 
   it("hydrates only Hymnary resources explicitly marked public domain", async () => {
