@@ -66,20 +66,22 @@ function parseCsvLine(line: string) {
 }
 
 export function parseHymnalCsv(csv: string, code: string) {
-    const rows = csv.split(/\r?\n/).filter((line) => line.trim());
+    const rows = csv.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
     if (rows.length < 2 || /<html/i.test(rows[0])) return [];
-    const headers = parseCsvLine(rows[0]).map((header) => header.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    const headerIndex = rows.findIndex((line) => parseCsvLine(line).some((header) => ["title", "hymntitle", "hymn"].includes(header.toLowerCase().replace(/[^a-z0-9]/g, ""))));
+    if (headerIndex < 0) return [];
+    const headers = parseCsvLine(rows[headerIndex]).map((header) => header.toLowerCase().replace(/[^a-z0-9]/g, ""));
     const column = (...names: string[]) => names.map((name) => headers.indexOf(name)).find((index) => index >= 0) ?? -1;
-    const numberColumn = column("number", "hymnnumber", "no");
-    const titleColumn = column("title", "hymntitle");
+    const numberColumn = column("number", "hymnnumber", "hymnalnumber", "no");
+    const titleColumn = column("title", "hymntitle", "hymn", "name");
     const firstLineColumn = column("firstline", "firstlineofthehymn");
     const tuneColumn = column("tune", "tunename");
     const tuneAuthorsColumn = column("tuneauthors", "tuneauthor");
     const textAuthorsColumn = column("authors", "textauthors", "author");
     const copyrightColumn = column("copyright", "copyrightinfo");
-    const urlColumn = column("url", "sourceurl", "hymnurl");
+    const urlColumn = column("url", "sourceurl", "hymnurl", "hymnarylink");
     if (titleColumn < 0) return [];
-    return rows.slice(1).map((line) => {
+    return rows.slice(headerIndex + 1).map((line) => {
       const values = parseCsvLine(line);
       const number = numberColumn >= 0 ? decode(values[numberColumn] ?? "") || null : null;
       const title = decode(values[titleColumn] ?? "");
@@ -104,10 +106,27 @@ export function parseHymnalHymns(html: string, code: string) {
   return result.filter((hymn, index, all) => all.findIndex((candidate) => candidate.number === hymn.number && candidate.title === hymn.title) === index);
 }
 
-async function fetchText(url: string) {
-  const response = await fetch(url, { headers: { "User-Agent": "StPaulsSite/1.0 (hymnal metadata importer)", Accept: "text/html" }, signal: AbortSignal.timeout(10000), cache: "no-store" });
+async function fetchText(url: string, accept = "text/html") {
+  const response = await fetch(url, { headers: { "User-Agent": "StPaulsSite/1.0 (hymnal metadata importer)", Accept: accept }, signal: AbortSignal.timeout(10000), cache: "no-store" });
   if (!response.ok) throw new Error(`Hymnary returned HTTP ${response.status}.`);
   return response.text();
+}
+
+async function importCsvPages(url: string, code: string) {
+  const hymns: HymnaryHymn[] = [];
+  let duplicatePages = 0;
+  for (let page = 0; page < 20; page += 1) {
+    const pageUrl = new URL(url);
+    pageUrl.searchParams.set("page", String(page));
+    const parsed = parseHymnalCsv(await fetchText(pageUrl.toString(), "text/csv"), code);
+    const before = new Set(hymns.map((hymn) => `${hymn.number}|${hymn.title}`)).size;
+    hymns.push(...parsed);
+    const uniqueCount = new Set(hymns.map((hymn) => `${hymn.number}|${hymn.title}`)).size;
+    if (!parsed.length || uniqueCount === before) duplicatePages += 1;
+    else duplicatePages = 0;
+    if (duplicatePages >= 2) break;
+  }
+  return hymns.filter((hymn, index, all) => all.findIndex((candidate) => candidate.number === hymn.number && candidate.title === hymn.title) === index);
 }
 
 export async function listHymnals() {
@@ -122,28 +141,18 @@ export async function listHymnals() {
 export async function importHymnal(code: string, name?: string) {
   if (!/^[A-Za-z0-9_-]{2,40}$/.test(code)) throw new Error("Invalid hymnal selection.");
   const sourceUrl = `${baseUrl}/hymnal/${code}`;
-  try {
-    const csvHymns = parseHymnalCsv(await fetchText(`${sourceUrl}?export=csv`), code);
-    if (csvHymns.length) return { code, name: name?.trim().slice(0, 200) || code, sourceUrl, hymns: csvHymns };
-  } catch {
-    // Fall back to the paginated HTML catalog when CSV export is unavailable.
-  }
-  const firstPage = await fetchText(sourceUrl);
-  const hymns = [...parseHymnalHymns(firstPage, code)];
-  let duplicatePages = 0;
-  for (let page = 1; page <= 20; page += 1) {
+  const csvUrls = [
+    `${sourceUrl}?export=csv`,
+    `${sourceUrl}/titles?export=csv`,
+    `${baseUrl}/search?qu=hymnalnumber%3A${encodeURIComponent(code)}&export=csv`,
+  ];
+  for (const csvUrl of csvUrls) {
     try {
-      const before = new Set(hymns.map((hymn) => `${hymn.number}|${hymn.title}`)).size;
-      hymns.push(...parseHymnalHymns(await fetchText(`${sourceUrl}?page=${page}`), code));
-      const uniqueCount = new Set(hymns.map((hymn) => `${hymn.number}|${hymn.title}`)).size;
-      if (uniqueCount === before) duplicatePages += 1;
-      else duplicatePages = 0;
-      if (duplicatePages >= 2) break;
+      const csvHymns = await importCsvPages(csvUrl, code);
+      if (csvHymns.length > 100) return { code, name: name?.trim().slice(0, 200) || code, sourceUrl, hymns: csvHymns };
     } catch {
-      break;
+      // Try the next documented Hymnary CSV endpoint.
     }
   }
-  const unique = hymns.filter((hymn, index, all) => all.findIndex((candidate) => candidate.number === hymn.number && candidate.title === hymn.title) === index);
-  if (!unique.length) throw new Error("Hymnary did not return hymn metadata for that hymnal.");
-  return { code, name: name?.trim().slice(0, 200) || code, sourceUrl, hymns: unique };
+  throw new Error("Hymnary did not return a complete CSV catalog for that hymnal. No partial 100-hymn import was saved.");
 }

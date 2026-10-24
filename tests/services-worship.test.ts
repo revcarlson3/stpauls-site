@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BIBLE_BOOKS, LSB_LITURGIES } from "@/lib/worship-service";
-import { parseHymnalCsv, parseHymnalHymns, parseHymnalList } from "@/lib/hymnary";
+import { importHymnal, parseHymnalCsv, parseHymnalHymns, parseHymnalList } from "@/lib/hymnary";
 
 const root = path.resolve(process.cwd());
 const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
+afterEach(() => vi.unstubAllGlobals());
 
 describe("worship services", () => {
   it("defines the initial LSB liturgy settings and Bible book choices", () => {
@@ -56,6 +57,10 @@ describe("worship services", () => {
     expect(hymnalApi).toContain("worshipHymnal.deleteMany");
     expect(hymnalApi).toContain("worshipServiceSettings.upsert");
     expect(settingsPage).toContain("Import hymnal");
+    const importer = read("lib/hymnary.ts");
+    expect(importer).toContain("search?qu=hymnalnumber");
+    expect(importer).toContain("export=csv");
+    expect(importer).toContain("No partial 100-hymn import");
   });
 
   it("parses hymnal and hymn metadata without importing copyrighted content", () => {
@@ -64,5 +69,15 @@ describe("worship services", () => {
     expect(parseHymnalList(hymnalHtml)[0]).toMatchObject({ code: "LSB2006", name: "Lutheran Service Book" });
     expect(parseHymnalHymns(hymnHtml, "LSB2006")[0]).toMatchObject({ number: "151", title: "A Mighty Fortress", tuneName: "EIN FESTE BURG", copyrightInfo: null });
     expect(parseHymnalCsv('number,title,first line,tune\n151,"A Mighty Fortress","A mighty fortress is our God","EIN FESTE BURG"', "LSB2006")[0]).toMatchObject({ number: "151", title: "A Mighty Fortress", firstLine: "A mighty fortress is our God", tuneName: "EIN FESTE BURG" });
+  });
+
+  it("imports the complete CSV catalog instead of accepting a page-sized result", async () => {
+    const firstPage = ["number,title", ...Array.from({ length: 100 }, (_, index) => `${index + 1},Hymn ${index + 1}`)].join("\n");
+    const secondPage = ["number,title", ...Array.from({ length: 25 }, (_, index) => `${index + 101},Hymn ${index + 101}`)].join("\n");
+    const fetchMock = vi.fn(async (input: string) => new Response(new URL(input).searchParams.get("page") === "1" ? secondPage : new URL(input).searchParams.get("page") === "2" ? "" : firstPage, { headers: { "content-type": "text/csv" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const imported = await importHymnal("LSB2006", "Lutheran Service Book");
+    expect(imported.hymns).toHaveLength(125);
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("?export=csv"), expect.objectContaining({ headers: expect.objectContaining({ Accept: "text/csv" }) }));
   });
 });
