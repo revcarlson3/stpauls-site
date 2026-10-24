@@ -1,13 +1,14 @@
 import { randomUUID } from "crypto";
 import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { requireTenantScope } from "@/lib/tenant";
 import { DEFAULT_EVENT_TYPES, resolveEventType } from "@/lib/event-validation";
-import { BIBLE_BOOKS, LSB_LITURGIES, formatLessonReference, safeVideoUrl, type WorshipServiceHymnInput, type WorshipServiceLessonInput } from "@/lib/worship-service";
+import { BIBLE_BOOKS, LSB_LITURGIES, formatLessonReference, safeVideoUrl, type WorshipServiceHymnInput, type WorshipServiceLessonInput, type WorshipServicePericopes } from "@/lib/worship-service";
 import { fetchPublicHymnContent } from "@/lib/hymnary";
 
 const include = {
@@ -75,10 +76,44 @@ function validateHymns(value: unknown): WorshipServiceHymnInput[] | null {
       } catch {
         return null;
       }
+
     }
     hymns.push({ hymnId: hymnId || undefined, custom, number: text(raw.number, 30) || undefined, title: title || undefined, sourceUrl });
   }
   return hymns;
+}
+
+function validatePericopes(value: unknown): WorshipServicePericopes | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const readings = raw.readings && typeof raw.readings === "object" ? raw.readings as Record<string, unknown> : {};
+  const lectionary = raw.lectionary === "ONE_YEAR" || raw.lectionary === "THREE_YEAR" ? raw.lectionary : null;
+  const name = text(raw.name, 200);
+  const key = text(raw.key, 100);
+  if (!lectionary || !name || !key) return null;
+  const proper = raw.introit && typeof raw.introit === "object" ? raw.introit as Record<string, unknown> : null;
+  return {
+    lectionary,
+    key,
+    name,
+    date: typeof raw.date === "string" ? raw.date.slice(0, 20) : undefined,
+    series: typeof raw.series === "string" ? raw.series.slice(0, 10) : null,
+    readings: {
+      oldTestament: typeof readings.oldTestament === "string" ? readings.oldTestament.slice(0, 300) : null,
+      psalm: typeof readings.psalm === "string" ? readings.psalm.slice(0, 300) : null,
+      epistle: typeof readings.epistle === "string" ? readings.epistle.slice(0, 300) : null,
+      gospel: typeof readings.gospel === "string" ? readings.gospel.slice(0, 300) : null,
+    },
+    introit: proper ? {
+      name: typeof proper.name === "string" ? proper.name.slice(0, 120) : null,
+      reference: typeof proper.reference === "string" ? proper.reference.slice(0, 200) : null,
+      text: typeof proper.text === "string" ? proper.text.slice(0, 4000) : null,
+    } : null,
+    gradual: typeof raw.gradual === "string" ? raw.gradual.slice(0, 4000) : null,
+    verse: typeof raw.verse === "string" ? raw.verse.slice(0, 2000) : null,
+    collect: typeof raw.collect === "string" ? raw.collect.slice(0, 4000) : null,
+    source: typeof raw.source === "string" ? raw.source.slice(0, 500) : null,
+  };
 }
 
 export async function GET() {
@@ -110,8 +145,9 @@ export async function POST(request: Request) {
     const clergyIds = Array.isArray(payload.clergyIds) ? payload.clergyIds.filter((id): id is string => typeof id === "string").slice(0, 30) : [];
     const hymns = validateHymns(payload.hymns);
     const lessons = validateLessons(payload.lessons);
+    const pericopes = payload.pericopes == null ? null : validatePericopes(payload.pericopes);
     const videoUrl = safeVideoUrl(payload.videoUrl);
-    if (!title || Number.isNaN(startsAt.getTime()) || (endsAt && (Number.isNaN(endsAt.getTime()) || endsAt < startsAt)) || (scheduledAt && Number.isNaN(scheduledAt.getTime())) || (liturgy && !LSB_LITURGIES.includes(liturgy as typeof LSB_LITURGIES[number])) || !hymns || !lessons || (payload.videoUrl && videoUrl === undefined)) return NextResponse.json({ error: "Enter valid worship service details." }, { status: 400 });
+    if (!title || Number.isNaN(startsAt.getTime()) || (endsAt && (Number.isNaN(endsAt.getTime()) || endsAt < startsAt)) || (scheduledAt && Number.isNaN(scheduledAt.getTime())) || (liturgy && !LSB_LITURGIES.includes(liturgy as typeof LSB_LITURGIES[number])) || !hymns || !lessons || (payload.pericopes != null && !pericopes) || (payload.videoUrl && videoUrl === undefined)) return NextResponse.json({ error: "Enter valid worship service details." }, { status: 400 });
     const clergy = clergyIds.length ? await db.clergyProfile.findMany({ where: { churchId: scope.church.id, id: { in: clergyIds }, status: "ACTIVE" }, select: { id: true } }) : [];
     if (clergy.length !== clergyIds.length) return NextResponse.json({ error: "One or more selected clergy profiles are unavailable." }, { status: 400 });
     const addToCalendar = payload.addToCalendar === true;
@@ -189,6 +225,7 @@ export async function POST(request: Request) {
           videoUrl: videoUrl ?? null,
           bulletinUrl: assetUrls.bulletinUrl,
           featuredImageUrl: assetUrls.featuredImageUrl,
+          pericopes: pericopes ?? Prisma.JsonNull,
           eventId,
           clergy: { create: clergyIds.map((clergyId, sortOrder) => ({ clergyId, sortOrder })) },
           hymns: { create: normalizedHymns.map((hymn, sortOrder) => ({ ...hymn, sortOrder })) },

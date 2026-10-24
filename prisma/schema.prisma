@@ -1140,6 +1140,7 @@ model WorshipService {
   videoUrl           String?
   bulletinUrl        String?
   featuredImageUrl   String?
+  pericopes          Json?
   eventId            String?                @unique
   calendarEvent      MembershipEvent?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
   clergy             WorshipServiceClergy[]
@@ -1185,6 +1186,8 @@ model WorshipServiceSettings {
   church          Church         @relation(fields: [churchId], references: [id], onDelete: Cascade)
   primaryHymnalId String? @unique
   primaryHymnal   WorshipHymnal? @relation(fields: [primaryHymnalId], references: [id], onDelete: SetNull)
+  lectionaryEnabled Boolean @default(false)
+  lectionaryType String @default("THREE_YEAR")
   updatedAt       DateTime       @updatedAt
 }
 

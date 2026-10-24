@@ -38,14 +38,17 @@ describe("worship services", () => {
   });
 
   it("provides the service creation UI and isolated asset route", () => {
+    const schema = read("prisma/schema.prisma");
     const page = read("app/admin/services/services/services-manager.tsx");
     const assetRoute = read("app/api/services/services/assets/[filename]/route.ts");
     const hymnRoute = read("app/api/services/hymns/route.ts");
     const serviceApi = read("app/api/services/services/route.ts");
     const hymnalApi = read("app/api/services/hymnals/route.ts");
+    const settingsApi = read("app/api/services/settings/route.ts");
+    const lectionaryApi = read("app/api/services/lectionary/route.ts");
     const settingsPage = read("app/admin/services/settings/hymnal-settings.tsx");
     expect(page).toContain("Assigned preacher or clergy");
-    expect(page).toContain("Scripture lessons");
+    expect(page).toContain("Pericopes");
     expect(page).toContain("Search saved hymnal");
     expect(page).toContain("Custom hymn");
     expect(page).toContain("Create an event on the shared Events calendar");
@@ -57,6 +60,14 @@ describe("worship services", () => {
     expect(hymnalApi).toContain("worshipHymnal.deleteMany");
     expect(hymnalApi).toContain("worshipServiceSettings.upsert");
     expect(settingsPage).toContain("Import hymnal");
+    expect(settingsPage).toContain("LSB Three-Year");
+    expect(settingsPage).toContain("Enable lectionary");
+    expect(serviceApi).toContain("validatePericopes");
+    expect(settingsApi).toContain("lectionaryEnabled");
+    expect(lectionaryApi).toContain("lectionary.collver.biz/api/calendar");
+    expect(lectionaryApi).toContain("Common Service Book");
+    expect(schema).toContain("pericopes");
+    expect(schema).toContain("lectionaryType");
     const importer = read("lib/hymnary.ts");
     expect(importer).toContain("/instances?qu=hymnalNumber");
     expect(importer).toContain("export=csv");

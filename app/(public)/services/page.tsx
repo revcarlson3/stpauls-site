@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Container } from "@/components/ui";
 import { db } from "@/lib/db";
 import { resolvePublicTenant } from "@/lib/platform-domain";
+import type { WorshipServicePericopes } from "@/lib/worship-service";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,26 @@ export default async function PublicServicesPage() {
         {service.liturgy && <p className="mt-2 text-ink/65">{service.liturgy}</p>}
         {service.description && <p className="mt-4 whitespace-pre-wrap leading-7 text-ink/75">{service.description}</p>}
         {service.clergy.length > 0 && <p className="mt-4 text-sm text-ink/60">Led by {service.clergy.map((entry) => `${entry.clergy.title} ${entry.clergy.firstName ?? ""} ${entry.clergy.lastName ?? ""}`.trim()).join(", ")}</p>}
-        {service.lessons.length > 0 && <p className="mt-2 text-sm text-ink/60">Lessons: {service.lessons.map((lesson) => lesson.reference).filter(Boolean).join("; ")}</p>}
+        {service.lessons.length > 0 && <p className="mt-2 text-sm text-ink/60">Pericopes: {service.lessons.map((lesson) => lesson.reference).filter(Boolean).join("; ")}</p>}
+        {service.pericopes && (() => {
+          const pericopes = service.pericopes as unknown as WorshipServicePericopes;
+          return <section className="mt-6 grid gap-3 border-t border-ink/10 pt-5">
+            <h3 className="font-serif text-2xl">Pericopes</h3>
+            <p className="font-semibold">{pericopes.name}{pericopes.series ? ` · Series ${pericopes.series}` : ""}</p>
+            <div className="grid gap-2 text-sm text-ink/70 sm:grid-cols-2">
+              <p>Old Testament: {pericopes.readings.oldTestament ?? "Not listed"}</p>
+              <p>Psalm: {pericopes.readings.psalm ?? "Not listed"}</p>
+              <p>Epistle: {pericopes.readings.epistle ?? "Not listed"}</p>
+              <p>Gospel: {pericopes.readings.gospel ?? "Not listed"}</p>
+            </div>
+            {(pericopes.introit?.text || pericopes.gradual || pericopes.verse || pericopes.collect) && <div className="grid gap-3 sm:grid-cols-2">
+              {pericopes.introit?.text && <div><h4 className="font-semibold">Introit</h4><p className="mt-1 whitespace-pre-wrap text-sm leading-6">{pericopes.introit.text}</p></div>}
+              {pericopes.gradual && <div><h4 className="font-semibold">Gradual</h4><p className="mt-1 whitespace-pre-wrap text-sm leading-6">{pericopes.gradual}</p></div>}
+              {pericopes.verse && <div><h4 className="font-semibold">Verse</h4><p className="mt-1 whitespace-pre-wrap text-sm leading-6">{pericopes.verse}</p></div>}
+              {pericopes.collect && <div><h4 className="font-semibold">Collect of the Day</h4><p className="mt-1 whitespace-pre-wrap text-sm leading-6">{pericopes.collect}</p></div>}
+            </div>}
+          </section>;
+        })()}
         {service.hymns.length > 0 && <div className="mt-6 grid gap-5 border-t border-ink/10 pt-5"><h3 className="font-serif text-2xl">Hymns</h3>{service.hymns.map((entry) => {
           const hymn = entry.hymn;
           const words = hymn && canShowWords(hymn);

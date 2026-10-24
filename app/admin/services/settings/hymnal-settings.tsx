@@ -16,14 +16,29 @@ export function HymnalSettings() {
   const [hymnQuery, setHymnQuery] = useState("");
   const [hymnResults, setHymnResults] = useState<Hymn[]>([]);
   const [editing, setEditing] = useState<Hymn | null>(null);
+  const [lectionaryEnabled, setLectionaryEnabled] = useState(false);
+  const [lectionaryType, setLectionaryType] = useState<"ONE_YEAR" | "THREE_YEAR">("THREE_YEAR");
+  const [savingLectionary, setSavingLectionary] = useState(false);
 
   useEffect(() => {
-    void fetch("/api/services/hymnals").then((response) => response.json()).then((body) => {
+    void Promise.all([fetch("/api/services/hymnals"), fetch("/api/services/settings")]).then(async ([hymnalResponse, settingsResponse]) => {
+      const body = await hymnalResponse.json();
+      const settingsBody = await settingsResponse.json();
       setHymnals(body.hymnals ?? []);
       setPrimary(body.primaryHymnal ?? null);
       setSelected(body.primaryHymnal?.code ?? "");
-    }).catch(() => setMessage("Unable to load hymnals.")).finally(() => setLoading(false));
+      setLectionaryEnabled(settingsBody.lectionaryEnabled === true);
+      setLectionaryType(settingsBody.lectionaryType === "ONE_YEAR" ? "ONE_YEAR" : "THREE_YEAR");
+    }).catch(() => setMessage("Unable to load Services settings.")).finally(() => setLoading(false));
   }, []);
+
+  async function saveLectionary() {
+    setSavingLectionary(true);
+    const response = await fetch("/api/services/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lectionaryEnabled, lectionaryType }) });
+    const body = await response.json().catch(() => ({}));
+    setMessage(response.ok ? "Lectionary settings saved." : body.error ?? "Unable to save lectionary settings.");
+    setSavingLectionary(false);
+  }
 
   async function searchHymns(query: string) {
     setHymnQuery(query);
@@ -87,7 +102,20 @@ export function HymnalSettings() {
     setSaving(false);
   }
 
-  return <section className="mt-8 rounded-[var(--site-radius-card)] border border-ink/10 bg-white p-6 shadow-sm">
+  return <section className="mt-8 grid gap-8">
+    <section className="rounded-[var(--site-radius-card)] border border-ink/10 bg-white p-6 shadow-sm">
+      <h2 className="font-serif text-2xl">LCMS lectionary</h2>
+      <p className="mt-2 max-w-2xl text-sm text-ink/60">Enable the Lutheran Service Book one-year or three-year lectionary for automatic pericope selection when creating a service. Reading references are stored with each service; additional proper text is included only when the source identifies it as reusable.</p>
+      <div className="mt-5 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+        <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={lectionaryEnabled} onChange={(event) => setLectionaryEnabled(event.target.checked)} />Enable lectionary</label>
+        <select disabled={!lectionaryEnabled} value={lectionaryType} onChange={(event) => setLectionaryType(event.target.value === "ONE_YEAR" ? "ONE_YEAR" : "THREE_YEAR")} className="focus-ring rounded-lg border border-ink/15 px-3 py-2">
+          <option value="THREE_YEAR">LSB Three-Year (Series A, B, C)</option>
+          <option value="ONE_YEAR">LSB One-Year</option>
+        </select>
+        <button type="button" disabled={loading || savingLectionary} onClick={() => void saveLectionary()} className="focus-ring rounded-full bg-coral px-5 py-2 font-semibold text-white disabled:opacity-50">{savingLectionary ? "Saving..." : "Save lectionary"}</button>
+      </div>
+    </section>
+    <section className="rounded-[var(--site-radius-card)] border border-ink/10 bg-white p-6 shadow-sm">
     <h2 className="font-serif text-2xl">Primary hymnal</h2>
     <p className="mt-2 max-w-2xl text-sm text-ink/60">Choose the hymnal used for hymn lookup when creating worship services. Changing it replaces the currently imported catalog for this church.</p>
     <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -114,5 +142,6 @@ export function HymnalSettings() {
       </form>}
     </div>}
     {message && <p className="mt-4 text-sm font-semibold text-coral">{message}</p>}
+    </section>
   </section>;
 }

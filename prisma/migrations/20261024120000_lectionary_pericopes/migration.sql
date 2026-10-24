@@ -1,0 +1,3 @@
+ALTER TABLE "WorshipService" ADD COLUMN IF NOT EXISTS "pericopes" JSONB;
+ALTER TABLE "WorshipServiceSettings" ADD COLUMN IF NOT EXISTS "lectionaryEnabled" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "WorshipServiceSettings" ADD COLUMN IF NOT EXISTS "lectionaryType" TEXT NOT NULL DEFAULT 'THREE_YEAR';

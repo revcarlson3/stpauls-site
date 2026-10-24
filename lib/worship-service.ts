@@ -44,6 +44,20 @@ export type WorshipServiceLessonInput = {
   reference?: string;
 };
 
+export type WorshipServicePericopes = {
+  lectionary: "ONE_YEAR" | "THREE_YEAR";
+  key: string;
+  name: string;
+  date?: string;
+  series?: string | null;
+  readings: { oldTestament?: string | null; psalm?: string | null; epistle?: string | null; gospel?: string | null };
+  introit?: { name?: string | null; reference?: string | null; text?: string | null } | null;
+  gradual?: string | null;
+  verse?: string | null;
+  collect?: string | null;
+  source?: string | null;
+};
+
 export function safeVideoUrl(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return null;
   const url = value.trim();

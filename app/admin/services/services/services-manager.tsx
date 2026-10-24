@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BIBLE_BOOKS, LSB_LITURGIES } from "@/lib/worship-service";
+import { BIBLE_BOOKS, LSB_LITURGIES, type WorshipServicePericopes } from "@/lib/worship-service";
 
 type Clergy = { id: string; title: string; firstName: string | null; lastName: string | null };
 type Hymn = { hymnId?: string; custom?: boolean; number: string; title: string; sourceUrl?: string; tuneName?: string | null; copyrightInfo?: string | null };
 type Lesson = { book: string; startChapter: string; startVerse: string; endChapter: string; endVerse: string };
+type LectionaryEvent = WorshipServicePericopes & { date: string | null };
 type Service = {
   id: string; title: string; description: string | null; liturgy: string | null; status: string; scheduledAt: string | null; startsAt: string; endsAt: string | null;
   livestreamEnabled: boolean; videoUrl: string | null; bulletinUrl: string | null; featuredImageUrl: string | null;
-  clergy: { clergy: Clergy }[]; hymns: Hymn[]; lessons: { reference: string | null }[]; calendarEvent: { eventType: string; category: string | null; location: string | null } | null;
+  clergy: { clergy: Clergy }[]; hymns: Hymn[]; lessons: { reference: string | null }[]; pericopes: WorshipServicePericopes | null; calendarEvent: { eventType: string; category: string | null; location: string | null } | null;
 };
 type ServiceForm = { title: string; description: string; liturgy: string; startsAt: string; endsAt: string; scheduledAt: string; status: string; livestreamEnabled: boolean; videoUrl: string; addToCalendar: boolean; eventType: string; category: string; location: string };
 
@@ -39,13 +40,19 @@ export function ServicesManager() {
   const [selectedClergy, setSelectedClergy] = useState<string[]>([]);
   const [hymns, setHymns] = useState<Hymn[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [lectionaryEnabled, setLectionaryEnabled] = useState(false);
+  const [lectionaryType, setLectionaryType] = useState<"ONE_YEAR" | "THREE_YEAR">("THREE_YEAR");
+  const [lectionaryEvents, setLectionaryEvents] = useState<LectionaryEvent[]>([]);
+  const [selectedPericope, setSelectedPericope] = useState("");
+  const [pericopes, setPericopes] = useState<WorshipServicePericopes | null>(null);
 
   async function load() {
     setLoading(true);
-    const [serviceResponse, clergyResponse, settingsResponse] = await Promise.all([fetch("/api/services/services"), fetch("/api/services/clergy"), fetch("/api/events/settings")]);
+    const [serviceResponse, clergyResponse, settingsResponse, lectionarySettingsResponse] = await Promise.all([fetch("/api/services/services"), fetch("/api/services/clergy"), fetch("/api/events/settings"), fetch("/api/services/settings")]);
     const serviceBody = await serviceResponse.json().catch(() => ({}));
     const clergyBody = await clergyResponse.json().catch(() => ({}));
     const settingsBody = await settingsResponse.json().catch(() => ({}));
+    const lectionarySettingsBody = await lectionarySettingsResponse.json().catch(() => ({}));
     if (!serviceResponse.ok) setMessage(serviceBody.error ?? "Unable to load services.");
     setServices(serviceBody.services ?? []);
     setClergy((clergyBody.profiles ?? []).filter((profile: { status: string }) => profile.status === "ACTIVE"));
@@ -54,6 +61,16 @@ export function ServicesManager() {
       setEventSettings({ eventTypes: settings.eventTypes?.length ? settings.eventTypes : ["Worship"], categories: settings.categories ?? [], locations: settings.locations ?? [], timeZone: settings.timeZone ?? "America/Chicago" });
       setForm((current) => ({ ...current, eventType: settings.eventTypes?.includes(current.eventType) ? current.eventType : settings.eventTypes?.[0] ?? "Worship" }));
     }
+    const enabled = lectionarySettingsBody.lectionaryEnabled === true;
+    const type = lectionarySettingsBody.lectionaryType === "ONE_YEAR" ? "ONE_YEAR" : "THREE_YEAR";
+    setLectionaryEnabled(enabled);
+    setLectionaryType(type);
+    if (enabled) {
+      const year = new Date(form.startsAt).getFullYear();
+      const response = await fetch(`/api/services/lectionary?lectionary=${type}&year=${year}`);
+      const body = await response.json().catch(() => ({}));
+      setLectionaryEvents(body.events ?? []);
+    }
     setLoading(false);
   }
 
@@ -61,6 +78,12 @@ export function ServicesManager() {
 
   function updateForm<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function selectPericope(key: string) {
+    const event = lectionaryEvents.find((item) => item.key === key);
+    setSelectedPericope(key);
+    setPericopes(event ?? null);
   }
 
   async function searchHymns(query = hymnQuery) {
@@ -79,7 +102,7 @@ export function ServicesManager() {
     setSaving(true);
     setMessage("");
     const data = new FormData(event.currentTarget);
-    data.set("payload", JSON.stringify({ ...form, clergyIds: selectedClergy, hymns, lessons }));
+    data.set("payload", JSON.stringify({ ...form, clergyIds: selectedClergy, hymns, lessons, pericopes }));
     const response = await fetch("/api/services/services", { method: "POST", body: data });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -91,6 +114,8 @@ export function ServicesManager() {
     setSelectedClergy([]);
     setHymns([]);
     setLessons([]);
+    setSelectedPericope("");
+    setPericopes(null);
     setForm((current) => ({ ...current, title: "", description: "", startsAt: localDateTime(new Date()), endsAt: "", scheduledAt: "", videoUrl: "" }));
     setServices((current) => [body.service, ...current]);
     setMessage("Worship service added.");
@@ -131,7 +156,23 @@ export function ServicesManager() {
           {hymnResults.length > 0 && <div className="grid gap-1 rounded-lg bg-mist p-3 text-sm">{hymnResults.map((hymn, index) => <button type="button" key={`${hymn.hymnId ?? hymn.title}-${index}`} className="text-left hover:underline" onClick={() => { setHymns((current) => [...current, { ...hymn, custom: false }]); setHymnResults([]); setHymnQuery(""); }}>{hymn.number ? `${hymn.number} — ` : ""}{hymn.title}{hymn.tuneName ? ` · ${hymn.tuneName}` : ""}</button>)}</div>}
         </fieldset>
 
-        <fieldset className="grid gap-3 rounded-xl border border-ink/10 p-4"><legend className="px-1 text-sm font-semibold">Scripture lessons</legend>{lessons.map((lesson, index) => <div key={index} className="grid gap-2 sm:grid-cols-[1.3fr_repeat(4,5rem)_auto]"><select className={inputClass} value={lesson.book} onChange={(event) => setLessons((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, book: event.target.value } : item))}>{BIBLE_BOOKS.map((book) => <option key={book}>{book}</option>)}</select>{(["startChapter", "startVerse", "endChapter", "endVerse"] as const).map((key) => <input key={key} className={inputClass} type="number" min="1" placeholder={key === "startChapter" ? "Ch." : key === "startVerse" ? "Verse" : key === "endChapter" ? "End ch." : "End v."} value={lesson[key]} onChange={(event) => setLessons((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: event.target.value } : item))} />)}<button type="button" className="focus-ring rounded-full border border-ink/20 px-3 py-2 text-sm" onClick={() => setLessons((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button></div>)}<button type="button" className="focus-ring w-fit rounded-full border border-ink/20 px-3 py-2 text-sm" onClick={() => setLessons((current) => [...current, emptyLesson()])}>Add lesson</button></fieldset>
+        {lectionaryEnabled && <fieldset className="grid gap-3 rounded-xl border border-ink/10 bg-mist/40 p-4">
+          <legend className="px-1 text-sm font-semibold">Church-year pericope</legend>
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            <select className={inputClass} value={selectedPericope} onChange={(event) => selectPericope(event.target.value)}>
+              <option value="">Select a Sunday or festival</option>
+              {lectionaryEvents.map((event) => <option key={`${event.key}-${event.date ?? ""}`} value={event.key}>{event.name}{event.series ? ` · Series ${event.series}` : ""}</option>)}
+            </select>
+            {pericopes && <div className="grid gap-1 text-sm"><strong>{pericopes.name}</strong><span>Old Testament: {pericopes.readings.oldTestament ?? "Not listed"}</span><span>Psalm: {pericopes.readings.psalm ?? "Not listed"}</span><span>Epistle: {pericopes.readings.epistle ?? "Not listed"}</span><span>Gospel: {pericopes.readings.gospel ?? "Not listed"}</span></div>}
+          </div>
+          {pericopes && <div className="grid gap-3 md:grid-cols-2">
+            <label className="grid gap-1 text-sm font-semibold">Introit{pericopes.introit?.name && <span className="font-normal">{pericopes.introit.name}{pericopes.introit.reference ? ` · ${pericopes.introit.reference}` : ""}</span>}{pericopes.introit?.text && <textarea readOnly value={pericopes.introit.text} rows={4} className={inputClass} />}</label>
+            <label className="grid gap-1 text-sm font-semibold">Gradual<textarea readOnly value={pericopes.gradual ?? ""} rows={4} className={inputClass} /></label>
+            <label className="grid gap-1 text-sm font-semibold">Verse<input readOnly value={pericopes.verse ?? ""} className={inputClass} /></label>
+            <label className="grid gap-1 text-sm font-semibold">Collect of the Day<textarea readOnly value={pericopes.collect ?? ""} rows={4} className={inputClass} /></label>
+          </div>}
+        </fieldset>}
+        <fieldset className="grid gap-3 rounded-xl border border-ink/10 p-4"><legend className="px-1 text-sm font-semibold">Pericopes</legend>{lessons.map((lesson, index) => <div key={index} className="grid gap-2 sm:grid-cols-[1.3fr_repeat(4,5rem)_auto]"><select className={inputClass} value={lesson.book} onChange={(event) => setLessons((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, book: event.target.value } : item))}>{BIBLE_BOOKS.map((book) => <option key={book}>{book}</option>)}</select>{(["startChapter", "startVerse", "endChapter", "endVerse"] as const).map((key) => <input key={key} className={inputClass} type="number" min="1" placeholder={key === "startChapter" ? "Ch." : key === "startVerse" ? "Verse" : key === "endChapter" ? "End ch." : "End v."} value={lesson[key]} onChange={(event) => setLessons((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: event.target.value } : item))} />)}<button type="button" className="focus-ring rounded-full border border-ink/20 px-3 py-2 text-sm" onClick={() => setLessons((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button></div>)}<button type="button" className="focus-ring w-fit rounded-full border border-ink/20 px-3 py-2 text-sm" onClick={() => setLessons((current) => [...current, emptyLesson()])}>Add manual pericope</button></fieldset>
 
         <fieldset className="grid gap-4 rounded-xl border border-ink/10 p-4"><legend className="px-1 text-sm font-semibold">Calendar and media</legend><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={form.addToCalendar} onChange={(event) => updateForm("addToCalendar", event.target.checked)} />Create an event on the shared Events calendar</label>{form.addToCalendar && <div className="grid gap-4 md:grid-cols-3"><label className="grid gap-1 text-sm font-semibold">Event Type<select value={form.eventType} onChange={(event) => updateForm("eventType", event.target.value)} className={inputClass}>{eventSettings.eventTypes.map((value) => <option key={value}>{value}</option>)}</select></label><label className="grid gap-1 text-sm font-semibold">Category<select value={form.category} onChange={(event) => updateForm("category", event.target.value)} className={inputClass}><option value="">None</option>{eventSettings.categories.map((value) => <option key={value}>{value}</option>)}</select></label><label className="grid gap-1 text-sm font-semibold">Location<select value={form.location} onChange={(event) => updateForm("location", event.target.value)} className={inputClass}><option value="">None</option>{eventSettings.locations.map((value) => <option key={value}>{value}</option>)}</select></label></div>}<div className="grid gap-4 md:grid-cols-2"><label className="grid gap-1 text-sm font-semibold">Bulletin (PDF)<input type="file" name="bulletin" accept="application/pdf" className={inputClass} /></label><label className="grid gap-1 text-sm font-semibold">Featured image<input type="file" name="featuredImage" accept="image/jpeg,image/png,image/webp" className={inputClass} /></label></div><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={form.livestreamEnabled} onChange={(event) => updateForm("livestreamEnabled", event.target.checked)} />Enable livestreaming for this service</label><label className="grid gap-1 text-sm font-semibold">Video link<input type="url" value={form.videoUrl} onChange={(event) => updateForm("videoUrl", event.target.value)} className={inputClass} placeholder="https://youtube.com/..." /></label></fieldset>
         <button disabled={saving} className="focus-ring w-fit rounded-full bg-coral px-5 py-3 font-semibold text-white disabled:opacity-50">{saving ? "Adding..." : "Add worship service"}</button>
