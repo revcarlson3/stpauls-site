@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const response = await fetch(`${SOURCE}/${year}?lectionary=${lectionary}`, { headers: { Accept: "application/json" }, cache: "no-store" });
     if (!response.ok) return NextResponse.json({ error: "The lectionary source is temporarily unavailable." }, { status: 502 });
     const body = await response.json() as { church_year?: string; events?: Array<Record<string, unknown>> };
-    const events = Array.isArray(body.events) ? body.events.filter((event) => event.is_sunday === true || event.is_feast === true).map((event) => {
+    const events = Array.isArray(body.events) ? body.events.filter((event) => typeof event.date === "string" && typeof event.name === "string").map((event) => {
       const source = typeof event.source === "string" ? event.source : null;
       const reusablePropers = source?.includes("Common Service Book") && source.includes("1917");
       return {

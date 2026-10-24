@@ -58,6 +58,14 @@ export type WorshipServicePericopes = {
   source?: string | null;
 };
 
+export function churchYearStartYear(value: Date) {
+  const year = value.getFullYear();
+  const novemberThirtieth = new Date(year, 10, 30);
+  const previousSundayDay = 30 - novemberThirtieth.getDay();
+  const firstAdvent = new Date(year, 10, previousSundayDay < 27 ? previousSundayDay + 7 : previousSundayDay);
+  return value >= firstAdvent ? year : year - 1;
+}
+
 export function safeVideoUrl(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return null;
   const url = value.trim();

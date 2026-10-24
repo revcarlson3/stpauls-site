@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BIBLE_BOOKS, LSB_LITURGIES } from "@/lib/worship-service";
+import { BIBLE_BOOKS, churchYearStartYear, LSB_LITURGIES } from "@/lib/worship-service";
 import { fetchPublicHymnContent, importHymnal, parseHymnalCsv, parseHymnalHymns, parseHymnalList } from "@/lib/hymnary";
 
 const root = path.resolve(process.cwd());
@@ -19,6 +19,8 @@ describe("worship services", () => {
     expect(LSB_LITURGIES).toContain("Funeral Service");
     expect(BIBLE_BOOKS).toContain("John");
     expect(BIBLE_BOOKS).toContain("1 Corinthians");
+    expect(churchYearStartYear(new Date("2026-10-24T12:00:00Z"))).toBe(2025);
+    expect(churchYearStartYear(new Date("2026-12-01T12:00:00Z"))).toBe(2026);
   });
 
   it("keeps worship service data tenant-scoped and linked to shared event data", () => {
@@ -66,6 +68,7 @@ describe("worship services", () => {
     expect(settingsApi).toContain("lectionaryEnabled");
     expect(lectionaryApi).toContain("lectionary.collver.biz/api/calendar");
     expect(lectionaryApi).toContain("Common Service Book");
+    expect(lectionaryApi).toContain('typeof event.date === "string"');
     expect(schema).toContain("pericopes");
     expect(schema).toContain("lectionaryType");
     const importer = read("lib/hymnary.ts");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BIBLE_BOOKS, LSB_LITURGIES, type WorshipServicePericopes } from "@/lib/worship-service";
+import { BIBLE_BOOKS, churchYearStartYear, LSB_LITURGIES, type WorshipServicePericopes } from "@/lib/worship-service";
 
 type Clergy = { id: string; title: string; firstName: string | null; lastName: string | null };
 type Hymn = { hymnId?: string; custom?: boolean; number: string; title: string; sourceUrl?: string; tuneName?: string | null; copyrightInfo?: string | null };
@@ -66,7 +66,7 @@ export function ServicesManager() {
     setLectionaryEnabled(enabled);
     setLectionaryType(type);
     if (enabled) {
-      const year = new Date(form.startsAt).getFullYear();
+      const year = churchYearStartYear(new Date(form.startsAt));
       const response = await fetch(`/api/services/lectionary?lectionary=${type}&year=${year}`);
       const body = await response.json().catch(() => ({}));
       setLectionaryEvents(body.events ?? []);
