@@ -142,6 +142,11 @@ enum Permission {
   MANAGE_MODULES
 }
 
+enum ClergyProfileStatus {
+  ACTIVE
+  INACTIVE
+}
+
 model User {
   id                             String                          @id @default(cuid())
   email                          String                          @unique
@@ -268,6 +273,7 @@ model Church {
   ownedAnnouncements                   GlobalAnnouncement[]                  @relation("GlobalAnnouncementChurch")
   announcementPublications             AnnouncementPublication[]
   announcementTemplates                AnnouncementTemplate[]
+  clergyProfiles                       ClergyProfile[]
   auditLogs                            AuditLog[]
   createdAt                            DateTime                              @default(now())
   updatedAt                            DateTime                              @updatedAt
@@ -1078,6 +1084,7 @@ model MembershipIndividual {
   linkRequests               MembershipLinkRequest[]              @relation("MembershipLinkRequestMatch")
   givingContributions        GivingContribution[]
   pledgeAssignments          PledgeAssignment[]
+  clergyProfile              ClergyProfile?
   createdAt                  DateTime                             @default(now())
   updatedAt                  DateTime                             @updatedAt
 
@@ -1085,6 +1092,27 @@ model MembershipIndividual {
   @@index([lastName, firstName])
   @@index([externalSource, externalId])
   @@index([churchId])
+}
+
+model ClergyProfile {
+  id                     String                @id @default(cuid())
+  churchId               String
+  church                 Church                @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  membershipIndividualId String?               @unique
+  membershipIndividual   MembershipIndividual? @relation(fields: [membershipIndividualId], references: [id], onDelete: SetNull)
+  title                  String
+  firstName              String?
+  lastName               String?
+  email                  String?
+  phone                  String?
+  biography              String?
+  status                 ClergyProfileStatus   @default(ACTIVE)
+  photographUrl          String?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  @@index([churchId, status, lastName, firstName])
+  @@index([churchId, email])
 }
 
 model GivingContributionBatch {
