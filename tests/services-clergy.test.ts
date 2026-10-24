@@ -68,4 +68,22 @@ describe("services clergy foundation", () => {
     expect(route).toContain('data: { status: "INACTIVE" }');
     expect(page).toContain("These name and contact values are clergy-specific overrides.");
   });
+
+  it("prevents duplicate independent profiles and confirms immediate insertion", () => {
+    const route = read("app/api/services/clergy/route.ts");
+    const page = read("app/admin/services/preachers-clergy/clergy-manager.tsx");
+    expect(route).toContain("duplicateWhere");
+    expect(route).toContain("already exists.");
+    expect(page).toContain("setProfiles((current) => [body");
+    expect(page).toContain("was added to the clergy list.");
+    expect(page).toContain("disabled={submitting}");
+  });
+
+  it("cleans only inactive duplicate identities during migration", () => {
+    const migration = read("prisma/migrations/20261024080000_remove_duplicate_inactive_clergy_profiles/migration.sql");
+    expect(migration).toContain('duplicate."status" = \'INACTIVE\'');
+    expect(migration).toContain('canonical."status" = \'ACTIVE\'');
+    expect(migration).toContain('canonical."churchId" = duplicate."churchId"');
+    expect(migration).toContain('lower(trim(coalesce(canonical."email", \'\'))) = lower(trim(coalesce(duplicate."email", \'\')))');
+  });
 });

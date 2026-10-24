@@ -111,6 +111,7 @@ export function ClergyManager() {
   const [status, setStatus] = useState("ALL");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   async function loadProfiles() {
     setLoading(true);
@@ -131,6 +132,8 @@ export function ClergyManager() {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     setMessage("");
     const form = new FormData(event.currentTarget);
     const photo = form.get("photo");
@@ -138,13 +141,14 @@ export function ClergyManager() {
     form.set("membershipIndividualId", mode === "member" ? String(form.get("membershipIndividualId") ?? "") : "");
     const response = await fetch("/api/services/clergy", { method: "POST", body: form });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) { setMessage(body.error ?? "Unable to save clergy profile."); return; }
+    if (!response.ok) { setMessage(body.error ?? "Unable to save clergy profile."); setSubmitting(false); return; }
     event.currentTarget.reset();
     setBiography("");
     setMode("independent");
     setProfiles((current) => [body, ...current.filter((profile: Profile) => profile.id !== body.id)]);
     setExpandedId(body.id);
-    setMessage("Clergy profile added.");
+    setMessage(`${body.title} ${body.firstName ?? body.membershipIndividual?.firstName ?? ""} ${body.lastName ?? body.membershipIndividual?.lastName ?? ""} was added to the clergy list.`);
+    setSubmitting(false);
   }
 
   async function saveEdit(event: React.FormEvent<HTMLFormElement>, profile: Profile) {
@@ -179,6 +183,6 @@ export function ClergyManager() {
       })}</tbody></table></div>}
       {message && <p role="alert" className="mt-3 text-sm text-coral">{message}</p>}
     </section>
-    <section className="order-1 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm xl:order-2"><h2 className="font-serif text-2xl">Add preacher or clergy</h2><p className="mt-2 text-sm text-ink/60">Link an existing membership individual when possible, or create an independent clergy record.</p><div className="mt-5 flex gap-2 text-sm"><button type="button" className={`focus-ring rounded-lg border px-3 py-2 ${mode === "independent" ? "border-coral bg-coral/10 text-coral" : "border-ink/15"}`} onClick={() => setMode("independent")}>Independent</button><button type="button" className={`focus-ring rounded-lg border px-3 py-2 ${mode === "member" ? "border-coral bg-coral/10 text-coral" : "border-ink/15"}`} onClick={() => setMode("member")}>From membership</button></div><form onSubmit={(event) => void submit(event)} encType="multipart/form-data" className="mt-5 grid gap-4"><label className="grid gap-1 text-sm font-semibold">Clerical title<select required name="title" defaultValue="" className={inputClass}><option value="">Choose title</option>{CLERGY_TITLES.map((title) => <option key={title} value={title}>{title}</option>)}</select></label>{mode === "member" ? <label className="grid gap-1 text-sm font-semibold">Membership individual<select required name="membershipIndividualId" defaultValue="" className={inputClass}><option value="">Choose member</option>{members.map((member) => <option key={member.id} value={member.id}>{member.firstName} {member.lastName ?? ""} · #{member.memberNumber}{member.email ? ` · ${member.email}` : ""}</option>)}</select></label> : <><div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-1 text-sm font-semibold">First name<input required name="firstName" className={inputClass} /></label><label className="grid gap-1 text-sm font-semibold">Last name<input required name="lastName" className={inputClass} /></label></div><label className="grid gap-1 text-sm font-semibold">Email address<input required type="email" name="email" className={inputClass} /></label><label className="grid gap-1 text-sm font-semibold">Phone<input type="tel" name="phone" className={inputClass} /></label></>}<SimpleRichTextEditor value={biography} onChange={setBiography} /><input type="hidden" name="biography" value={biography} /><label className="grid gap-1 text-sm font-semibold">Custom photograph<input type="file" name="photo" accept="image/jpeg,image/png" className={inputClass} /><span className="text-xs font-normal text-ink/55">JPG or PNG, 100–4000 px per side, maximum 5 MB. Custom photos override a linked membership photo.</span></label><label className="grid gap-1 text-sm font-semibold">Status<select name="status" defaultValue="ACTIVE" className={inputClass}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label><button className="focus-ring rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white">Add clergy profile</button></form></section>
+    <section className="order-1 rounded-2xl border border-ink/10 bg-white p-6 shadow-sm xl:order-2"><h2 className="font-serif text-2xl">Add preacher or clergy</h2><p className="mt-2 text-sm text-ink/60">Link an existing membership individual when possible, or create an independent clergy record.</p><div className="mt-5 flex gap-2 text-sm"><button type="button" className={`focus-ring rounded-lg border px-3 py-2 ${mode === "independent" ? "border-coral bg-coral/10 text-coral" : "border-ink/15"}`} onClick={() => setMode("independent")}>Independent</button><button type="button" className={`focus-ring rounded-lg border px-3 py-2 ${mode === "member" ? "border-coral bg-coral/10 text-coral" : "border-ink/15"}`} onClick={() => setMode("member")}>From membership</button></div><form onSubmit={(event) => void submit(event)} encType="multipart/form-data" className="mt-5 grid gap-4"><label className="grid gap-1 text-sm font-semibold">Clerical title<select required name="title" defaultValue="" className={inputClass}><option value="">Choose title</option>{CLERGY_TITLES.map((title) => <option key={title} value={title}>{title}</option>)}</select></label>{mode === "member" ? <label className="grid gap-1 text-sm font-semibold">Membership individual<select required name="membershipIndividualId" defaultValue="" className={inputClass}><option value="">Choose member</option>{members.map((member) => <option key={member.id} value={member.id}>{member.firstName} {member.lastName ?? ""} · #{member.memberNumber}{member.email ? ` · ${member.email}` : ""}</option>)}</select></label> : <><div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-1 text-sm font-semibold">First name<input required name="firstName" className={inputClass} /></label><label className="grid gap-1 text-sm font-semibold">Last name<input required name="lastName" className={inputClass} /></label></div><label className="grid gap-1 text-sm font-semibold">Email address<input required type="email" name="email" className={inputClass} /></label><label className="grid gap-1 text-sm font-semibold">Phone<input type="tel" name="phone" className={inputClass} /></label></>}<SimpleRichTextEditor value={biography} onChange={setBiography} /><input type="hidden" name="biography" value={biography} /><label className="grid gap-1 text-sm font-semibold">Custom photograph<input type="file" name="photo" accept="image/jpeg,image/png" className={inputClass} /><span className="text-xs font-normal text-ink/55">JPG or PNG, 100–4000 px per side, maximum 5 MB. Custom photos override a linked membership photo.</span></label><label className="grid gap-1 text-sm font-semibold">Status<select name="status" defaultValue="ACTIVE" className={inputClass}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label><button disabled={submitting} className="focus-ring rounded-full bg-coral px-5 py-3 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60">{submitting ? "Adding…" : "Add clergy profile"}</button>{message && <p role="status" className="rounded-lg bg-mist px-3 py-2 text-sm text-ink" aria-live="polite">{message}</p>}</form></section>
   </div>;
 }

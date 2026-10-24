@@ -32,6 +32,15 @@ function status(value: unknown) {
   return value === "INACTIVE" ? "INACTIVE" : value === "ACTIVE" ? "ACTIVE" : null;
 }
 
+function duplicateWhere(churchId: string, firstName: string, lastName: string, email: string) {
+  return {
+    churchId,
+    firstName: { equals: firstName, mode: "insensitive" as const },
+    lastName: { equals: lastName, mode: "insensitive" as const },
+    email: { equals: email, mode: "insensitive" as const },
+  };
+}
+
 export async function GET(request: Request) {
   try {
     const user = await requirePermission("MANAGE_SERVICES");
@@ -105,8 +114,10 @@ export async function POST(request: Request) {
     }
     const firstName = text(input?.firstName, 80);
     const lastName = text(input?.lastName, 80);
-    const email = text(input?.email, 160);
+    const email = text(input?.email, 160).toLowerCase();
     if (!firstName || !lastName || !email) return NextResponse.json({ error: "Independent clergy records require first name, last name, and email address." }, { status: 400 });
+    const duplicate = await db.clergyProfile.findFirst({ where: duplicateWhere(user.churchId, firstName, lastName, email), select: { id: true, status: true } });
+    if (duplicate) return NextResponse.json({ error: "A clergy profile with this name and email already exists.", profileId: duplicate.id, status: duplicate.status }, { status: 409 });
     const profile = await db.clergyProfile.create({ data: { churchId: user.churchId, title, firstName, lastName, email, phone: text(input?.phone, 60) || null, biography, photographUrl, status: selectedStatus }, include: profileInclude });
     if (uploadedPhoto) {
       await mkdir(path.dirname(clergyPhotoPath("photo")), { recursive: true });
