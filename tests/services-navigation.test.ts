@@ -22,3 +22,17 @@ describe("services and sermons module navigation", () => {
     }
   });
 });
+
+describe("admin settings navigation", () => {
+  it("keeps report automations outside the module navigation and distinguishes billing", () => {
+    const source = fs.readFileSync(path.join(root, "components/admin-navigation.tsx"), "utf8");
+    const icons = fs.readFileSync(path.join(root, "components/admin-nav-icon.tsx"), "utf8");
+    expect(source).toContain(">Report Settings");
+    expect(source).toContain('href="/admin/report-automations"');
+    expect(source).toContain('<AdminNavIcon name="reports" />');
+    expect(source).toContain('<AdminNavIcon name="billing" />Billing and Domains');
+    expect(icons).toContain('type AdminNavIconName =');
+    expect(icons).toContain('"billing"');
+    expect(icons).toContain('"reports"');
+  });
+});

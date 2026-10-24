@@ -147,6 +147,12 @@ enum ClergyProfileStatus {
   INACTIVE
 }
 
+enum WorshipServiceStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
 model User {
   id                             String                          @id @default(cuid())
   email                          String                          @unique
@@ -250,6 +256,7 @@ model Church {
   membershipIndividuals                MembershipIndividual[]
   membershipEvents                     MembershipEvent[]
   membershipEventSettings              MembershipEventSettings?
+  worshipServices                      WorshipService[]
   membershipEventNotificationTemplates MembershipEventNotificationTemplate[]
   membershipFamilyRoles                MembershipFamilyRole[]
   membershipWorkflows                  MembershipWorkflow[]
@@ -1108,11 +1115,77 @@ model ClergyProfile {
   biography              String?
   status                 ClergyProfileStatus   @default(ACTIVE)
   photographUrl          String?
+  worshipServices        WorshipServiceClergy[]
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 
   @@index([churchId, status, lastName, firstName])
   @@index([churchId, email])
+}
+
+model WorshipService {
+  id                 String                 @id @default(cuid())
+  churchId           String
+  church             Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  title              String
+  description        String?
+  liturgy            String?
+  status             WorshipServiceStatus   @default(DRAFT)
+  scheduledAt        DateTime?
+  startsAt           DateTime
+  endsAt             DateTime?
+  livestreamEnabled  Boolean                @default(false)
+  videoUrl           String?
+  bulletinUrl        String?
+  featuredImageUrl   String?
+  eventId            String?                @unique
+  calendarEvent      MembershipEvent?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  clergy             WorshipServiceClergy[]
+  hymns              WorshipServiceHymn[]
+  lessons            WorshipServiceLesson[]
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([churchId, startsAt])
+  @@index([churchId, status, scheduledAt])
+}
+
+model WorshipServiceClergy {
+  serviceId String
+  clergyId  String
+  service   WorshipService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  clergy    ClergyProfile  @relation(fields: [clergyId], references: [id], onDelete: Restrict)
+  sortOrder Int            @default(0)
+
+  @@id([serviceId, clergyId])
+  @@index([clergyId])
+}
+
+model WorshipServiceHymn {
+  id          String         @id @default(cuid())
+  serviceId   String
+  service     WorshipService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  sortOrder   Int            @default(0)
+  number      String?
+  title       String
+  sourceUrl   String?
+
+  @@index([serviceId, sortOrder])
+}
+
+model WorshipServiceLesson {
+  id           String         @id @default(cuid())
+  serviceId    String
+  service      WorshipService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  sortOrder    Int            @default(0)
+  book         String
+  startChapter Int
+  startVerse   Int?
+  endChapter   Int?
+  endVerse     Int?
+  reference    String?
+
+  @@index([serviceId, sortOrder])
 }
 
 model GivingContributionBatch {
@@ -1213,6 +1286,7 @@ model MembershipEvent {
   attendanceAudienceId   String?
   visitorCount           Int                                  @default(0)
   timeZone               String?
+  worshipService         WorshipService?
   volunteerGroups        MembershipEventVolunteerGroup[]
   rotationAssignments    MembershipEventVolunteerAssignment[]
   createdById            String?

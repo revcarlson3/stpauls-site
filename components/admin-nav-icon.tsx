@@ -1,4 +1,4 @@
-type AdminNavIconName = "dashboard" | "pages" | "media" | "security" | "users" | "navigation" | "theme" | "settings" | "membership" | "events" | "accounting" | "giving" | "services" | "site";
+type AdminNavIconName = "dashboard" | "pages" | "media" | "security" | "users" | "navigation" | "theme" | "settings" | "membership" | "events" | "accounting" | "giving" | "services" | "site" | "billing" | "reports";
 
 const paths: Record<AdminNavIconName, string> = {
   dashboard: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
@@ -14,7 +14,9 @@ const paths: Record<AdminNavIconName, string> = {
   accounting: "M4 4h16v16H4zM8 16v-4M12 16V8M16 16v-6",
   giving: "M4 6h16v12H4zM8 10h3M8 14h8M16 10h1",
   services: "M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2V4zM5 4a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h14M8 8h7M8 12h7M8 16h5",
-  site: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"
+  site: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20",
+  billing: "M3 6h18v12H3zM3 10h18M7 15h3",
+  reports: "M5 3h14v18H5zM8 7h8M8 11h8M8 15h4M15 15h1"
 };
 
 export function AdminNavIcon({ name }: { name: AdminNavIconName }) {
