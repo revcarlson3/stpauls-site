@@ -257,6 +257,8 @@ model Church {
   membershipEvents                     MembershipEvent[]
   membershipEventSettings              MembershipEventSettings?
   worshipServices                      WorshipService[]
+  worshipHymnals                       WorshipHymnal[]
+  worshipServiceSettings               WorshipServiceSettings?
   membershipEventNotificationTemplates MembershipEventNotificationTemplate[]
   membershipFamilyRoles                MembershipFamilyRole[]
   membershipWorkflows                  MembershipWorkflow[]
@@ -1165,12 +1167,59 @@ model WorshipServiceHymn {
   id          String         @id @default(cuid())
   serviceId   String
   service     WorshipService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  hymnId      String?
+  hymn        WorshipHymn?   @relation(fields: [hymnId], references: [id], onDelete: SetNull)
+  custom      Boolean        @default(false)
   sortOrder   Int            @default(0)
   number      String?
   title       String
   sourceUrl   String?
 
   @@index([serviceId, sortOrder])
+  @@index([hymnId])
+}
+
+model WorshipServiceSettings {
+  id              Int            @id @default(autoincrement())
+  churchId        String         @unique
+  church          Church         @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  primaryHymnalId String? @unique
+  primaryHymnal   WorshipHymnal? @relation(fields: [primaryHymnalId], references: [id], onDelete: SetNull)
+  updatedAt       DateTime       @updatedAt
+}
+
+model WorshipHymnal {
+  id          String                  @id @default(cuid())
+  churchId    String
+  church      Church                  @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  code        String
+  name        String
+  sourceUrl   String
+  importedAt  DateTime                @default(now())
+  hymns       WorshipHymn[]
+  settings    WorshipServiceSettings?
+
+  @@unique([churchId, code])
+  @@index([churchId])
+}
+
+model WorshipHymn {
+  id            String              @id @default(cuid())
+  hymnalId      String
+  hymnal        WorshipHymnal       @relation(fields: [hymnalId], references: [id], onDelete: Cascade)
+  number        String?
+  title         String
+  firstLine     String?
+  tuneName      String?
+  tuneAuthors   String?
+  textAuthors   String?
+  copyrightInfo String?
+  sourceUrl     String
+  serviceHymns  WorshipServiceHymn[]
+
+  @@unique([hymnalId, number])
+  @@index([hymnalId, title])
+  @@index([hymnalId, tuneName])
 }
 
 model WorshipServiceLesson {

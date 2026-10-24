@@ -11,7 +11,7 @@ import { BIBLE_BOOKS, LSB_LITURGIES, formatLessonReference, safeVideoUrl, type W
 
 const include = {
   clergy: { orderBy: { sortOrder: "asc" as const }, include: { clergy: { select: { id: true, title: true, firstName: true, lastName: true } } } },
-  hymns: { orderBy: { sortOrder: "asc" as const } },
+  hymns: { orderBy: { sortOrder: "asc" as const }, include: { hymn: true } },
   lessons: { orderBy: { sortOrder: "asc" as const } },
   calendarEvent: { select: { id: true, eventType: true, category: true, location: true } },
 } as const;
@@ -61,11 +61,21 @@ function validateHymns(value: unknown): WorshipServiceHymnInput[] | null {
   for (const item of value) {
     if (!item || typeof item !== "object") return null;
     const raw = item as Record<string, unknown>;
+    const hymnId = text(raw.hymnId, 80);
+    const custom = raw.custom === true || !hymnId;
     const title = text(raw.title, 200);
-    if (!title) return null;
-    const sourceUrl = raw.sourceUrl == null || raw.sourceUrl === "" ? null : safeVideoUrl(raw.sourceUrl);
-    if (raw.sourceUrl != null && raw.sourceUrl !== "" && sourceUrl === undefined) return null;
-    hymns.push({ number: text(raw.number, 30) || undefined, title, sourceUrl: sourceUrl ?? undefined });
+    if (custom && !title) return null;
+    let sourceUrl: string | undefined;
+    if (raw.sourceUrl != null && raw.sourceUrl !== "") {
+      try {
+        const parsed = new URL(String(raw.sourceUrl));
+        if (!["http:", "https:"].includes(parsed.protocol)) return null;
+        sourceUrl = parsed.toString();
+      } catch {
+        return null;
+      }
+    }
+    hymns.push({ hymnId: hymnId || undefined, custom, number: text(raw.number, 30) || undefined, title: title || undefined, sourceUrl });
   }
   return hymns;
 }
@@ -109,6 +119,20 @@ export async function POST(request: Request) {
       if (!user.permissions.includes("MANAGE_EVENTS")) return NextResponse.json({ error: "Event management permission is required to add a service to the calendar." }, { status: 403 });
       await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
     }
+    const hymnalSettings = await db.worshipServiceSettings.findUnique({ where: { churchId: scope.church.id }, select: { primaryHymnalId: true } });
+    const selectedHymnIds = hymns.filter((hymn) => hymn.hymnId).map((hymn) => hymn.hymnId as string);
+    const savedHymns = selectedHymnIds.length && hymnalSettings?.primaryHymnalId
+      ? await db.worshipHymn.findMany({ where: { id: { in: selectedHymnIds }, hymnalId: hymnalSettings.primaryHymnalId } })
+      : [];
+    if (selectedHymnIds.length !== savedHymns.length) return NextResponse.json({ error: "One or more selected hymns are not in the primary hymnal." }, { status: 400 });
+    const savedHymnById = new Map(savedHymns.map((hymn) => [hymn.id, hymn]));
+    const normalizedHymns = hymns.map((hymn) => {
+      if (hymn.hymnId) {
+        const saved = savedHymnById.get(hymn.hymnId);
+        return { hymnId: hymn.hymnId, custom: false, number: saved?.number, title: saved?.title ?? "", sourceUrl: saved?.sourceUrl };
+      }
+      return { hymnId: null, custom: true, number: hymn.number, title: hymn.title ?? "", sourceUrl: hymn.sourceUrl };
+    });
     const settings = await db.membershipEventSettings.findUnique({ where: { churchId: scope.church.id }, select: { eventTypes: true, categories: true, locations: true, timeZone: true } });
     const eventTypes = Array.isArray(settings?.eventTypes) && settings.eventTypes.length ? settings.eventTypes.filter((item): item is string => typeof item === "string") : DEFAULT_EVENT_TYPES;
     const eventType = resolveEventType(payload.eventType, eventTypes);
@@ -153,7 +177,7 @@ export async function POST(request: Request) {
           featuredImageUrl: assetUrls.featuredImageUrl,
           eventId,
           clergy: { create: clergyIds.map((clergyId, sortOrder) => ({ clergyId, sortOrder })) },
-          hymns: { create: hymns.map((hymn, sortOrder) => ({ ...hymn, sortOrder })) },
+          hymns: { create: normalizedHymns.map((hymn, sortOrder) => ({ ...hymn, sortOrder })) },
           lessons: { create: lessons.map((lesson, sortOrder) => ({ ...lesson, sortOrder })) },
         },
         include,

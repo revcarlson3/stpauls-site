@@ -4,6 +4,22 @@ export const LSB_LITURGIES = [
   "Divine Service, Setting Three",
   "Divine Service, Setting Four",
   "Divine Service, Setting Five",
+  "Matins",
+  "Vespers",
+  "Morning Prayer",
+  "Evening Prayer",
+  "Compline",
+  "Service of Prayer and Preaching",
+  "Holy Baptism",
+  "Confirmation",
+  "Holy Matrimony",
+  "Funeral Service",
+  "Responsive Prayer I",
+  "Responsive Prayer II",
+  "The Litany",
+  "Corporate Confession and Absolution",
+  "Individual Confession and Absolution",
+  "Daily Prayer for Individuals and Families",
 ] as const;
 
 export const BIBLE_BOOKS = [
@@ -18,7 +34,7 @@ export const BIBLE_BOOKS = [
   "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Revelation",
 ] as const;
 
-export type WorshipServiceHymnInput = { number?: string; title: string; sourceUrl?: string };
+export type WorshipServiceHymnInput = { hymnId?: string; custom?: boolean; number?: string; title?: string; sourceUrl?: string };
 export type WorshipServiceLessonInput = {
   book: string;
   startChapter: number;
