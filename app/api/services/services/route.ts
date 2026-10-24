@@ -147,7 +147,21 @@ export async function POST(request: Request) {
     const lessons = validateLessons(payload.lessons);
     const pericopes = payload.pericopes == null ? null : validatePericopes(payload.pericopes);
     const videoUrl = safeVideoUrl(payload.videoUrl);
-    if (!title || Number.isNaN(startsAt.getTime()) || (endsAt && (Number.isNaN(endsAt.getTime()) || endsAt < startsAt)) || (scheduledAt && Number.isNaN(scheduledAt.getTime())) || (liturgy && !LSB_LITURGIES.includes(liturgy as typeof LSB_LITURGIES[number])) || !hymns || !lessons || (payload.pericopes != null && !pericopes) || (payload.videoUrl && videoUrl === undefined)) return NextResponse.json({ error: "Enter valid worship service details." }, { status: 400 });
+    const validationErrors = [
+      !title ? "Service name is required." : null,
+      Number.isNaN(startsAt.getTime()) ? "Enter a valid start date and time." : null,
+      endsAt && Number.isNaN(endsAt.getTime()) ? "Enter a valid end date and time." : null,
+      endsAt && !Number.isNaN(endsAt.getTime()) && endsAt < startsAt ? "The end time must be after the start time." : null,
+      scheduledAt && Number.isNaN(scheduledAt.getTime()) ? "Enter a valid visibility date and time." : null,
+      liturgy && !LSB_LITURGIES.includes(liturgy as typeof LSB_LITURGIES[number]) ? "Choose a valid liturgy." : null,
+      !hymns ? "Check the hymn entries; custom hymns need a title and saved hymns must be valid." : null,
+      !lessons ? "Check the manual pericope entries; each entry needs a valid Bible book and chapter." : null,
+      payload.pericopes != null && !pericopes ? "The selected church-year pericope is invalid; choose it again or clear the selection." : null,
+      payload.videoUrl && videoUrl === undefined ? "Enter a valid video link beginning with http:// or https://." : null,
+    ].filter((error): error is string => Boolean(error));
+    if (validationErrors.length) return NextResponse.json({ error: validationErrors.join(" ") }, { status: 400 });
+    const validHymns = hymns ?? [];
+    const validLessons = lessons ?? [];
     const clergy = clergyIds.length ? await db.clergyProfile.findMany({ where: { churchId: scope.church.id, id: { in: clergyIds }, status: "ACTIVE" }, select: { id: true } }) : [];
     if (clergy.length !== clergyIds.length) return NextResponse.json({ error: "One or more selected clergy profiles are unavailable." }, { status: 400 });
     const addToCalendar = payload.addToCalendar === true;
@@ -157,7 +171,7 @@ export async function POST(request: Request) {
       await requireEnabledModule("events", user.id, "MANAGE_EVENTS");
     }
     const hymnalSettings = await db.worshipServiceSettings.findUnique({ where: { churchId: scope.church.id }, select: { primaryHymnalId: true } });
-    const selectedHymnIds = hymns.filter((hymn) => hymn.hymnId).map((hymn) => hymn.hymnId as string);
+    const selectedHymnIds = validHymns.filter((hymn) => hymn.hymnId).map((hymn) => hymn.hymnId as string);
     const savedHymns = selectedHymnIds.length && hymnalSettings?.primaryHymnalId
       ? await db.worshipHymn.findMany({ where: { id: { in: selectedHymnIds }, hymnalId: hymnalSettings.primaryHymnalId } })
       : [];
@@ -172,7 +186,7 @@ export async function POST(request: Request) {
         console.warn(`Unable to enrich hymn ${hymn.id} with Hymnary public-domain content.`, error);
       }
     }));
-    const normalizedHymns = hymns.map((hymn) => {
+    const normalizedHymns = validHymns.map((hymn) => {
       if (hymn.hymnId) {
         const saved = savedHymnById.get(hymn.hymnId);
         return { hymnId: hymn.hymnId, custom: false, number: saved?.number, title: saved?.title ?? "", sourceUrl: saved?.sourceUrl };
@@ -229,7 +243,7 @@ export async function POST(request: Request) {
           eventId,
           clergy: { create: clergyIds.map((clergyId, sortOrder) => ({ clergyId, sortOrder })) },
           hymns: { create: normalizedHymns.map((hymn, sortOrder) => ({ ...hymn, sortOrder })) },
-          lessons: { create: lessons.map((lesson, sortOrder) => ({ ...lesson, sortOrder })) },
+          lessons: { create: validLessons.map((lesson, sortOrder) => ({ ...lesson, sortOrder })) },
         },
         include,
       });

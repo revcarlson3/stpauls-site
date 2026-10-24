@@ -64,6 +64,10 @@ describe("worship services", () => {
     expect(serviceApi).toContain("selectedHymnIds");
     expect(serviceApi).toContain("not in the primary hymnal");
     expect(serviceApi).toContain("custom: true");
+    expect(serviceApi).toContain("Service name is required.");
+    expect(serviceApi).toContain("The selected church-year pericope is invalid");
+    expect(serviceApi).toContain("Check the manual pericope entries");
+    expect(page).toContain('role="alert"');
     expect(hymnalApi).toContain("worshipHymnal.deleteMany");
     expect(hymnalApi).toContain("worshipServiceSettings.upsert");
     expect(settingsPage).toContain("Import hymnal");
