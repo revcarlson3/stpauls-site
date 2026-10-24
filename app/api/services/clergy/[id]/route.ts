@@ -67,10 +67,15 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     const user = await requirePermission("MANAGE_SERVICES");
     await requireEnabledModule("services", user.id, "MANAGE_SERVICES");
     if (!user.churchId) return NextResponse.json({ error: "A church membership is required." }, { status: 400 });
-    const profile = await db.clergyProfile.findFirst({ where: { id: params.id, churchId: user.churchId }, select: { id: true } });
+    const profile = await db.clergyProfile.findFirst({ where: { id: params.id, churchId: user.churchId }, select: { id: true, status: true, photographUrl: true } });
     if (!profile) return NextResponse.json({ error: "Clergy profile not found." }, { status: 404 });
+    if (profile.status === "INACTIVE") {
+      await removeClergyPhoto(profile.photographUrl);
+      await db.clergyProfile.delete({ where: { id: profile.id } });
+      return NextResponse.json({ deleted: true });
+    }
     const updated = await db.clergyProfile.update({ where: { id: profile.id }, data: { status: "INACTIVE" } });
-    return NextResponse.json(updated);
+    return NextResponse.json({ ...updated, deactivated: true });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to inactivate clergy profile." }, { status: 400 });
   }

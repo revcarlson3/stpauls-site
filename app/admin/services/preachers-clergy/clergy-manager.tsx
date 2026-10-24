@@ -90,7 +90,7 @@ function ProfileDetails({ profile, onSave, onInactivate, onEdit, onCancelEdit, e
           <div><h3 className="font-serif text-2xl">{profile.title} {firstName} {lastName}</h3><p className="mt-1 text-sm text-ink/60">{email || "No email"}{phone ? ` · ${phone}` : ""}</p></div>
           <div className="flex gap-2">
             <button type="button" onClick={() => onEdit(profile)} className="focus-ring rounded-full border border-ink/20 px-4 py-2 text-sm font-semibold">Edit</button>
-            {profile.status === "ACTIVE" && <button type="button" onClick={() => onInactivate(profile)} className="focus-ring rounded-full border border-red-300 px-4 py-2 text-sm font-semibold text-red-700">Delete</button>}
+            <button type="button" onClick={() => onInactivate(profile)} className="focus-ring rounded-full border border-red-300 px-4 py-2 text-sm font-semibold text-red-700">{profile.status === "ACTIVE" ? "Deactivate" : "Delete"}</button>
           </div>
         </div>
         <div className="rich-text-content mt-5 leading-7">{profile.biography ? <div dangerouslySetInnerHTML={{ __html: sanitizeClergyBiographyHtml(profile.biography) }} /> : <p className="text-sm text-ink/55">No biography has been added.</p>}</div>
@@ -164,12 +164,13 @@ export function ClergyManager() {
   }
 
   async function inactivate(profile: Profile) {
-    if (!window.confirm("Inactivate this clergy profile?")) return;
+    const action = profile.status === "ACTIVE" ? "deactivate" : "permanently delete";
+    if (!window.confirm(`Are you sure you want to ${action} this clergy profile?`)) return;
     const response = await fetch(`/api/services/clergy/${profile.id}`, { method: "DELETE" });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) { setMessage(body.error ?? "Unable to inactivate clergy profile."); return; }
     setExpandedId(null);
-    setMessage("Clergy profile inactivated.");
+    setMessage(profile.status === "ACTIVE" ? "Clergy profile deactivated." : "Clergy profile deleted.");
     await loadProfiles();
   }
 

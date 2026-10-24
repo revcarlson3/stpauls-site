@@ -86,4 +86,20 @@ describe("services clergy foundation", () => {
     expect(migration).toContain('canonical."churchId" = duplicate."churchId"');
     expect(migration).toContain('lower(trim(coalesce(canonical."email", \'\'))) = lower(trim(coalesce(duplicate."email", \'\')))');
   });
+
+  it("supports deactivation followed by permanent deletion", () => {
+    const route = read("app/api/services/clergy/[id]/route.ts");
+    const page = read("app/admin/services/preachers-clergy/clergy-manager.tsx");
+    expect(route).toContain('if (profile.status === "INACTIVE")');
+    expect(route).toContain("removeClergyPhoto(profile.photographUrl)");
+    expect(route).toContain("db.clergyProfile.delete");
+    expect(page).toContain('profile.status === "ACTIVE" ? "Deactivate" : "Delete"');
+  });
+
+  it("removes the specifically requested inactive duplicate during deployment", () => {
+    const migration = read("prisma/migrations/20261024083000_remove_alan_marxhausen_inactive_profile/migration.sql");
+    expect(migration).toContain("'alan'");
+    expect(migration).toContain("'marxhausen'");
+    expect(migration).toContain("'INACTIVE'");
+  });
 });
