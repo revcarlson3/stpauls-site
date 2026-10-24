@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { requireEnabledModule } from "@/lib/modules";
 import { requireTenantScope } from "@/lib/tenant";
+import { fetchPublicHymnContent } from "@/lib/hymnary";
 
 const RIGHTS = new Set(["UNKNOWN", "PUBLIC_DOMAIN", "COPYRIGHTED"]);
 
@@ -18,6 +19,22 @@ function url(input: unknown) {
     return ["http:", "https:"].includes(parsed.protocol) ? parsed.toString() : null;
   } catch {
     return null;
+  }
+}
+
+export async function POST(_request: Request, { params }: { params: { id: string } }) {
+  try {
+    const user = await requirePermission("MANAGE_SERVICES");
+    await requireEnabledModule("services", user.id, "MANAGE_SERVICES");
+    const scope = await requireTenantScope();
+    const hymn = await db.worshipHymn.findFirst({ where: { id: params.id, hymnal: { churchId: scope.church.id } } });
+    if (!hymn) return NextResponse.json({ error: "Hymn not found." }, { status: 404 });
+    const content = await fetchPublicHymnContent(hymn.sourceUrl);
+    if (!content) return NextResponse.json({ hymn, populated: false });
+    const updated = await db.worshipHymn.update({ where: { id: hymn.id }, data: content });
+    return NextResponse.json({ hymn: updated, populated: true });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load public-domain hymn content." }, { status: 502 });
   }
 }
 

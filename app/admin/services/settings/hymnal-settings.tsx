@@ -52,6 +52,21 @@ export function HymnalSettings() {
     setMessage("Hymn rights and public-domain content saved.");
   }
 
+  async function selectHymn(hymn: Hymn) {
+    setHymnResults([]);
+    setEditing(hymn);
+    setMessage("Checking Hymnary for verified public-domain content...");
+    const response = await fetch(`/api/services/hymns/${hymn.id}`, { method: "POST" });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage(body.error ?? "Unable to check Hymnary content.");
+      return;
+    }
+    setEditing(body.hymn);
+    setHymnResults((current) => current.map((item) => item.id === body.hymn.id ? body.hymn : item));
+    setMessage(body.populated ? "Verified public-domain content loaded from Hymnary." : "Hymnary did not identify reusable public-domain content for this hymn.");
+  }
+
   async function save() {
     const hymnal = hymnals.find((item) => item.code === selected);
     if (!hymnal) return;
@@ -87,7 +102,7 @@ export function HymnalSettings() {
       <h3 className="font-serif text-xl">Public-domain hymn content</h3>
       <p className="mt-2 max-w-2xl text-sm text-ink/60">Search an imported hymn to record separate rights decisions. Content is shown publicly only when its rights are explicitly marked public domain. Do not paste copyrighted lyrics or upload copyrighted scans.</p>
       <input value={hymnQuery} onChange={(event) => void searchHymns(event.target.value)} className="focus-ring mt-4 w-full rounded-lg border border-ink/15 px-3 py-2" placeholder="Search by hymn number or title" />
-      {hymnResults.length > 0 && <div className="mt-2 grid gap-1 rounded-lg bg-mist p-2 text-sm">{hymnResults.map((hymn) => <button type="button" key={hymn.id} onClick={() => { setEditing(hymn); setHymnResults([]); }} className="rounded px-2 py-2 text-left hover:bg-white">{hymn.number ? `${hymn.number} — ` : ""}{hymn.title}{hymn.tuneName ? ` · ${hymn.tuneName}` : ""}</button>)}</div>}
+      {hymnResults.length > 0 && <div className="mt-2 grid gap-1 rounded-lg bg-mist p-2 text-sm">{hymnResults.map((hymn) => <button type="button" key={hymn.id} onClick={() => void selectHymn(hymn)} className="rounded px-2 py-2 text-left hover:bg-white">{hymn.number ? `${hymn.number} — ` : ""}{hymn.title}{hymn.tuneName ? ` · ${hymn.tuneName}` : ""}</button>)}</div>}
       {editing && <form onSubmit={saveRights} className="mt-4 grid gap-3 rounded-xl border border-ink/10 p-4">
         <p className="font-semibold">{editing.number ? `${editing.number} — ` : ""}{editing.title}</p>
         <div className="grid gap-3 md:grid-cols-3">{(["lyricsRights", "musicRights", "arrangementRights"] as const).map((field) => <label key={field} className="grid gap-1 text-sm font-semibold">{field === "lyricsRights" ? "Lyrics rights" : field === "musicRights" ? "Music rights" : "Arrangement rights"}<select name={field} defaultValue={editing[field]} className="focus-ring rounded-lg border border-ink/15 px-3 py-2"><option value="UNKNOWN">Unknown</option><option value="PUBLIC_DOMAIN">Public domain</option><option value="COPYRIGHTED">Copyrighted</option></select></label>)}</div>

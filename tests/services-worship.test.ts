@@ -79,6 +79,8 @@ describe("worship services", () => {
     expect(publicPage).toContain('hymn.lyricsRights === "PUBLIC_DOMAIN"');
     expect(publicPage).toContain('hymn.arrangementRights === "PUBLIC_DOMAIN"');
     expect(publicPage).toContain("Words and music are not available for public display.");
+    expect(rightsRoute).toContain("fetchPublicHymnContent");
+    expect(settingsPage).toContain("Checking Hymnary for verified public-domain content");
   });
 
   it("hydrates only Hymnary resources explicitly marked public domain", async () => {
