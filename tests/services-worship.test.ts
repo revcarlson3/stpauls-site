@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { BIBLE_BOOKS, LSB_LITURGIES } from "@/lib/worship-service";
-import { parseHymnalHymns, parseHymnalList } from "@/lib/hymnary";
+import { parseHymnalCsv, parseHymnalHymns, parseHymnalList } from "@/lib/hymnary";
 
 const root = path.resolve(process.cwd());
 const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
@@ -63,5 +63,6 @@ describe("worship services", () => {
     const hymnHtml = '<tr><td><a href="/hymn/LSB2006/151">151</a></td><td><a href="/hymn/LSB2006/151">A Mighty Fortress</a></td><td><a href="/tune/EIN_FESTE_BURG">EIN FESTE BURG</a></td></tr>';
     expect(parseHymnalList(hymnalHtml)[0]).toMatchObject({ code: "LSB2006", name: "Lutheran Service Book" });
     expect(parseHymnalHymns(hymnHtml, "LSB2006")[0]).toMatchObject({ number: "151", title: "A Mighty Fortress", tuneName: "EIN FESTE BURG", copyrightInfo: null });
+    expect(parseHymnalCsv('number,title,first line,tune\n151,"A Mighty Fortress","A mighty fortress is our God","EIN FESTE BURG"', "LSB2006")[0]).toMatchObject({ number: "151", title: "A Mighty Fortress", firstLine: "A mighty fortress is our God", tuneName: "EIN FESTE BURG" });
   });
 });

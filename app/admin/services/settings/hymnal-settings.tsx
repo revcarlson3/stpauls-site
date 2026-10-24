@@ -23,7 +23,7 @@ export function HymnalSettings() {
 
   async function save() {
     const hymnal = hymnals.find((item) => item.code === selected);
-    if (!hymnal || hymnal.code === primary?.code) return;
+    if (!hymnal) return;
     const oldName = primary?.name ? ` This will remove the currently imported ${primary.name} catalog.` : "";
     if (!window.confirm(`Import ${hymnal.name} into the Services database?${oldName}`)) return;
     setSaving(true);
@@ -48,7 +48,7 @@ export function HymnalSettings() {
         <option value="">Select a hymnal</option>
         {hymnals.map((hymnal) => <option key={hymnal.code} value={hymnal.code}>{hymnal.name}</option>)}
       </select>
-      <button type="button" disabled={!selected || selected === primary?.code || saving} onClick={() => void save()} className="focus-ring rounded-full bg-coral px-5 py-2 font-semibold text-white disabled:opacity-50">{saving ? "Importing..." : "Import hymnal"}</button>
+      <button type="button" disabled={!selected || saving} onClick={() => void save()} className="focus-ring rounded-full bg-coral px-5 py-2 font-semibold text-white disabled:opacity-50">{saving ? "Importing..." : selected === primary?.code ? "Re-import hymnal" : "Import hymnal"}</button>
     </div>
     {primary && <p className="mt-4 text-sm text-ink/60">Current catalog: <strong>{primary.name}</strong> · {primary._count.hymns} hymns imported.</p>}
     {message && <p className="mt-4 text-sm font-semibold text-coral">{message}</p>}
