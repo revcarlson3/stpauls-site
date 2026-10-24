@@ -1188,6 +1188,7 @@ model WorshipServiceSettings {
   primaryHymnal   WorshipHymnal? @relation(fields: [primaryHymnalId], references: [id], onDelete: SetNull)
   lectionaryEnabled Boolean @default(false)
   lectionaryType String @default("THREE_YEAR")
+  streamingDestinations Json?
   updatedAt       DateTime       @updatedAt
 }
 

@@ -77,6 +77,14 @@ describe("worship services", () => {
     expect(settingsPage).toContain("Enable lectionary");
     expect(serviceApi).toContain("validatePericopes");
     expect(settingsApi).toContain("lectionaryEnabled");
+    expect(settingsApi).toContain("streamingDestinations");
+    expect(schema).toContain("streamingDestinations");
+    expect(read("app/admin/services/streaming/streaming-settings.tsx")).toContain("YouTube Live");
+    expect(read("app/admin/services/streaming/streaming-settings.tsx")).toContain("Facebook Live");
+    expect(read("app/admin/services/streaming/streaming-settings.tsx")).toContain("Vimeo");
+    expect(read("app/admin/services/streaming/streaming-settings.tsx")).toContain("Twitch");
+    expect(read("app/admin/services/streaming/streaming-settings.tsx")).toContain("LinkedIn Live");
+    expect(read("app/admin/services/streaming/streaming-settings.tsx")).toContain("Restream");
     expect(lectionaryApi).toContain("lectionary.collver.biz/api/calendar");
     expect(lectionaryApi).toContain("lectionary.collver.biz/api/day");
     expect(lectionaryApi).toContain("[10, 31]");
