@@ -30,6 +30,14 @@ CREATE TABLE "WorshipHymn" (
   "textAuthors" TEXT,
   "copyrightInfo" TEXT,
   "sourceUrl" TEXT NOT NULL,
+  "lyricsRights" TEXT NOT NULL DEFAULT 'UNKNOWN',
+  "musicRights" TEXT NOT NULL DEFAULT 'UNKNOWN',
+  "arrangementRights" TEXT NOT NULL DEFAULT 'UNKNOWN',
+  "lyricsText" TEXT,
+  "musicImageUrl" TEXT,
+  "musicUrl" TEXT,
+  "rightsSourceUrl" TEXT,
+  "rightsNotes" TEXT,
   CONSTRAINT "WorshipHymn_pkey" PRIMARY KEY ("id")
 );
 

@@ -1215,6 +1215,14 @@ model WorshipHymn {
   textAuthors   String?
   copyrightInfo String?
   sourceUrl     String
+  lyricsRights  String              @default("UNKNOWN")
+  musicRights   String              @default("UNKNOWN")
+  arrangementRights String           @default("UNKNOWN")
+  lyricsText    String?
+  musicImageUrl String?
+  musicUrl      String?
+  rightsSourceUrl String?
+  rightsNotes   String?
   serviceHymns  WorshipServiceHymn[]
 
   @@unique([hymnalId, number])

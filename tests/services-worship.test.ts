@@ -63,6 +63,24 @@ describe("worship services", () => {
     expect(importer).toContain("No partial 100-hymn import");
   });
 
+  it("gates public hymn words and music behind explicit rights", () => {
+    const schema = read("prisma/schema.prisma");
+    const rightsRoute = read("app/api/services/hymns/[id]/route.ts");
+    const settingsPage = read("app/admin/services/settings/hymnal-settings.tsx");
+    const publicPage = read("app/(public)/services/page.tsx");
+    expect(schema).toContain('lyricsRights  String              @default("UNKNOWN")');
+    expect(schema).toContain('musicRights   String              @default("UNKNOWN")');
+    expect(schema).toContain("arrangementRights");
+    expect(schema).toContain("lyricsText");
+    expect(schema).toContain("musicImageUrl");
+    expect(rightsRoute).toContain('requirePermission("MANAGE_SERVICES")');
+    expect(rightsRoute).toContain("PUBLIC_DOMAIN");
+    expect(settingsPage).toContain("Public-domain hymn content");
+    expect(publicPage).toContain('hymn.lyricsRights === "PUBLIC_DOMAIN"');
+    expect(publicPage).toContain('hymn.arrangementRights === "PUBLIC_DOMAIN"');
+    expect(publicPage).toContain("Words and music are not available for public display.");
+  });
+
   it("parses hymnal and hymn metadata without importing copyrighted content", () => {
     const hymnalHtml = '<a href="/hymnal/LSB2006">Lutheran Service Book</a>';
     const hymnHtml = '<tr><td><a href="/hymn/LSB2006/151">151</a></td><td><a href="/hymn/LSB2006/151">A Mighty Fortress</a></td><td><a href="/tune/EIN_FESTE_BURG">EIN FESTE BURG</a></td></tr>';
