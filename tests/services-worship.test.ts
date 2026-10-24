@@ -68,6 +68,8 @@ describe("worship services", () => {
     expect(serviceApi).toContain("The selected church-year pericope is invalid");
     expect(serviceApi).toContain("Check the manual pericope entries");
     expect(page).toContain('role="alert"');
+    expect(page).toContain('role="progressbar"');
+    expect(page).toContain("xhr.upload");
     expect(hymnalApi).toContain("worshipHymnal.deleteMany");
     expect(hymnalApi).toContain("worshipServiceSettings.upsert");
     expect(settingsPage).toContain("Import hymnal");
@@ -81,6 +83,7 @@ describe("worship services", () => {
     expect(lectionaryApi).toContain("[11, 1]");
     expect(lectionaryApi).toContain("readings_parsed");
     expect(lectionaryApi).toContain("const identity = `${event.date}:${event.key}`");
+    expect(lectionaryApi).toContain("lectionaryType");
     expect(lectionaryApi).toContain("Common Service Book");
     expect(lectionaryApi).toContain('typeof event.date === "string"');
     expect(schema).toContain("pericopes");
@@ -123,6 +126,9 @@ describe("worship services", () => {
       name: "Reformation Day",
       date: "2026-10-31",
       source: "Common Service Book of the Lutheran Church (Philadelphia, 1917)",
+      introit: { name: "Dominus Fortitudo Plebis", ref: "Psalm 46:7, 4; Psalm 46:1", text: "The Lord of Hosts is with us." },
+      gradual: "Great is the Lord.",
+      collect: "O Lord God, Heavenly Father.",
       readings_parsed: [
         { label: "First Reading", ref: "Revelation 14:6-7" },
         { label: "Psalm", ref: "Psalm 46" },
@@ -149,6 +155,8 @@ describe("worship services", () => {
     expect(sameDate.map((event) => event.key)).toEqual(expect.arrayContaining(["ordinary-22-pentecost", "reformation"]));
     expect(body.events.find((event) => event.key === "all_saints")).toMatchObject({ name: "All Saints' Day", date: "2025-11-01" });
     expect(body.events.find((event) => event.key === "reformation")?.readings.gospel).toBe("John 8:31-36");
+    expect(body.events.find((event) => event.key === "reformation")).toMatchObject({ lectionary: "THREE_YEAR" });
+    expect(body.events.find((event) => event.key === "reformation")).toMatchObject({ gradual: "Great is the Lord.", collect: "O Lord God, Heavenly Father." });
   });
 
   it("hydrates only Hymnary resources explicitly marked public domain", async () => {

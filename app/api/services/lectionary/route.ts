@@ -10,8 +10,14 @@ const FIXED_FESTIVALS = [
   [7, 22], [7, 25], [8, 24], [9, 14], [9, 29], [10, 23], [10, 28], [10, 31],
   [11, 1], [11, 30], [12, 21], [12, 26], [12, 27], [12, 28],
 ] as const;
+const PUBLIC_DOMAIN_FESTIVAL_KEYS = new Set([
+  "presentation", "joseph", "annunciation", "philip_james", "barnabas", "visitation",
+  "nativity_john", "nativity_of_john", "peter_paul", "ss_peter_paul", "mary_magdalene", "st_mary_magdalene", "james", "st_james", "bartholomew", "holy_cross",
+  "michael", "st_michael", "james_jerusalem", "st_james_jerusalem", "simon_jude", "ss_simon_jude", "reformation", "all_saints", "andrew", "st_andrew",
+  "thomas", "stephen", "john_apostle", "holy_innocents",
+]);
 
-function normalizeEvent(event: Record<string, unknown>) {
+function normalizeEvent(event: Record<string, unknown>, lectionary: "ONE_YEAR" | "THREE_YEAR") {
   const source = typeof event.source === "string" ? event.source : null;
   const reusablePropers = source?.includes("Common Service Book") && source.includes("1917");
   const readings = event.readings && typeof event.readings === "object" ? event.readings as Record<string, unknown> : {};
@@ -28,6 +34,7 @@ function normalizeEvent(event: Record<string, unknown>) {
     }
   }
   return {
+    lectionary,
     key: typeof event.slot === "string" ? event.slot : "",
     name: typeof event.name === "string" ? event.name : "",
     date: typeof event.date === "string" ? event.date : null,
@@ -57,12 +64,13 @@ export async function GET(request: Request) {
     await requireTenantScope();
     const url = new URL(request.url);
     const lectionary = url.searchParams.get("lectionary") === "ONE_YEAR" ? "one_year" : "three_year";
+    const lectionaryType = lectionary === "one_year" ? "ONE_YEAR" : "THREE_YEAR";
     const year = Number(url.searchParams.get("year") ?? new Date().getFullYear());
     if (!Number.isInteger(year) || year < 1900 || year > 2300) return NextResponse.json({ error: "Choose a valid church year." }, { status: 400 });
     const response = await fetch(`${SOURCE}/${year}?lectionary=${lectionary}`, { headers: { Accept: "application/json" }, cache: "no-store" });
     if (!response.ok) return NextResponse.json({ error: "The lectionary source is temporarily unavailable." }, { status: 502 });
     const body = await response.json() as { church_year?: string; events?: Array<Record<string, unknown>> };
-    const calendarEvents = Array.isArray(body.events) ? body.events.filter((event) => typeof event.date === "string" && typeof event.name === "string").map(normalizeEvent) : [];
+    const calendarEvents = Array.isArray(body.events) ? body.events.filter((event) => typeof event.date === "string" && typeof event.name === "string").map((event) => normalizeEvent(event, lectionaryType)) : [];
     const festivalDates = FIXED_FESTIVALS.map(([month, day]) => {
       const festivalYear = month >= 11 ? year : year + 1;
       return `${festivalYear}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -72,13 +80,13 @@ export async function GET(request: Request) {
         const response = await fetch(`${DAY_SOURCE}/${date}?lectionary=${lectionary}`, { headers: { Accept: "application/json" }, cache: "no-store" });
         if (!response.ok) return null;
         const event = await response.json() as Record<string, unknown>;
-        return typeof event.name === "string" && typeof event.slot === "string" ? normalizeEvent(event) : null;
+        return typeof event.name === "string" && typeof event.slot === "string" ? normalizeEvent(event, lectionaryType) : null;
       } catch {
         return null;
       }
     }));
     const seen = new Set<string>();
-    const events = [...calendarEvents, ...festivalResponses.filter((event): event is NonNullable<typeof event> => Boolean(event))]
+    const mergedEvents = [...calendarEvents, ...festivalResponses.filter((event): event is NonNullable<typeof event> => Boolean(event))]
       .filter((event) => {
         const identity = `${event.date}:${event.key}`;
         if (seen.has(identity)) return false;
@@ -86,6 +94,19 @@ export async function GET(request: Request) {
         return true;
       })
       .sort((left, right) => `${left.date}:${left.name}`.localeCompare(`${right.date}:${right.name}`));
+    const events = await Promise.all(mergedEvents.map(async (event) => {
+      if (lectionaryType === "ONE_YEAR" || !event.date || !PUBLIC_DOMAIN_FESTIVAL_KEYS.has(event.key) || event.introit || event.gradual || event.verse || event.collect) return event;
+      try {
+        const response = await fetch(`${DAY_SOURCE}/${event.date}?lectionary=one_year`, { headers: { Accept: "application/json" }, cache: "no-store" });
+        if (!response.ok) return event;
+        const properEvent = await response.json() as Record<string, unknown>;
+        const proper = typeof properEvent.name === "string" && typeof properEvent.slot === "string" ? normalizeEvent(properEvent, "ONE_YEAR") : null;
+        if (!proper?.source?.includes("Common Service Book") || !proper.source.includes("1917")) return event;
+        return { ...event, introit: proper.introit, gradual: proper.gradual, verse: proper.verse, collect: proper.collect, source: proper.source };
+      } catch {
+        return event;
+      }
+    }));
     return NextResponse.json({ churchYear: body.church_year ?? null, events });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load the lectionary." }, { status: 400 });

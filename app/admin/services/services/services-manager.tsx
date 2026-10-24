@@ -34,6 +34,7 @@ export function ServicesManager() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [hymnQuery, setHymnQuery] = useState("");
   const [hymnResults, setHymnResults] = useState<Hymn[]>([]);
   const [form, setForm] = useState<ServiceForm>(() => ({ title: "", description: "", liturgy: LSB_LITURGIES[0], startsAt: localDateTime(new Date()), endsAt: "", scheduledAt: "", status: "DRAFT", livestreamEnabled: false, videoUrl: "", addToCalendar: true, eventType: "Worship", category: "", location: "" }));
@@ -103,11 +104,32 @@ export function ServicesManager() {
     setMessage("");
     const data = new FormData(event.currentTarget);
     data.set("payload", JSON.stringify({ ...form, clergyIds: selectedClergy, hymns, lessons, pericopes }));
-    const response = await fetch("/api/services/services", { method: "POST", body: data });
+    const response = await new Promise<Response>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/services/services");
+      xhr.upload.addEventListener("progress", (progressEvent) => {
+        if (progressEvent.lengthComputable) setUploadProgress(Math.round((progressEvent.loaded / progressEvent.total) * 100));
+      });
+      xhr.addEventListener("load", () => {
+        setUploadProgress(100);
+        resolve(new Response(xhr.responseText, { status: xhr.status, headers: { "Content-Type": xhr.getResponseHeader("Content-Type") ?? "application/json" } }));
+      });
+      xhr.addEventListener("error", () => reject(new Error("Unable to upload the worship service.")));
+      xhr.send(data);
+    }).catch((error: unknown) => {
+      setMessage(error instanceof Error ? error.message : "Unable to upload the worship service.");
+      return null;
+    });
+    if (!response) {
+      setSaving(false);
+      setUploadProgress(null);
+      return;
+    }
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
       setMessage(body.error ?? "Unable to save worship service.");
       setSaving(false);
+      setUploadProgress(null);
       return;
     }
     event.currentTarget.reset();
@@ -120,6 +142,7 @@ export function ServicesManager() {
     setServices((current) => [body.service, ...current]);
     setMessage("Worship service added.");
     setSaving(false);
+    setUploadProgress(null);
   }
 
   const clergyNames = useMemo(() => new Map(clergy.map((person) => [person.id, `${person.title} ${person.firstName ?? ""} ${person.lastName ?? ""}`.trim()])), [clergy]);
@@ -176,6 +199,10 @@ export function ServicesManager() {
 
         <fieldset className="grid gap-4 rounded-xl border border-ink/10 p-4"><legend className="px-1 text-sm font-semibold">Calendar and media</legend><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={form.addToCalendar} onChange={(event) => updateForm("addToCalendar", event.target.checked)} />Create an event on the shared Events calendar</label>{form.addToCalendar && <div className="grid gap-4 md:grid-cols-3"><label className="grid gap-1 text-sm font-semibold">Event Type<select value={form.eventType} onChange={(event) => updateForm("eventType", event.target.value)} className={inputClass}>{eventSettings.eventTypes.map((value) => <option key={value}>{value}</option>)}</select></label><label className="grid gap-1 text-sm font-semibold">Category<select value={form.category} onChange={(event) => updateForm("category", event.target.value)} className={inputClass}><option value="">None</option>{eventSettings.categories.map((value) => <option key={value}>{value}</option>)}</select></label><label className="grid gap-1 text-sm font-semibold">Location<select value={form.location} onChange={(event) => updateForm("location", event.target.value)} className={inputClass}><option value="">None</option>{eventSettings.locations.map((value) => <option key={value}>{value}</option>)}</select></label></div>}<div className="grid gap-4 md:grid-cols-2"><label className="grid gap-1 text-sm font-semibold">Bulletin (PDF)<input type="file" name="bulletin" accept="application/pdf" className={inputClass} /></label><label className="grid gap-1 text-sm font-semibold">Featured image<input type="file" name="featuredImage" accept="image/jpeg,image/png,image/webp" className={inputClass} /></label></div><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={form.livestreamEnabled} onChange={(event) => updateForm("livestreamEnabled", event.target.checked)} />Enable livestreaming for this service</label><label className="grid gap-1 text-sm font-semibold">Video link<input type="url" value={form.videoUrl} onChange={(event) => updateForm("videoUrl", event.target.value)} className={inputClass} placeholder="https://youtube.com/..." /></label></fieldset>
         <button disabled={saving} className="focus-ring w-fit rounded-full bg-coral px-5 py-3 font-semibold text-white disabled:opacity-50">{saving ? "Adding..." : "Add worship service"}</button>
+        {saving && <div className="grid max-w-md gap-1" role="progressbar" aria-label="Uploading worship service" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress ?? undefined}>
+          <div className="h-2 overflow-hidden rounded-full bg-ink/10"><div className={`h-full rounded-full bg-coral transition-[width] duration-200 ${uploadProgress === null ? "w-1/3 animate-pulse" : ""}`} style={uploadProgress === null ? undefined : { width: `${uploadProgress}%` }} /></div>
+          <span className="text-xs text-ink/60">{uploadProgress === null ? "Uploading worship service..." : `Uploading worship service: ${uploadProgress}%`}</span>
+        </div>}
       </form>
       {message && <p role="alert" className="mt-4 whitespace-pre-wrap text-sm font-semibold text-coral">{message}</p>}
     </section>
