@@ -68,15 +68,15 @@ function parseCsvLine(line: string) {
 export function parseHymnalCsv(csv: string, code: string) {
     const rows = csv.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
     if (rows.length < 2 || /<html/i.test(rows[0])) return [];
-    const headerIndex = rows.findIndex((line) => parseCsvLine(line).some((header) => ["title", "hymntitle", "hymn"].includes(header.toLowerCase().replace(/[^a-z0-9]/g, ""))));
+    const headerIndex = rows.findIndex((line) => parseCsvLine(line).some((header) => ["title", "hymntitle", "displaytitle", "texttitle", "hymn"].includes(header.toLowerCase().replace(/[^a-z0-9]/g, ""))));
     if (headerIndex < 0) return [];
     const headers = parseCsvLine(rows[headerIndex]).map((header) => header.toLowerCase().replace(/[^a-z0-9]/g, ""));
     const column = (...names: string[]) => names.map((name) => headers.indexOf(name)).find((index) => index >= 0) ?? -1;
     const numberColumn = column("number", "hymnnumber", "hymnalnumber", "no");
-    const titleColumn = column("title", "hymntitle", "hymn", "name");
+    const titleColumn = column("title", "hymntitle", "displaytitle", "texttitle", "hymn", "name");
     const firstLineColumn = column("firstline", "firstlineofthehymn");
-    const tuneColumn = column("tune", "tunename");
-    const tuneAuthorsColumn = column("tuneauthors", "tuneauthor");
+    const tuneColumn = column("tune", "tunename", "tunetitle");
+    const tuneAuthorsColumn = column("tuneauthors", "tuneauthor", "composers");
     const textAuthorsColumn = column("authors", "textauthors", "author");
     const copyrightColumn = column("copyright", "copyrightinfo");
     const urlColumn = column("url", "sourceurl", "hymnurl", "hymnarylink");
@@ -142,13 +142,16 @@ export async function importHymnal(code: string, name?: string) {
   if (!/^[A-Za-z0-9_-]{2,40}$/.test(code)) throw new Error("Invalid hymnal selection.");
   const sourceUrl = `${baseUrl}/hymnal/${code}`;
   const csvUrls = [
+    `${baseUrl}/instances?qu=hymnalNumber%3A${encodeURIComponent(code.toLowerCase())}%20in%3Ainstances&sort=firstLine&order=asc&export=csv&limit=10000`,
     `${sourceUrl}?export=csv`,
     `${sourceUrl}/titles?export=csv`,
-    `${baseUrl}/search?qu=hymnalnumber%3A${encodeURIComponent(code)}&export=csv`,
   ];
-  for (const csvUrl of csvUrls) {
+  for (let index = 0; index < csvUrls.length; index += 1) {
+    const csvUrl = csvUrls[index];
     try {
-      const csvHymns = await importCsvPages(csvUrl, code);
+      const csvHymns = index === 0
+        ? parseHymnalCsv(await fetchText(csvUrl, "text/csv"), code)
+        : await importCsvPages(csvUrl, code);
       if (csvHymns.length > 100) return { code, name: name?.trim().slice(0, 200) || code, sourceUrl, hymns: csvHymns };
     } catch {
       // Try the next documented Hymnary CSV endpoint.

@@ -58,7 +58,7 @@ describe("worship services", () => {
     expect(hymnalApi).toContain("worshipServiceSettings.upsert");
     expect(settingsPage).toContain("Import hymnal");
     const importer = read("lib/hymnary.ts");
-    expect(importer).toContain("search?qu=hymnalnumber");
+    expect(importer).toContain("/instances?qu=hymnalNumber");
     expect(importer).toContain("export=csv");
     expect(importer).toContain("No partial 100-hymn import");
   });
@@ -69,6 +69,7 @@ describe("worship services", () => {
     expect(parseHymnalList(hymnalHtml)[0]).toMatchObject({ code: "LSB2006", name: "Lutheran Service Book" });
     expect(parseHymnalHymns(hymnHtml, "LSB2006")[0]).toMatchObject({ number: "151", title: "A Mighty Fortress", tuneName: "EIN FESTE BURG", copyrightInfo: null });
     expect(parseHymnalCsv('number,title,first line,tune\n151,"A Mighty Fortress","A mighty fortress is our God","EIN FESTE BURG"', "LSB2006")[0]).toMatchObject({ number: "151", title: "A Mighty Fortress", firstLine: "A mighty fortress is our God", tuneName: "EIN FESTE BURG" });
+    expect(parseHymnalCsv('firstLine,displayTitle,textAuthNumber,hymnalTitle,hymnalID,number,textTitle,refrainFirstLine,authors,composers,meter,tuneTitle\n"A mighty fortress is our God","A Mighty Fortress",, "Lutheran Service Book",LSB2006,656,"A Mighty Fortress",,"Martin Luther",,"8.7.8.7.5.5.5.6.7","EIN FESTE BURG"', "LSB2006")[0]).toMatchObject({ number: "656", title: "A Mighty Fortress", firstLine: "A mighty fortress is our God", tuneName: "EIN FESTE BURG", textAuthors: "Martin Luther" });
   });
 
   it("imports the complete CSV catalog instead of accepting a page-sized result", async () => {
@@ -78,6 +79,6 @@ describe("worship services", () => {
     vi.stubGlobal("fetch", fetchMock);
     const imported = await importHymnal("LSB2006", "Lutheran Service Book");
     expect(imported.hymns).toHaveLength(125);
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("?export=csv"), expect.objectContaining({ headers: expect.objectContaining({ Accept: "text/csv" }) }));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/instances?qu=hymnalNumber%3Alsb2006"), expect.objectContaining({ headers: expect.objectContaining({ Accept: "text/csv" }) }));
   });
 });
